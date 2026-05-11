@@ -1,13 +1,21 @@
+lowdefy: 5.3.0
 name: shifty
-version: 5.3.0
 license: Apache-2.0
+
+plugins:
+  - name: '@lowdefy/connection-knex'
+    version: '5.3.0'
+  - name: '@lowdefy/blocks-aggrid'
+    version: '5.3.0'
 
 connections:
   - id: shifts_db
-    type: ConnectionPostgreSQL
+    type: Knex
     properties:
-      connectionString:
-        _secret: POSTGRES_CONNECTION_STRING
+      client: pg
+      connection:
+        connectionString:
+          _secret: POSTGRES_CONNECTION_STRING
 
 menus:
   - id: default
@@ -45,7 +53,7 @@ pages:
       title: Employees | shifty
     requests:
       - id: list_employees
-        type: PostgreSQLQuery
+        type: KnexRaw
         connectionId: shifts_db
         properties:
           query: |
@@ -68,22 +76,25 @@ pages:
                 rows:
                   _request: list_employees
       - id: employee_table
-        type: AntTable
+        type: AgGridAlpine
         properties:
-          dataSource:
+          rowData:
             _request: list_employees
-          columns:
-            - title: Name
-              dataIndex: name
-            - title: Email
-              dataIndex: email
-            - title: Role
-              dataIndex: role
-            - title: Type
-              dataIndex: employment_type
-            - title: Hourly Rate
-              dataIndex: hourly_rate
-            - title: Max Hrs/Week
-              dataIndex: max_weekly_hrs
-            - title: Active
-              dataIndex: active
+          defaultColDef:
+            sortable: true
+            resizable: true
+          columnDefs:
+            - field: name
+              headerName: Name
+            - field: email
+              headerName: Email
+            - field: role
+              headerName: Role
+            - field: employment_type
+              headerName: Type
+            - field: hourly_rate
+              headerName: Hourly Rate
+            - field: max_weekly_hrs
+              headerName: Max Hrs/Week
+            - field: active
+              headerName: Active

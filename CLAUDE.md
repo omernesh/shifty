@@ -141,6 +141,7 @@ plink ... hpg5 "powershell -c \"docker compose -f C:\shifts-manager\docker-compo
 
 ## Open questions
 
+- **Lowdefy runtime resolution (active).** `docker compose build lowdefy` succeeds and the container starts, but the Next.js SSR fails with `ERR_MODULE_NOT_FOUND` on hash-suffixed `@lowdefy/helpers-<hash>` packages. Cause: Lowdefy + pnpm symlink layout doesn't fully survive the COPY between Docker build stages. Three potential fixes to try: (a) enable Next.js `output: 'standalone'` correctly (it currently emits at workspace root because Lowdefy creates an inner pnpm-lock, breaking the path expectation), (b) start node with `--preserve-symlinks --preserve-symlinks-main`, (c) follow Lowdefy's exact published Dockerfile and adjust paths for the `.lowdefy/server/` nesting.
 - Auth model: Lowdefy supports Auth.js (75+ providers). For v1 we'll use a simple email/password setup or magic-link; revisit if SSO becomes useful.
 - Calendar widget: try a Lowdefy npm-plugin first (e.g., a fullcalendar-react block), fall back to an embedded Google Calendar if no good option.
 - Single-tenant for v1 is decided. Revisit `tenant_id` columns if multi-tenant becomes a real need.
