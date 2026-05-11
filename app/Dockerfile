@@ -1,12 +1,18 @@
 # Lowdefy multi-stage build.
-# WIP: this builds successfully and the container boots, but the Next.js
-# SSR runtime fails to resolve some hash-suffixed @lowdefy/* internal
-# packages (pnpm symlink layout doesn't survive the COPY between stages).
-# The build pipeline works; the runtime config needs more investigation —
-# either enabling next.config.js `output: standalone` correctly (Next.js
-# emits it at a workspace root that's not where we expect), or using
-# `--preserve-symlinks` flags, or following Lowdefy's exact published
-# Dockerfile pattern. See CLAUDE.md "Open questions" for context.
+#
+# Why the runtime stage copies the entire /build tree (not just .lowdefy/server):
+# Lowdefy's `npx lowdefy build` produces a Next.js app under .lowdefy/server/
+# with a pnpm symlink layout. The Next.js build externalizes hash-suffixed
+# Lowdefy internal packages into .lowdefy/server/.next/node_modules/@lowdefy/
+# (e.g. `helpers-f4b7b5506784a410`) as symlinks that point UP five levels and
+# then back into `.lowdefy/server/node_modules/.pnpm/...`. Those symlinks
+# require the ORIGINAL absolute path layout (i.e. a `/build/.lowdefy/server/`
+# style nesting) to resolve. If we copy only the contents of .lowdefy/server
+# to /app, the `../../../../..` traversals dangle and Next.js SSR fails with
+# `ERR_MODULE_NOT_FOUND: @lowdefy/helpers-<hash>`.
+#
+# Fix: preserve /build at /build in the runtime image, run next start from
+# /build/.lowdefy/server. The path layout above the working dir matters.
 FROM node:22-bookworm AS builder
 WORKDIR /build
 # Pin pnpm to 9.x — pnpm 11 refuses to run build scripts for @sentry/cli/sharp
@@ -20,11 +26,13 @@ RUN npx lowdefy build
 RUN cd .lowdefy/server && pnpm exec next build
 
 FROM node:22-bookworm
-WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 RUN corepack enable && corepack prepare pnpm@9.15.5 --activate
-COPY --from=builder /build/.lowdefy/server ./
+# Preserve the original /build path so the relative ../../../../.. symlinks
+# under .lowdefy/server/.next/node_modules/@lowdefy/*-<hash> still resolve.
+COPY --from=builder /build /build
+WORKDIR /build/.lowdefy/server
 EXPOSE 3000
 CMD ["pnpm", "exec", "next", "start", "-p", "3000", "-H", "0.0.0.0"]
