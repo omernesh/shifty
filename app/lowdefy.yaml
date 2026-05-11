@@ -1,0 +1,89 @@
+name: shifty
+version: 5.3.0
+license: Apache-2.0
+
+connections:
+  - id: shifts_db
+    type: ConnectionPostgreSQL
+    properties:
+      connectionString:
+        _secret: POSTGRES_CONNECTION_STRING
+
+menus:
+  - id: default
+    links:
+      - id: home_link
+        type: MenuLink
+        pageId: home
+        properties:
+          title: Home
+      - id: employees_link
+        type: MenuLink
+        pageId: employees
+        properties:
+          title: Employees
+
+pages:
+  - id: home
+    type: PageHeaderMenu
+    properties:
+      title: shifty
+    blocks:
+      - id: welcome
+        type: Title
+        properties:
+          content: shifty
+          level: 1
+      - id: subtitle
+        type: Paragraph
+        properties:
+          content: Shifts management. Schema is deployed; the app is being built.
+
+  - id: employees
+    type: PageHeaderMenu
+    properties:
+      title: Employees | shifty
+    requests:
+      - id: list_employees
+        type: PostgreSQLQuery
+        connectionId: shifts_db
+        properties:
+          query: |
+            SELECT id, name, email, role, employment_type, hourly_rate, max_weekly_hrs, active
+            FROM employees
+            ORDER BY name;
+    blocks:
+      - id: header
+        type: Title
+        properties:
+          content: Employees
+          level: 1
+      - id: count
+        type: Paragraph
+        properties:
+          content:
+            _nunjucks:
+              template: '{{ rows | length }} employee(s)'
+              on:
+                rows:
+                  _request: list_employees
+      - id: employee_table
+        type: AntTable
+        properties:
+          dataSource:
+            _request: list_employees
+          columns:
+            - title: Name
+              dataIndex: name
+            - title: Email
+              dataIndex: email
+            - title: Role
+              dataIndex: role
+            - title: Type
+              dataIndex: employment_type
+            - title: Hourly Rate
+              dataIndex: hourly_rate
+            - title: Max Hrs/Week
+              dataIndex: max_weekly_hrs
+            - title: Active
+              dataIndex: active

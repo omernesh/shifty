@@ -1,11 +1,29 @@
-# shifty![](https://raw.githubusercontent.com/appsmithorg/appsmith/release/static/appsmith_logo_primary.png)
+# shifty
 
-This app is built using Appsmith. Turn any datasource into an internal app in minutes. Appsmith lets you drag-and-drop components to build dashboards, write logic with JavaScript objects and connect to any API, database or GraphQL source.
+A shifts management app: employees, shifts, weekly calendar view, auto-scheduling with constraints, and time-clock / hours tracking.
 
-![](https://raw.githubusercontent.com/appsmithorg/appsmith/release/static/images/integrations.png)
+## Stack
 
-### [Github](https://github.com/appsmithorg/appsmith) • [Docs](https://docs.appsmith.com/?utm_source=github&utm_medium=social&utm_content=appsmith_docs&utm_campaign=null&utm_term=appsmith_docs) • [Community](https://community.appsmith.com/) • [Tutorials](https://github.com/appsmithorg/appsmith/tree/update/readme#tutorials) • [Youtube](https://www.youtube.com/appsmith) • [Discord](https://discord.gg/rBTTVJp)
+- **Lowdefy** — config-as-code app builder (Apache-2.0, self-hosted).
+- **PostgreSQL 16** — single source of truth for `employees`, `shifts`, `assignments`, `availability`, `time_clock_entries`.
+- **Solver service** (FastAPI, Python) — added in a later phase for auto-scheduling.
 
-##### You can visit the application using the below link
+All three run together as Docker containers on **hpg5** (Windows 11 + Docker Desktop), exposed publicly via Cloudflare Tunnel at `https://apps.nesher.co`.
 
-###### [![](https://assets.appsmith.com/git-sync/Buttons.svg) ](https://apps.nesher.co/applications/6a024d3c2cfb0f0f43d7aa0a/pages/6a024d3c2cfb0f0f43d7aa0c) [![](https://assets.appsmith.com/git-sync/Buttons2.svg)](https://apps.nesher.co/applications/6a024d3c2cfb0f0f43d7aa0a/pages/6a024d3c2cfb0f0f43d7aa0c/edit)
+The Lowdefy app definition lives in this repo as YAML — version-controlled and reviewable, no separate "export the app" step.
+
+## Layout
+
+```
+db/migrations/          numbered SQL migrations (0001_init.sql, ...)
+docker-compose.yml      Lowdefy + Postgres (solver added later)
+.env.example            template; copy to .env on the deploy host
+archive/                preserved artifacts from earlier experiments (Appsmith export)
+CLAUDE.md               operational context for Claude Code
+```
+
+See `CLAUDE.md` for the deployment topology (hpg5 connection, PsExec wrapper, Cloudflare Tunnel) and working conventions.
+
+## Status
+
+Brand-new. Database schema is deployed. The Lowdefy app is being scaffolded.

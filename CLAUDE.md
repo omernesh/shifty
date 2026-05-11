@@ -4,97 +4,150 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Status
 
-Infrastructure deployed as of 2026-05-12.
+Active build as of 2026-05-12. Stack pivoted from Appsmith to Lowdefy (see below for why).
 
-- **Public URL: `https://apps.nesher.co`** (Cloudflare Tunnel; `cloudflared` runs on hpg5 under a separate Windows account that is out-of-scope for SSH operations). Also reachable internally as `http://hpg5:8080` over Tailscale.
-- **Postgres 16.13** runs alongside Appsmith in the same compose stack, reachable only over the internal docker network. v1 schema is applied: `employees`, `shifts`, `assignments`, `availability`, `time_clock_entries`. All empty.
-- The Appsmith admin account is `omernesher@gmail.com` (created via signup at `https://apps.nesher.co` on 2026-05-12). Note: signup MUST be reached via `https://...` explicitly — visiting `http://apps.nesher.co` triggers Cloudflare's HTTP→HTTPS 301 redirect, which drops POST bodies (signup, login, etc.) per HTTP spec. Tell users this if they hit unexplained 401s during signup or login.
-- **Appsmith → Postgres datasource** has not been wired in the Appsmith UI yet. Connection details from inside the container: `host=postgres port=5432 db=shifts user=shifts`; password lives in `C:\shifts-manager\.env` on hpg5 (mode 600 conceptually; the file is excluded by `.gitignore`).
-- The solver service is not deployed; we add it in a later phase.
+- **Public URL: `https://apps.nesher.co`** (Cloudflare Tunnel; `cloudflared` runs on hpg5 under a separate Windows user account, out-of-scope for SSH operations). Also reachable internally as `http://hpg5:8080` over Tailscale.
+- **Postgres 16** runs in the compose stack alongside Lowdefy. The v1 schema is applied (`employees`, `shifts`, `assignments`, `availability`, `time_clock_entries`). All empty.
+- **Lowdefy** is being scaffolded; the minimal app in `app/` boots a home page + an employees list (PostgreSQL query). Build pipeline (Dockerfile multi-stage → Next.js standalone) is in place.
+- **Solver service** is not deployed; that's a later phase.
 
-The local repo at `C:\Projects\shifts manager\` contains: `CLAUDE.md`, `docker-compose.yml`, `db/migrations/0001_init.sql`, `.env.example`, `.gitignore`. These are the source of truth; the copies on hpg5 are deploy artifacts. The repo is not yet a git repo (no `.git`).
+The repo is git-tracked at `https://github.com/omernesh/shifty.git`. Local checkout is `C:\Projects\shifts manager\`.
 
-## What this project is
+## Why Lowdefy
 
-A **shifts management web app** for assigning employees to shifts, viewing the weekly schedule, auto-generating schedules subject to constraints, and tracking clocked hours.
+We started with Appsmith CE, deployed it on hpg5, applied the schema, made it reachable over Cloudflare Tunnel, then discovered the "Powered by Appsmith" branding is locked behind their paid Business plan. Same paywall on **Budibase** and **ToolJet**. The only no-branding self-host options are:
+- A different paradigm (NocoDB, more table/Airtable-shaped, not a free-form builder)
+- A custom React build (high effort)
+- **Lowdefy** (Apache-2.0, config-as-code, no paywall) — chosen.
 
-This is **not** a from-scratch React/Node build. The UI and most CRUD logic live inside an **Appsmith** application; only the parts Appsmith cannot do are hand-written.
+The Appsmith export from the experimental session is preserved at `archive/appsmith-export/` for reference if we ever want to consult what was tried.
 
-## Architecture (planned)
+## Architecture
 
-Three services, brought up together via Docker Compose:
+Two services right now via Docker Compose on hpg5; the solver service joins later.
 
-1. **Appsmith** — self-hosted via the official Docker image. Holds all pages, forms, tables, and the bulk of business logic. Persists nothing the app cares about; all domain data lives in Postgres.
-2. **Postgres** — single source of truth for `employees`, `shifts`, `assignments`, `time_clock_entries`, and constraint rules. Schema is plain SQL in `db/migrations/`.
-3. **Solver service** (FastAPI, Python) — exposes `/solve` over REST. Reads availability + constraints from Postgres, returns a proposed weekly assignment. Likely OR-Tools (CP-SAT) once constraints stabilize; a greedy heuristic is acceptable for v1.
+1. **Lowdefy** — UI + thin business logic. Defined as YAML in `app/`. Each build compiles the YAML into a Next.js standalone server inside a custom Docker image (`app/Dockerfile`, multi-stage: `node:20-bookworm` builder → `node:20-alpine` runtime). Container listens on 3000 internally; compose publishes it as `8080:3000` on the host. Auth via Auth.js (built into Lowdefy). Connects to Postgres over the internal docker network at host `postgres`, port `5432`.
+2. **Postgres 16** — single source of truth. Schema is plain SQL in `db/migrations/`. No host port exposed; only reachable inside the docker network.
 
-Direction of calls: **Appsmith -> Solver**, never the reverse. The solver does not know Appsmith exists.
+Future:
+3. **Solver service** (FastAPI, Python) — exposes `/solve` over REST. Reads availability + constraints from Postgres, returns a proposed weekly assignment. Likely OR-Tools (CP-SAT) once constraints stabilize; greedy heuristic acceptable for v1.
 
-## Deployment
+Direction of calls: **Lowdefy -> Solver**, never the reverse. The solver does not know Lowdefy exists.
 
-**Target host: `hpg5` — a Windows 11 Pro desktop, NOT Linux.** This was the surprise: hpg5 ≠ hpg6 (which is Linux at 100.114.126.43, documented in the user's global CLAUDE.md). hpg5 is `DESKTOP-09VPJKQ` at Tailscale IP `100.92.65.46`, MagicDNS hostname `hpg5`.
+## Deployment target — hpg5
 
-SSH access:
+**hpg5 is a Windows 11 Pro desktop, not Linux.** This is a common stumbling block — hpg5 ≠ hpg6 (which is the Linux box at 100.114.126.43 documented in the user's global CLAUDE.md). hpg5 is `DESKTOP-09VPJKQ` at Tailscale IP `100.92.65.46`, MagicDNS hostname `hpg5`.
+
+### SSH access
 ```
 plink -ssh -l claude -pw "Onclaude2103" -batch \
   -hostkey "SHA256:tPg5mYQbJO/9ccGmNGeyJeQQSPXq+C6SL3EHJcbRZMQ" \
   hpg5 "<cmd>"
 ```
-Remote default shell is **cmd**. Use `powershell -NoProfile -EncodedCommand <b64>` for non-trivial scripts to dodge quote-escape hell.
+Remote default shell is **cmd**. For non-trivial scripts use `powershell -NoProfile -EncodedCommand <b64>` to dodge quote-escape hell across the cmd→PowerShell layers.
 
-Because Docker Desktop on Windows can't run headless (needs an interactive user session), we **don't use Docker Desktop for the daemon**. Instead:
-- Ubuntu 24.04 lives in WSL2 with systemd enabled (`/etc/wsl.conf`)
-- Docker Engine + Compose are installed natively inside Ubuntu (`docker-ce` from Docker's apt repo)
-- `docker.service` is systemd-enabled — starts when the WSL distro boots
-- `C:\Users\claude\.wslconfig` sets `vmIdleTimeout=-1` and `networkingMode=mirrored` (the latter makes WSL bindings appear on all Windows network interfaces, including the Tailscale one)
-- A scheduled task `wsl-docker-autostart` (trigger: AtStartup, runs as `claude` with stored password, action: `wsl.exe -d Ubuntu-24.04 -u root -- /usr/bin/sleep infinity`) launches the WSL distro at system boot — survives logout/reboot without manual intervention
-- Windows Firewall has an inbound TCP/8080 rule named `Appsmith 8080 (shifts-manager)`
+File upload uses `pscp` (same auth/hostkey shape).
 
-All project files live **inside the WSL distro** at `/opt/shifts-manager/`. From Windows you can reach them at `\\wsl$\Ubuntu-24.04\opt\shifts-manager\`.
+### Why Docker Desktop (and not native WSL2 dockerd)
+We initially tried native `dockerd` in an Ubuntu-24.04 WSL2 distro with `networkingMode=mirrored`. The credential helper / pull worked, but **mirrored networking doesn't forward inbound LAN traffic to WSL bindings** — peers on the same physical LAN (e.g., the Synology NAS at `192.168.1.121`) couldn't reach `192.168.1.133:8080` even though TCP probes for ports 22/445 worked (those are native Windows listeners). We moved to **Docker Desktop**, which publishes ports as real Windows-host listeners, and LAN inbound works the standard way. Trade-off: Docker Desktop needs an interactive user session, which we solved with auto-login (see below). The Ubuntu-24.04 WSL distro has been deleted.
 
-Compose stack currently runs only `appsmith`. `postgres` + `solver` will be added in later phases. No reverse proxy / TLS yet — Tailscale-only on port 8080.
+### Auto-login + autostart
+- **Sysinternals Autologon** stores the `claude` user's password in an LSA secret. After a reboot, Windows auto-logs `claude` in at the console. Reconfigure with `autologon claude DESKTOP-09VPJKQ <password>`.
+- **Docker Desktop autostart** is enabled via the `HKCU:\...\Run\Docker Desktop` registry entry pointing at `C:\Program Files\Docker\Docker\Docker Desktop.exe`. Boots when claude logs in.
+- End result: after any reboot, `claude` is automatically logged in within ~30s, Docker Desktop starts within another ~30-60s, the compose stack comes up via `restart: unless-stopped`.
 
-## Planned repo layout
+### Why PsExec for SSH-side docker commands
+**Docker Desktop on Windows requires an interactive user session for its credential helper** (`docker-credential-desktop.exe` needs to access Windows Credential Manager). SSH sessions are Windows logon type 3 (network), which doesn't qualify — every `docker pull` / `docker compose build` from SSH fails with `error getting credentials - A specified logon session does not exist`.
+
+**Workaround:** wrap docker commands with PsExec so they run inside claude's interactive session 1:
+```
+psexec -accepteula -nobanner -i 1 -u claude -p <pw> cmd /c "<docker cmd> > C:\shifts-manager\out.txt 2>&1"
+```
+Then read `out.txt` for output (PsExec's `-i` sends stdout to the interactive session, not back to the SSH caller).
+
+Operations that DON'T need PsExec (no credential helper): `docker ps`, `docker logs`, `docker compose exec`, `docker inspect`, `docker compose up -d` (when images are already cached locally), `docker compose stop`, etc.
+
+Operations that DO need PsExec: anything pulling images from a registry, `docker compose build`, `docker compose pull`, `docker pull`.
+
+### Networking
+- Windows Defender Firewall rule `Appsmith 8080 (shifts-manager)` allows inbound TCP/8080 on any profile (name predates the Lowdefy pivot; left for continuity).
+- The Cloudflare Tunnel agent runs on hpg5 in a separate Windows user account; its config points at `http://192.168.1.133:8080` (hpg5's LAN IP). The tunnel doesn't depend on anything in this repo or claude's session.
+
+### Deploy layout on hpg5
+All project files live at `C:\shifts-manager\` (Windows-native, no WSL involved). Mirror of this repo:
+- `C:\shifts-manager\app\` — Lowdefy app
+- `C:\shifts-manager\db\migrations\` — SQL migrations
+- `C:\shifts-manager\docker-compose.yml`
+- `C:\shifts-manager\.env` — secrets (NOT committed)
+
+## Repo layout
 
 ```
-db/migrations/          numbered SQL migrations (0001_init.sql, ...)
-appsmith/export/        periodic JSON exports of the Appsmith app
-solver/app/             FastAPI source
-solver/Dockerfile
-solver/requirements.txt
-docker-compose.yml      brings up the full stack
-docs/                   runbooks: deploy, import-appsmith-app, add-constraint
-.env.example
+app/                     Lowdefy app definition (YAML, Dockerfile)
+  lowdefy.yaml           main config: connections, menus, pages
+  pages/                 page-specific YAML (when factored out)
+  connections/           connection-specific YAML (when factored out)
+  Dockerfile             multi-stage build: builder + standalone runtime
+  .dockerignore
+  package.json           "lowdefy" dep + build/dev/start scripts
+db/migrations/           numbered SQL migrations (0001_init.sql, ...)
+archive/                 preserved artifacts from earlier experiments
+  appsmith-export/       Appsmith app export from the abandoned attempt
+docker-compose.yml       lowdefy + postgres
+.env.example             template; copy to .env on the deploy host
+.gitignore
+README.md
+CLAUDE.md
+LICENSE
 ```
 
-## V1 feature scope (locked)
+The `solver/` directory will be added in a later phase.
+
+## V1 feature scope
 
 - Employee + shift CRUD
-- Weekly calendar view
-- Auto-scheduling with constraints (delivered by the FastAPI solver)
+- Weekly calendar view (likely a Lowdefy npm-plugin block or an embedded Google Calendar)
+- Auto-scheduling with constraints (delivered by the FastAPI solver, in a later phase)
 - Time-clock / hours tracking
 
 ## Working conventions
 
-- **The Appsmith app is not source-code-editable by hand.** Make changes in the Appsmith UI; version-control progress by exporting the application JSON to `appsmith/export/`. Do not hand-edit those JSON files — they will be overwritten on the next export and merge conflicts are unworkable.
-- **Schema changes go through `db/migrations/` first, never via the Appsmith UI.** After a migration runs, regenerate / re-point any Appsmith queries that reference the changed shape.
-- **Scheduling logic lives in `solver/`, not in Appsmith JS.** Appsmith JS should stay thin (formatting, light validation) because it is painful to test in isolation.
-- Local dev is `docker compose up` (once scaffolded). There is no separate `npm run dev` workflow — Appsmith is the dev environment.
+- **The Lowdefy app definition lives in `app/` as YAML and IS the source of truth.** Don't try to manage it through a UI — there isn't one. Edit the YAML, commit, rebuild the container. This is fundamentally different from Appsmith/Budibase/ToolJet.
+- **Schema changes go through `db/migrations/` first.** Add a new numbered file (`0002_*.sql`); never edit a committed migration. After a migration runs, update any Lowdefy `request` blocks that reference changed columns.
+- **Solver logic stays in `solver/`** (when we get there), not in Lowdefy operators. Operators are fine for formatting, light validation, and stitching requests together; non-trivial business logic belongs in a real service.
+- **Secrets live only in `.env` on hpg5.** `.env.example` ships in the repo as a template. The Lowdefy `_secret: NAME` references resolve to environment variables; compose injects them into the container at run time.
+- **Branch / commit hygiene:** commit on feature branches, push to GitHub. The user's GitHub identity is `omernesher`; the repo is `omernesh/shifty`.
+
+## Common ops on hpg5
+
+All examples use the plink invocation above. Commands run from claude's SSH session unless noted.
+
+```
+# Status of the stack
+plink ... hpg5 "powershell -c \"cd C:\shifts-manager; docker compose ps\""
+
+# Tail Lowdefy logs (live)
+plink ... hpg5 "powershell -c \"docker logs -f shifty-lowdefy\""
+
+# Apply a new migration
+plink ... hpg5 "powershell -c \"cd C:\shifts-manager; Get-Content db\migrations\0002_xxx.sql -Raw | docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U shifts -d shifts\""
+
+# Rebuild Lowdefy after editing app/*.yaml — REQUIRES PsExec because `build` pulls base images
+plink ... hpg5 "powershell -c \"\$env:PATH = [Environment]::GetEnvironmentVariable('PATH','Machine') + ';' + [Environment]::GetEnvironmentVariable('PATH','User'); psexec -accepteula -nobanner -i 1 -u claude -p Onclaude2103 cmd /c 'cd C:\shifts-manager && docker compose build lowdefy > C:\shifts-manager\build.txt 2>&1 && docker compose up -d lowdefy >> C:\shifts-manager\build.txt 2>&1'; Get-Content C:\shifts-manager\build.txt -Tail 30\""
+
+# Reach into postgres for ad-hoc queries
+plink ... hpg5 "powershell -c \"docker compose -f C:\shifts-manager\docker-compose.yml exec -T postgres psql -U shifts -d shifts -c 'SELECT count(*) FROM employees;'\""
+```
 
 ## Open questions
 
-- Reverse-proxy + TLS strategy on hpg5 (Caddy in a container? Tailscale Funnel? do without for now since tailnet-only?).
-- Auth model: Appsmith built-in users vs SSO.
-- Single-tenant for v1 (decided). Revisit `tenant_id` columns if multi-tenant becomes a real need.
-- Initial Appsmith admin account creation (happens on first visit to `http://hpg5:8080`).
-- Wire up Appsmith → Postgres datasource (after the admin account exists).
+- Auth model: Lowdefy supports Auth.js (75+ providers). For v1 we'll use a simple email/password setup or magic-link; revisit if SSO becomes useful.
+- Calendar widget: try a Lowdefy npm-plugin first (e.g., a fullcalendar-react block), fall back to an embedded Google Calendar if no good option.
+- Single-tenant for v1 is decided. Revisit `tenant_id` columns if multi-tenant becomes a real need.
+- Whether to ship Lowdefy app builds via docker registry (push from CI) or always build on hpg5 (current default). Current works; switch when CI exists.
 
 ## When working in this repo
 
-- Commands like `npm test`, `dotnet build`, etc., do **not** apply — there is no JS/.NET source tree. The only things to run are `docker compose up` (inside the WSL distro on hpg5) and (eventually) `pytest` inside `solver/`.
 - The user works in **orchestrator mode** (see global CLAUDE.md) — delegate multi-file work to sub-agents; do not silently scaffold.
-- Common ops over SSH (all need the `plink` invocation above):
-  - Check Appsmith health: `wsl -d Ubuntu-24.04 -u root -- docker ps`
-  - Tail logs: `wsl -d Ubuntu-24.04 -u root -- docker logs -f shifts-appsmith`
-  - Stop/start: `wsl -d Ubuntu-24.04 -u root -- bash -c 'cd /opt/shifts-manager && docker compose <stop|up -d>'`
-  - Pull latest Appsmith: `... docker compose pull && docker compose up -d`
+- Commands like `npm test` / `dotnet build` do not apply — no JS test suite, no .NET. The build sequence is `docker compose build && docker compose up -d` (with PsExec wrapping when on SSH).
+- For UI iteration: edit `app/*.yaml` locally, commit, push, `pscp` the changed files to `C:\shifts-manager\app\` on hpg5, then rebuild + restart the `lowdefy` service. (We can wire git pull on hpg5 later if it becomes painful.)

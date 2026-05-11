@@ -1,21 +1,27 @@
 services:
-  appsmith:
-    image: appsmith/appsmith-ce:latest
-    container_name: shifts-appsmith
+  lowdefy:
+    build: ./app
+    container_name: shifty-lowdefy
     ports:
-      - "8080:80"
-    volumes:
-      - ./appsmith-stacks:/appsmith-stacks
-    restart: unless-stopped
+      - "8080:3000"
+    environment:
+      POSTGRES_CONNECTION_STRING: "postgresql://${POSTGRES_USER:-shifts}:${POSTGRES_PASSWORD:?missing}@postgres:5432/${POSTGRES_DB:-shifts}"
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?missing}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-https://apps.nesher.co}
     depends_on:
       postgres:
         condition: service_healthy
+    restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:80/api/v1/health || exit 1"]
+      test:
+        - CMD
+        - node
+        - -e
+        - "require('http').get('http://localhost:3000/',r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))"
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 120s
+      start_period: 60s
 
   postgres:
     image: postgres:16
@@ -34,5 +40,5 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    # No `ports:` exposed — postgres is reachable only via the docker network.
-    # Appsmith connects at host=postgres, port=5432.
+    # No host port exposed — internal docker network only.
+    # Lowdefy reaches it at host=postgres, port=5432.
