@@ -11,6 +11,8 @@
     "./hooks/knex-tenant": "./src/hooks/knex-tenant.js"
   },
   "dependencies": {
-    "knex": "^3.1.0"
+    "knex": "^3.1.0",
+    "next-auth": "^4.24.0",
+    "pg": "^8.0.0"
   }
 }

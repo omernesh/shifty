@@ -17,6 +17,7 @@
     "resend": "6.12.3",
     "shifty-auth": "file:./plugins/shifty-auth",
     "shifty-audit-writer": "file:./plugins/shifty-audit-writer",
-    "knex": "^3.1.0"
+    "knex": "^3.1.0",
+    "nodemailer": "^6.9.0"
   }
 }
