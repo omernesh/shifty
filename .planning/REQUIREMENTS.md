@@ -10,21 +10,21 @@ Requirements for initial release. Each maps to roadmap phases via Traceability (
 
 ### Tenant & Org Management (PRD §7.1)
 
-- [ ] **TEN-01**: Anyone with a valid email can self-sign-up and create a tenant; founding admin's account becomes `unit_admin` automatically without an invite code
-- [ ] **TEN-02**: At tenant creation, admin chooses org depth (1, 2, or 3 levels); depth is immutable except by adding deeper levels
-- [ ] **TEN-03**: Admin can add, rename, and delete org units within their unit's tree (`org_unit` rows with self-referential `parent_id`; leaf nodes are where teams/schedules live)
-- [ ] **TEN-04**: Admin can view the org tree across all teams in their unit
-- [ ] **TEN-05**: All schedules and assignments live at the leaf (team) level always; a 1-level org has its root as the team
+- [x] **TEN-01**: Anyone with a valid email can self-sign-up and create a tenant; founding admin's account becomes `unit_admin` automatically without an invite code
+- [x] **TEN-02**: At tenant creation, admin chooses org depth (1, 2, or 3 levels); depth is immutable except by adding deeper levels
+- [x] **TEN-03**: Admin can add, rename, and delete org units within their unit's tree (`org_unit` rows with self-referential `parent_id`; leaf nodes are where teams/schedules live)
+- [x] **TEN-04**: Admin can view the org tree across all teams in their unit
+- [x] **TEN-05**: All schedules and assignments live at the leaf (team) level always; a 1-level org has its root as the team
 
 ### Authentication & Invite Codes (PRD §7.2)
 
-- [ ] **AUTH-01**: User signs up via NextAuth EmailProvider magic link delivered by Resend (no passwords)
-- [ ] **AUTH-02**: Sessions stored in HTTP-only secure cookies; CSRF protection on all state-changing endpoints
-- [ ] **AUTH-03**: Admin can generate invite code for a specific `(org_unit_id, role)` pair, optionally with `expires_at` and `max_uses`
-- [ ] **AUTH-04**: Invite codes are 8 chars Crockford base32 (no I, L, O, U), case-insensitive on redemption, copyable to clipboard
-- [ ] **AUTH-05**: User redeems invite code on first sign-in; creates `membership` row tying soldier to org unit with target role; audit row written to `invite_code_redemption`
-- [ ] **AUTH-06**: Revoked, expired, or used-up invite codes reject redemption with a Hebrew error message
-- [ ] **AUTH-07**: Four-role RBAC matrix enforced server-side per PRD §8.3 (`unit_admin`, `team_manager`, `member`, `viewer`); session carries `tenant_id`, `roles`, `team_ids`, `locale`
+- [x] **AUTH-01**: User signs up via NextAuth EmailProvider magic link delivered by Resend (no passwords)
+- [x] **AUTH-02**: Sessions stored in HTTP-only secure cookies; CSRF protection on all state-changing endpoints
+- [x] **AUTH-03**: Admin can generate invite code for a specific `(org_unit_id, role)` pair, optionally with `expires_at` and `max_uses`
+- [x] **AUTH-04**: Invite codes are 8 chars Crockford base32 (no I, L, O, U), case-insensitive on redemption, copyable to clipboard
+- [x] **AUTH-05**: User redeems invite code on first sign-in; creates `membership` row tying soldier to org unit with target role; audit row written to `invite_code_redemption`
+- [x] **AUTH-06**: Revoked, expired, or used-up invite codes reject redemption with a Hebrew error message
+- [x] **AUTH-07**: Four-role RBAC matrix enforced server-side per PRD §8.3 (`unit_admin`, `team_manager`, `member`, `viewer`); session carries `tenant_id`, `roles`, `team_ids`, `locale`
 
 ### People & Roster (PRD §7.3, §7.3.1)
 
@@ -177,14 +177,14 @@ Requirements for initial release. Each maps to roadmap phases via Traceability (
 ### Security & Tenant Isolation (PRD §8.2, §8.3)
 
 - [ ] **SEC-01**: Every domain table has `tenant_id` FK; every backend query filters by `tenant_id` derived from session (NEVER request input); cross-tenant access returns 403 with no information leak
-- [ ] **SEC-02**: RBAC matrix from PRD §8.3 enforced server-side; client-side gating is for UX only, never for security
-- [ ] **SEC-03**: Lowdefy pages declare top-level `auth` block with minimum required role; mutating `request` blocks set `properties.auth` with server-side role re-check
-- [ ] **SEC-04**: Migration `0009_rls_policies.sql` enables Postgres RLS on every domain table; `app.current_tenant` session variable set per-connection-checkout via Knex `afterCreate` hook (5th defense layer)
+- [x] **SEC-02**: RBAC matrix from PRD §8.3 enforced server-side; client-side gating is for UX only, never for security
+- [x] **SEC-03**: Lowdefy pages declare top-level `auth` block with minimum required role; mutating `request` blocks set `properties.auth` with server-side role re-check
+- [x] **SEC-04**: Migration `0009_rls_policies.sql` enables Postgres RLS on every domain table; `app.current_tenant` session variable set per-connection-checkout via Knex `afterCreate` hook (5th defense layer)
 - [ ] **SEC-05**: CI grep gate (`tools/check-queries.mjs`) fails build on any YAML query missing `tenant_id` filter
 - [ ] **SEC-06**: Playwright pen-test fixture asserts every list/detail/mutation route returns 403 for cross-tenant access; manual penetration of `?tenant_id=` overrides returns 403
-- [ ] **SEC-07**: Audit tables (`schedule_audit`, `roster_import_log`) are append-only — migration `0010_audit_revokes.sql` REVOKEs UPDATE/DELETE/TRUNCATE from the app role
+- [x] **SEC-07**: Audit tables (`schedule_audit`, `roster_import_log`) are append-only — migration `0010_audit_revokes.sql` REVOKEs UPDATE/DELETE/TRUNCATE from the app role
 - [ ] **SEC-08**: All secrets in `.env` on hpg5; never in code or committed YAML; Postgres credentials never exposed beyond docker network
-- [ ] **SEC-09**: Invite codes are not enumerable (no listing endpoint without auth + role check)
+- [x] **SEC-09**: Invite codes are not enumerable (no listing endpoint without auth + role check)
 - [ ] **SEC-10**: Log-redaction middleware scrubs `*_SECRET`, `*_PASSWORD`, `*_KEY` env-var values from any structured log
 
 ### Operations & Observability (PRD §8.4, §8.8)
@@ -281,18 +281,18 @@ Each v1 requirement maps to exactly one phase. Phase assignment follows the rule
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TEN-01 | Phase 1 (Foundations) | Pending |
-| TEN-02 | Phase 1 (Foundations) | Pending |
-| TEN-03 | Phase 1 (Foundations) | Pending |
-| TEN-04 | Phase 1 (Foundations) | Pending |
-| TEN-05 | Phase 1 (Foundations) | Pending |
-| AUTH-01 | Phase 1 (Foundations) | Pending |
-| AUTH-02 | Phase 1 (Foundations) | Pending |
-| AUTH-03 | Phase 1 (Foundations) | Pending |
-| AUTH-04 | Phase 1 (Foundations) | Pending |
-| AUTH-05 | Phase 1 (Foundations) | Pending |
-| AUTH-06 | Phase 1 (Foundations) | Pending |
-| AUTH-07 | Phase 1 (Foundations) | Pending |
+| TEN-01 | Phase 1 (Foundations) | Complete |
+| TEN-02 | Phase 1 (Foundations) | Complete |
+| TEN-03 | Phase 1 (Foundations) | Complete |
+| TEN-04 | Phase 1 (Foundations) | Complete |
+| TEN-05 | Phase 1 (Foundations) | Complete |
+| AUTH-01 | Phase 1 (Foundations) | Complete |
+| AUTH-02 | Phase 1 (Foundations) | Complete |
+| AUTH-03 | Phase 1 (Foundations) | Complete |
+| AUTH-04 | Phase 1 (Foundations) | Complete |
+| AUTH-05 | Phase 1 (Foundations) | Complete |
+| AUTH-06 | Phase 1 (Foundations) | Complete |
+| AUTH-07 | Phase 1 (Foundations) | Complete |
 | ROST-01 | Phase 2 (Org & People) | Pending |
 | ROST-02 | Phase 2 (Org & People) | Pending |
 | ROST-03 | Phase 2 (Org & People) | Pending |
@@ -403,14 +403,14 @@ Each v1 requirement maps to exactly one phase. Phase assignment follows the rule
 | I18N-06 | Phase 7 (Polish & Exports) | Pending |
 | I18N-07 | Phase 1 (Foundations) | Complete |
 | SEC-01 | Phase 1 (Foundations) | Pending |
-| SEC-02 | Phase 1 (Foundations) | Pending |
-| SEC-03 | Phase 1 (Foundations) | Pending |
-| SEC-04 | Phase 1 (Foundations) | Pending |
+| SEC-02 | Phase 1 (Foundations) | Complete |
+| SEC-03 | Phase 1 (Foundations) | Complete |
+| SEC-04 | Phase 1 (Foundations) | Complete |
 | SEC-05 | Phase 1 (Foundations) | Pending |
 | SEC-06 | Phase 1 (Foundations) | Pending |
-| SEC-07 | Phase 1 (Foundations) | Pending |
+| SEC-07 | Phase 1 (Foundations) | Complete |
 | SEC-08 | Phase 1 (Foundations) | Pending |
-| SEC-09 | Phase 1 (Foundations) | Pending |
+| SEC-09 | Phase 1 (Foundations) | Complete |
 | SEC-10 | Phase 1 (Foundations) | Pending |
 | OPS-01 | Phase 1 (Foundations) | Pending |
 | OPS-02 | Phase 1 (Foundations) | Complete |
