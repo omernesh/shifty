@@ -55,7 +55,17 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. CSV import canonicalizes smart-quote variants (strips U+2019, U+200E, U+200F, U+202A–U+202E) before writing `soldier.display_name`; a 50-row CSV imports in under 10 seconds and dispatches magic-link invites via Resend.
   4. Each soldier gets a calendar color from the 24-color preset palette (round-robin, no adjacent-color collisions within a team); the soldier can override in profile.
   5. Soldier can be a member of multiple teams within the same tenant via `membership` rows; role tags autocomplete from existing tenant tags but allow new ones (lowercase kebab-case).
-**Plans**: TBD
+**Plans**: 10 plans
+  - [ ] 02-01-PLAN.md — Wave 0 migrations 0011_role_tag + 0012_org_unit_last_color_index (schema + RLS)
+  - [ ] 02-02-PLAN.md — Wave 0 shifty-roster plugin scaffold (palette, canonicalize, role-tag helpers + 7 request stubs + unit tests)
+  - [ ] 02-03-PLAN.md — Wave 1 manage_org_units tree-table upgrade (D-01, D-02, D-04 grow-depth)
+  - [ ] 02-04-PLAN.md — Wave 1 manage_soldiers admin tenant-wide soldier roster + Add-soldier Modal
+  - [ ] 02-05-PLAN.md — Wave 1 manage_role_tags read-only autocomplete viewer
+  - [ ] 02-06-PLAN.md — Wave 2 soldier_detail + color_swatches block + CreateSoldier/UpdateSoldier/ArchiveSoldier/InviteLater bodies
+  - [ ] 02-07-PLAN.md — Wave 2 team_detail (Add/Remove member) + my_profile color override + CreateMembership body
+  - [ ] 02-08-PLAN.md — Wave 3 CSV import wizard + ParseCsvAndValidate + CommitRosterImport (Auth.js spike + Resend dispatch loop)
+  - [ ] 02-09-PLAN.md — Wave 4 lowdefy.yaml wiring + 0008_legacy_drop (UI ships before migration)
+  - [ ] 02-10-PLAN.md — Wave 4 E2E specs (roster-csv-import + soldier-crud + tenant-isolation) + 4 CSV fixtures + phase-gate smoke
 **Sequencing notes**: Sequential FK chain — org_unit CRUD → soldier CRUD → role tags + seniority → membership. CSV import path builds in parallel with the single-row form once `soldier.display_name` write semantics are settled.
 **Avoids pitfalls**: P5 (CSV direction-mark stripping at write time), P10 (display-name normalization, 24-color palette spec).
 
