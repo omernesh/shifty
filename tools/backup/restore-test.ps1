@@ -1,4 +1,4 @@
-# tools/backup/restore-test.ps1
+﻿# tools/backup/restore-test.ps1
 # Daily self-test: runs pg_restore --list on the latest backup file.
 # Alerts via Windows Event Log if no recent backup OR if self-test fails.
 # Runs from Windows Task Scheduler on hpg5 as user `claude`.

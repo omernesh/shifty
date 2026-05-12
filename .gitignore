@@ -3,3 +3,4 @@ appsmith-stacks/
 postgres-data/
 *.log
 .DS_Store
+node_modules/

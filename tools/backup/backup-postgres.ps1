@@ -1,7 +1,7 @@
-# tools/backup/backup-postgres.ps1
+﻿# tools/backup/backup-postgres.ps1
 # Nightly backup of the shifty Postgres database.
 # Runs from Windows Task Scheduler on hpg5 as user `claude`.
-# NO PsExec required — docker exec + docker cp work in Task Scheduler context.
+# NO PsExec required - docker exec + docker cp work in Task Scheduler context.
 # Source: RESEARCH Pattern 13
 
 $ErrorActionPreference = 'Stop'
@@ -23,7 +23,7 @@ try {
     New-EventLog -LogName Application -Source $EventSource -ErrorAction Stop
   }
 } catch {
-  # If we can't create the source (non-admin), fall back silently — log to file only
+  # If we can't create the source (non-admin), fall back silently - log to file only
 }
 
 function Write-BackupLog($Message, $Level = 'INFO') {
@@ -52,7 +52,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "rclone copy failed with exit code $LASTEXITCODE" }
     Write-BackupLog "Off-host copy to neshernas_pg_backup succeeded"
   } else {
-    Write-BackupLog "rclone config not found at $RcloneConf — skipping off-host copy" 'WARN'
+    Write-BackupLog "rclone config not found at $RcloneConf - skipping off-host copy" 'WARN'
   }
 
   # 4. Self-test: pg_restore --list
@@ -67,10 +67,14 @@ try {
   $tocLines = ($TestResult | Measure-Object -Line).Lines
   Write-BackupLog "Self-test: pg_restore --list returned $tocLines lines (PASS)"
 
-  # 5. Retention: keep last 14 daily files
-  $kept = Get-ChildItem $BackupDir -Filter "*.dump" | Sort-Object LastWriteTime -Descending | Select-Object -First 14
-  $allDumps = Get-ChildItem $BackupDir -Filter "*.dump"
-  $toDelete = $allDumps | Where-Object { $kept -notcontains $_ }
+  # 5. Retention: keep last 14 daily files. Compare by FullName because two separate
+  #    Get-ChildItem calls produce different FileInfo instances even for the same file -
+  #    `$kept -notcontains $_` would compare by reference and delete every file.
+  $keptPaths = Get-ChildItem $BackupDir -Filter "*.dump" |
+                 Sort-Object LastWriteTime -Descending |
+                 Select-Object -First 14 -ExpandProperty FullName
+  $toDelete = Get-ChildItem $BackupDir -Filter "*.dump" |
+                Where-Object { $keptPaths -notcontains $_.FullName }
   foreach ($f in $toDelete) {
     Remove-Item $f.FullName
     Write-BackupLog "Pruned old backup: $($f.Name)"

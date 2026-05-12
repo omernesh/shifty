@@ -1,4 +1,4 @@
-# tools/backup/install-task-scheduler.ps1
+﻿# tools/backup/install-task-scheduler.ps1
 # Registers Windows Scheduled Tasks for shifty-backup-nightly and shifty-restore-test-daily.
 # Run as `claude` from an ELEVATED PowerShell session on hpg5.
 # Idempotent: re-running updates the task definitions; doesn't duplicate.
@@ -32,7 +32,7 @@ $Action1 = New-ScheduledTaskAction `
   -Execute 'powershell.exe' `
   -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$ScriptsDir\backup-postgres.ps1`""
 
-# Israel is UTC+3 standard / UTC+2 winter — Task Scheduler uses local time.
+# Israel is UTC+3 standard / UTC+2 winter - Task Scheduler uses local time.
 # hpg5 must be configured for Asia/Jerusalem timezone (check via: tzutil /g).
 $Trigger1 = New-ScheduledTaskTrigger -Daily -At '02:00'
 
