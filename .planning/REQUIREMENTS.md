@@ -277,17 +277,196 @@ Explicitly excluded from any version unless reopened. From PRD §14.
 
 ## Traceability
 
-Filled by the roadmapper. Each v1 requirement maps to exactly one phase.
+Each v1 requirement maps to exactly one phase. Phase assignment follows the rule "pick the phase where each REQ first becomes testable" for cross-cutting requirements.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (populated during roadmap creation) | — | Pending |
+| TEN-01 | Phase 1 (Foundations) | Pending |
+| TEN-02 | Phase 1 (Foundations) | Pending |
+| TEN-03 | Phase 1 (Foundations) | Pending |
+| TEN-04 | Phase 1 (Foundations) | Pending |
+| TEN-05 | Phase 1 (Foundations) | Pending |
+| AUTH-01 | Phase 1 (Foundations) | Pending |
+| AUTH-02 | Phase 1 (Foundations) | Pending |
+| AUTH-03 | Phase 1 (Foundations) | Pending |
+| AUTH-04 | Phase 1 (Foundations) | Pending |
+| AUTH-05 | Phase 1 (Foundations) | Pending |
+| AUTH-06 | Phase 1 (Foundations) | Pending |
+| AUTH-07 | Phase 1 (Foundations) | Pending |
+| ROST-01 | Phase 2 (Org & People) | Pending |
+| ROST-02 | Phase 2 (Org & People) | Pending |
+| ROST-03 | Phase 2 (Org & People) | Pending |
+| ROST-04 | Phase 2 (Org & People) | Pending |
+| ROST-05 | Phase 2 (Org & People) | Pending |
+| ROST-06 | Phase 2 (Org & People) | Pending |
+| ROST-07 | Phase 2 (Org & People) | Pending |
+| ROST-08 | Phase 2 (Org & People) | Pending |
+| ROST-09 | Phase 2 (Org & People) | Pending |
+| ROST-10 | Phase 2 (Org & People) | Pending |
+| ROST-11 | Phase 2 (Org & People) | Pending |
+| ROST-12 | Phase 2 (Org & People) | Pending |
+| ROST-13 | Phase 2 (Org & People) | Pending |
+| SHFT-01 | Phase 3 (Availability & Rules) | Pending |
+| SHFT-02 | Phase 3 (Availability & Rules) | Pending |
+| SHFT-03 | Phase 3 (Availability & Rules) | Pending |
+| SHFT-04 | Phase 3 (Availability & Rules) | Pending |
+| SHFT-05 | Phase 3 (Availability & Rules) | Pending |
+| SHFT-06 | Phase 3 (Availability & Rules) | Pending |
+| SHFT-07 | Phase 3 (Availability & Rules) | Pending |
+| AVAL-01 | Phase 3 (Availability & Rules) | Pending |
+| AVAL-02 | Phase 3 (Availability & Rules) | Pending |
+| AVAL-03 | Phase 3 (Availability & Rules) | Pending |
+| AVAL-04 | Phase 3 (Availability & Rules) | Pending |
+| AVAL-05 | Phase 3 (Availability & Rules) | Pending |
+| AVAL-06 | Phase 3 (Availability & Rules) | Pending |
+| AVAL-07 | Phase 3 (Availability & Rules) | Pending |
+| AVAL-08 | Phase 3 (Availability & Rules) | Pending |
+| AVAL-09 | Phase 6 (Notifications & Reports) | Pending |
+| RULE-01 | Phase 3 (Availability & Rules) | Pending |
+| RULE-02 | Phase 3 (Availability & Rules) | Pending |
+| RULE-03 | Phase 3 (Availability & Rules) | Pending |
+| RULE-04 | Phase 3 (Availability & Rules) | Pending |
+| RULE-05 | Phase 3 (Availability & Rules) | Pending |
+| RULE-06 | Phase 3 (Availability & Rules) | Pending |
+| RULE-07 | Phase 3 (Availability & Rules) | Pending |
+| SOLV-01 | Phase 4 (Solver & Schedule) | Pending |
+| SOLV-02 | Phase 4 (Solver & Schedule) | Pending |
+| SOLV-03 | Phase 4 (Solver & Schedule) | Pending |
+| SOLV-04 | Phase 4 (Solver & Schedule) | Pending |
+| SOLV-05 | Phase 4 (Solver & Schedule) | Pending |
+| SOLV-06 | Phase 4 (Solver & Schedule) | Pending |
+| SOLV-07 | Phase 4 (Solver & Schedule) | Pending |
+| SOLV-08 | Phase 4 (Solver & Schedule) | Pending |
+| SOLV-09 | Phase 4 (Solver & Schedule) | Pending |
+| SOLV-10 | Phase 4 (Solver & Schedule) | Pending |
+| LIFE-01 | Phase 4 (Solver & Schedule) | Pending |
+| LIFE-02 | Phase 4 (Solver & Schedule) | Pending |
+| LIFE-03 | Phase 4 (Solver & Schedule) | Pending |
+| LIFE-04 | Phase 4 (Solver & Schedule) | Pending |
+| LIFE-05 | Phase 5 (Lifecycle Features) | Pending |
+| LIFE-06 | Phase 5 (Lifecycle Features) | Pending |
+| LIFE-07 | Phase 5 (Lifecycle Features) | Pending |
+| LIFE-08 | Phase 6 (Notifications & Reports) | Pending |
+| LIFE-09 | Phase 5 (Lifecycle Features) | Pending |
+| SWAP-01 | Phase 5 (Lifecycle Features) | Pending |
+| SWAP-02 | Phase 5 (Lifecycle Features) | Pending |
+| SWAP-03 | Phase 5 (Lifecycle Features) | Pending |
+| SWAP-04 | Phase 5 (Lifecycle Features) | Pending |
+| SWAP-05 | Phase 5 (Lifecycle Features) | Pending |
+| SWAP-06 | Phase 5 (Lifecycle Features) | Pending |
+| SWAP-07 | Phase 5 (Lifecycle Features) | Pending |
+| CLCK-01 | Phase 5 (Lifecycle Features) | Pending |
+| CLCK-02 | Phase 5 (Lifecycle Features) | Pending |
+| CLCK-03 | Phase 5 (Lifecycle Features) | Pending |
+| CLCK-04 | Phase 5 (Lifecycle Features) | Pending |
+| CLCK-05 | Phase 5 (Lifecycle Features) | Pending |
+| CLCK-06 | Phase 5 (Lifecycle Features) | Pending |
+| CLCK-07 | Phase 5 (Lifecycle Features) | Pending |
+| NOTF-01 | Phase 6 (Notifications & Reports) | Pending |
+| NOTF-02 | Phase 6 (Notifications & Reports) | Pending |
+| NOTF-03 | Phase 6 (Notifications & Reports) | Pending |
+| NOTF-04 | Phase 6 (Notifications & Reports) | Pending |
+| NOTF-05 | Phase 6 (Notifications & Reports) | Pending |
+| NOTF-06 | Phase 6 (Notifications & Reports) | Pending |
+| NOTF-07 | Phase 6 (Notifications & Reports) | Pending |
+| NOTF-08 | Phase 6 (Notifications & Reports) | Pending |
+| NOTF-09 | Phase 6 (Notifications & Reports) | Pending |
+| NOTF-10 | Phase 6 (Notifications & Reports) | Pending |
+| NOTF-11 | Phase 6 (Notifications & Reports) | Pending |
+| NOTF-12 | Phase 6 (Notifications & Reports) | Pending |
+| RPT-01 | Phase 6 (Notifications & Reports) | Pending |
+| RPT-02 | Phase 6 (Notifications & Reports) | Pending |
+| RPT-03 | Phase 6 (Notifications & Reports) | Pending |
+| RPT-04 | Phase 6 (Notifications & Reports) | Pending |
+| RPT-05 | Phase 6 (Notifications & Reports) | Pending |
+| RPT-06 | Phase 6 (Notifications & Reports) | Pending |
+| DASH-01 | Phase 7 (Polish & Exports) | Pending |
+| DASH-02 | Phase 7 (Polish & Exports) | Pending |
+| DASH-03 | Phase 7 (Polish & Exports) | Pending |
+| DASH-04 | Phase 7 (Polish & Exports) | Pending |
+| DASH-05 | Phase 7 (Polish & Exports) | Pending |
+| DASH-06 | Phase 7 (Polish & Exports) | Pending |
+| DASH-07 | Phase 7 (Polish & Exports) | Pending |
+| EXPT-01 | Phase 7 (Polish & Exports) | Pending |
+| EXPT-02 | Phase 7 (Polish & Exports) | Pending |
+| EXPT-03 | Phase 7 (Polish & Exports) | Pending |
+| EXPT-04 | Phase 7 (Polish & Exports) | Pending |
+| EXPT-05 | Phase 7 (Polish & Exports) | Pending |
+| EXPT-06 | Phase 7 (Polish & Exports) | Pending |
+| EXPT-07 | Phase 7 (Polish & Exports) | Pending |
+| EXPT-08 | Phase 7 (Polish & Exports) | Pending |
+| I18N-01 | Phase 7 (Polish & Exports) | Pending |
+| I18N-02 | Phase 7 (Polish & Exports) | Pending |
+| I18N-03 | Phase 7 (Polish & Exports) | Pending |
+| I18N-04 | Phase 7 (Polish & Exports) | Pending |
+| I18N-05 | Phase 7 (Polish & Exports) | Pending |
+| I18N-06 | Phase 7 (Polish & Exports) | Pending |
+| I18N-07 | Phase 1 (Foundations) | Pending |
+| SEC-01 | Phase 1 (Foundations) | Pending |
+| SEC-02 | Phase 1 (Foundations) | Pending |
+| SEC-03 | Phase 1 (Foundations) | Pending |
+| SEC-04 | Phase 1 (Foundations) | Pending |
+| SEC-05 | Phase 1 (Foundations) | Pending |
+| SEC-06 | Phase 1 (Foundations) | Pending |
+| SEC-07 | Phase 1 (Foundations) | Pending |
+| SEC-08 | Phase 1 (Foundations) | Pending |
+| SEC-09 | Phase 1 (Foundations) | Pending |
+| SEC-10 | Phase 1 (Foundations) | Pending |
+| OPS-01 | Phase 1 (Foundations) | Pending |
+| OPS-02 | Phase 1 (Foundations) | Pending |
+| OPS-03 | Phase 1 (Foundations) | Pending |
+| OPS-04 | Phase 1 (Foundations) | Pending |
+| OPS-05 | Phase 1 (Foundations) | Pending |
+| OPS-06 | Phase 1 (Foundations) | Pending |
+| OPS-07 | Phase 1 (Foundations) | Pending |
+| OPS-08 | Phase 1 (Foundations) | Pending |
+| OPS-09 | Phase 1 (Foundations) | Pending |
+| OPS-10 | Phase 1 (Foundations) | Pending |
+| PERF-01 | Phase 4 (Solver & Schedule) | Pending |
+| PERF-02 | Phase 7 (Polish & Exports) | Pending |
+| PERF-03 | Phase 7 (Polish & Exports) | Pending |
+| PERF-04 | Phase 1 (Foundations) | Pending |
+| A11Y-01 | Phase 7 (Polish & Exports) | Pending |
+| A11Y-02 | Phase 7 (Polish & Exports) | Pending |
+| A11Y-03 | Phase 7 (Polish & Exports) | Pending |
+| A11Y-04 | Phase 7 (Polish & Exports) | Pending |
+| MIGR-01 | Phase M (Tenant #1 Migration) | Pending |
+| MIGR-02 | Phase M (Tenant #1 Migration) | Pending |
+| MIGR-03 | Phase M (Tenant #1 Migration) | Pending |
+| MIGR-04 | Phase M (Tenant #1 Migration) | Pending |
+| MIGR-05 | Phase M (Tenant #1 Migration) | Pending |
+| MIGR-06 | Phase M (Tenant #1 Migration) | Pending |
 
 **Coverage:**
-- v1 requirements: ~110 total (across 16 categories)
-- Mapped to phases: TBD
-- Unmapped: TBD (must be 0 before roadmap is approved)
+- v1 requirements: 155 total (across 20 categories)
+- Mapped to phases: 155
+- Unmapped: 0 ✓
+- Coverage: 100% ✓
+
+**Phase-level distribution:**
+
+| Phase | Requirements | Count |
+|-------|--------------|-------|
+| Phase 1 (Foundations) | TEN, AUTH, SEC, OPS, I18N-07, PERF-04 | 34 |
+| Phase 2 (Org & People) | ROST | 13 |
+| Phase 3 (Availability & Rules) | SHFT, AVAL (1-8), RULE | 22 |
+| Phase 4 (Solver & Schedule) | SOLV, LIFE (1-4), PERF-01 | 15 |
+| Phase 5 (Lifecycle Features) | SWAP, LIFE (5,6,7,9), CLCK | 18 |
+| Phase 6 (Notifications & Reports) | NOTF, RPT, AVAL-09, LIFE-08 | 20 |
+| Phase 7 (Polish & Exports) | DASH, EXPT, I18N (1-6), A11Y, PERF (2,3) | 27 |
+| Phase M (Tenant #1 Migration) | MIGR | 6 |
+| **Total** | | **155** |
+
+**Cross-cutting assignment notes:**
+- `I18N-07` (Postgres `COLLATE "he-x-icu"` on Hebrew-text columns) → Phase 1: lives in initial migrations 0001–0007.
+- `PERF-04` (composite indexes on `(tenant_id, ...)`) → Phase 1: indexes ship with initial schema migrations.
+- `AVAL-09` (24h-pre-lock notification) → Phase 6: trigger logic + table flag are in Phase 3 schema, but the test "notification fires" requires the dispatcher (Phase 6).
+- `LIFE-04` (publish fires `schedule.published` notifications) → Phase 4: the state-transition + event-stage is testable in Phase 4 against a stub dispatcher; live notification firing is wired in Phase 6.
+- `LIFE-08` (window auto-close via cron) → Phase 6: cron service is built in Phase 6.
+- `LIFE-09` (audit-log UI distinguishes override from swap) → Phase 5: the swap audit and override audit are written in Phase 5; the UI surfaces them in the same audit-log component built here.
+- `PERF-01` (solver p95 <10s) → Phase 4: gated by the CI kibbutz-fixture test in Phase 4 definition of done.
+- `PERF-02` and `PERF-03` (dashboard <2s, API <500ms) → Phase 7: the dashboard surface that exercises these is built in Phase 7.
 
 ---
 *Requirements defined: 2026-05-12*
-*Last updated: 2026-05-12 after initial definition; awaiting roadmap-driven traceability*
+*Last updated: 2026-05-12 — roadmap-driven traceability populated; 155/155 v1 requirements mapped (100% coverage).*
