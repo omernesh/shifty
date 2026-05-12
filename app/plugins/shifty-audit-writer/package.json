@@ -5,5 +5,8 @@
   "exports": {
     "./connections": "./src/connections.js",
     "./types": "./src/types.js"
+  },
+  "dependencies": {
+    "knex": "*"
   }
 }
