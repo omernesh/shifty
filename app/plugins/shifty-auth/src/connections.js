@@ -1,3 +1,4 @@
-// shifty-auth plugin connection exports — empty.
-// (This plugin does not register Knex request types; it provides auth callbacks + a connection hook.)
+// shifty-auth plugin connection exports.
+// Side-effect import: log-redact.js monkey-patches console at module load.
+import './middleware/log-redact.js';
 export default {};

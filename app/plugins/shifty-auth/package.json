@@ -8,7 +8,8 @@
     "./auth/providers": "./src/auth/providers.js",
     "./connections": "./src/connections.js",
     "./types": "./src/types.js",
-    "./hooks/knex-tenant": "./src/hooks/knex-tenant.js"
+    "./hooks/knex-tenant": "./src/hooks/knex-tenant.js",
+    "./middleware/log-redact": "./src/middleware/log-redact.js"
   },
   "dependencies": {
     "knex": "^3.1.0",
