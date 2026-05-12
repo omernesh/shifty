@@ -1,0 +1,15 @@
+{
+  "name": "shifts-manager-dev",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Repo-root dev tooling (Playwright, pg). Application code lives in app/.",
+  "scripts": {
+    "test:e2e": "playwright test",
+    "test:check-queries": "node tools/check-queries.mjs",
+    "test:invite-code": "node --test tools/test/invite-code.test.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0",
+    "pg": "^8.13.1"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "shifty-audit-writer",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": {
+    "./connections": "./src/connections.js",
+    "./types": "./src/types.js"
+  }
+}

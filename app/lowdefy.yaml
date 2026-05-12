@@ -57,6 +57,7 @@ pages:
         connectionId: shifts_db
         properties:
           query: |
+            -- @gsd-allow-untenanted: bootstrap smoke-test surface; legacy 0001 table; superseded in Phase 2
             SELECT id, name, email, role, employment_type, hourly_rate, max_weekly_hrs, active
             FROM employees
             ORDER BY name;
