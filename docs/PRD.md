@@ -349,112 +349,172 @@ The escape hatch for the reality of reserve duty — no-shows, last-minute pulls
 
 #### Endpoint: `POST /solve`
 
-Request schema:
+Request schema (JSON Schema draft-07):
 
 ```json
 {
-  "request_id": "uuid",
-  "window": {
-    "start_date": "2026-05-15",
-    "end_date": "2026-05-29",
-    "timezone": "Asia/Jerusalem"
-  },
-  "team": {
-    "id": "uuid",
-    "name": "צוות א"
-  },
-  "shift_slots": [
-    {
-      "id": "uuid",
-      "name": "בוקר",
-      "start_time": "06:00",
-      "end_time": "18:00",
-      "headcount": 1,
-      "required_role_tags": [],
-      "min_seniority": null
-    }
-  ],
-  "soldiers": [
-    {
-      "id": "uuid",
-      "display_name": "...",
-      "seniority": 3,
-      "role_tags": ["medic"],
-      "active": true
-    }
-  ],
-  "availability": [
-    {
-      "soldier_id": "uuid",
-      "shift_instance_id": "uuid",
-      "state": "available"
-    }
-  ],
-  "shift_instances": [
-    {
-      "id": "uuid",
-      "slot_id": "uuid",
-      "date": "2026-05-15"
-    }
-  ],
-  "rules": {
-    "no_same_day_double": true,
-    "no_consecutive_shift2_then_shift1": true,
-    "max_consecutive_nights": 3,
-    "weekend_separation": true,
-    "max_weekly_hours": 60,
-    "min_rest_hours_between_shifts": 8,
-    "max_shifts_per_period": null,
-    "fairness_objective": "count_variance"
-  },
-  "rule_overrides": [
-    {
-      "soldier_id": "uuid",
-      "rule_key": "max_consecutive_nights",
-      "value": 2
-    }
-  ],
-  "solver_options": {
-    "max_seconds": 10,
-    "random_seed": 42
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SolveRequest",
+  "type": "object",
+  "required": ["tenant_id", "team_id", "window", "shift_slots", "soldiers", "availability", "rules"],
+  "properties": {
+    "tenant_id": {"type": "string", "format": "uuid"},
+    "team_id": {"type": "string", "format": "uuid"},
+    "solver_run_id": {"type": "string", "format": "uuid"},
+    "window": {
+      "type": "object",
+      "required": ["start_date", "end_date"],
+      "properties": {
+        "start_date": {"type": "string", "format": "date"},
+        "end_date": {"type": "string", "format": "date"}
+      }
+    },
+    "shift_slots": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "start_time", "end_time", "headcount"],
+        "properties": {
+          "id": {"type": "string"},
+          "name": {"type": "string"},
+          "start_time": {"type": "string", "format": "time"},
+          "end_time": {"type": "string", "format": "time"},
+          "headcount": {"type": "integer", "minimum": 1},
+          "required_role_tags": {"type": "array", "items": {"type": "string"}},
+          "min_seniority": {"type": "integer"}
+        }
+      }
+    },
+    "soldiers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "role_tags", "seniority"],
+        "properties": {
+          "id": {"type": "string", "format": "uuid"},
+          "role_tags": {"type": "array", "items": {"type": "string"}},
+          "seniority": {"type": "integer"}
+        }
+      }
+    },
+    "availability": {
+      "type": "array",
+      "description": "Per (soldier × date × slot) availability. Missing entries default to AVAILABLE.",
+      "items": {
+        "type": "object",
+        "required": ["soldier_id", "date", "available"],
+        "properties": {
+          "soldier_id": {"type": "string", "format": "uuid"},
+          "date": {"type": "string", "format": "date"},
+          "slot_id": {"type": ["string", "null"]},
+          "available": {"type": "boolean"}
+        }
+      }
+    },
+    "rules": {
+      "type": "object",
+      "properties": {
+        "no_same_day_double": {"type": "boolean"},
+        "no_consecutive_shift2_then_shift1": {"type": "boolean"},
+        "max_consecutive_nights": {"type": ["integer", "null"]},
+        "weekend_separation": {"type": "boolean"},
+        "max_weekly_hours": {"type": ["integer", "null"]},
+        "min_rest_hours_between_shifts": {"type": ["integer", "null"]},
+        "max_shifts_per_period": {"type": ["integer", "null"]},
+        "fairness_objective": {"type": "boolean"}
+      }
+    },
+    "rule_overrides": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["soldier_id", "rule_name", "value"],
+        "properties": {
+          "soldier_id": {"type": "string", "format": "uuid"},
+          "rule_name": {"type": "string"},
+          "value": {}
+        }
+      }
+    },
+    "max_seconds": {"type": "integer", "default": 10},
+    "random_seed": {"type": ["integer", "null"]}
   }
 }
 ```
 
-Response schema:
+Response schema (success):
 
 ```json
 {
-  "request_id": "uuid",
-  "status": "optimal | feasible | infeasible | timeout",
-  "solve_time_seconds": 4.21,
-  "assignments": [
-    {
-      "shift_instance_id": "uuid",
-      "soldier_id": "uuid"
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SolveResponse",
+  "type": "object",
+  "required": ["status", "solver_run_id"],
+  "properties": {
+    "status": {"enum": ["optimal", "feasible", "infeasible", "error"]},
+    "solver_run_id": {"type": "string", "format": "uuid"},
+    "solve_time_seconds": {"type": "number"},
+    "assignments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["date", "slot_id", "soldier_id"],
+        "properties": {
+          "date": {"type": "string", "format": "date"},
+          "slot_id": {"type": "string"},
+          "soldier_id": {"type": "string", "format": "uuid"}
+        }
+      }
+    },
+    "soldier_shift_counts": {
+      "type": "object",
+      "additionalProperties": {"type": "integer"}
+    },
+    "objective_value": {"type": "number"},
+    "infeasibility_report": {
+      "type": "object",
+      "properties": {
+        "offending_rules": {"type": "array", "items": {"type": "string"}},
+        "uncovered_slots": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "date": {"type": "string", "format": "date"},
+              "slot_id": {"type": "string"},
+              "headcount_missing": {"type": "integer"}
+            }
+          }
+        }
+      }
     }
-  ],
-  "stats": {
-    "per_soldier_shift_counts": {
-      "soldier_uuid": 4
-    },
-    "per_soldier_night_counts": {
-      "soldier_uuid": 1
-    },
-    "per_soldier_total_hours": {
-      "soldier_uuid": 48
-    },
-    "uncovered_instances": ["uuid"]
-  },
-  "infeasibility_report": {
-    "offending_rules": ["max_weekly_hours"],
-    "explanation": "Soldier UUID exceeds max_weekly_hours regardless of assignment."
   }
 }
 ```
+
+Error envelope (4xx/5xx):
+
+```json
+{
+  "error": {
+    "code": "string",
+    "message": "string",
+    "details": {}
+  }
+}
+```
+
+Error codes:
+
+| Code | HTTP | When |
+|------|------|------|
+| `INVALID_INPUT` | 400 | Request fails schema validation or references unknown soldier/slot ids |
+| `WINDOW_TOO_LARGE` | 413 | Window × soldiers × slots exceeds the solver's hard ceiling (see §8 scalability) |
+| `TIMEOUT` | 504 | `max_seconds` elapsed and no feasible solution was found |
+| `INTERNAL` | 500 | Uncaught exception in the solver process |
 
 - **Performance target**: <10 seconds for a 30-day window with 30 soldiers and 4 active rules.
-- **Timeout behavior**: if `max_seconds` is hit before optimality, return best-feasible with `status=feasible`. If no feasible solution exists, return `status=infeasible` with the offending-rules report.
+- **Timeout behavior**: if `max_seconds` is hit before optimality, return best-feasible with `status=feasible`. If no feasible solution exists, return `status=infeasible` with the offending-rules report. Hard timeout with no feasible result returns the `TIMEOUT` error envelope.
 - **Determinism**: same input + same seed = same output. Important for reproducible debugging.
 - **`random_seed` exposure**: hidden from the manager UI. Lowdefy generates it server-side (or defaults to a fixed value per run) and persists it on `solver_run.request_payload` for engineer-side debugging only. Surfacing it would confuse non-technical managers without unlocking any user-facing capability.
 - **No persistence**: the solver does not log requests/responses to disk in production (memory-only, with optional debug log to stderr). Lowdefy stores the request and response in `solver_run` for audit.
@@ -514,21 +574,28 @@ Response schema:
 | Push | Web Push API + service worker | Required |
 | In-app | Bell icon + queue table | Required |
 
-- **Event types** (default channel set per event in parentheses):
+#### Event catalog
 
-| Event | Default channels |
-|-------|------------------|
-| `schedule_published` | Email + In-app + Push |
-| `swap_proposed` (to counterparty) | In-app + Push + WhatsApp |
-| `swap_accepted` (to initiator) | In-app + Push |
-| `swap_approved` (to all affected) | Email + In-app + Push |
-| `swap_rejected` (to initiator) | In-app + Push |
-| `manager_override` (to soldier) | In-app + Email |
-| `constraint_lock_approaching` (to soldier, 24h before lock) | In-app + WhatsApp |
-| `constraint_lock_passed` (to soldier) | In-app |
-| `assignment_changed` (manager direct edit; to soldier) | Email + In-app + Push |
-| `daily_report` (to subscribed recipients) | Email |
-| `weekly_digest` (to subscribed recipients) | Email |
+Every system event that emits a notification. "Default channels" can be overridden per user per event type from the profile page.
+
+| Event | Trigger | Recipient(s) | Default channels | Template vars |
+|-------|---------|--------------|-------------------|---------------|
+| `invite.sent` | Admin generates invite code | Invited email | Email | `code, tenant_name, expiry, inviter_name` |
+| `signup.welcome` | New user first signin | The user | Email, in-app | `user_name, tenant_name` |
+| `availability.lock_approaching` | 24h before lock | All team soldiers | Email + WhatsApp + in-app | `team_name, lock_at, missing_count` |
+| `availability.locked` | Lock time passes | All team soldiers | In-app | `team_name, lock_at` |
+| `schedule.draft_ready` | Manager generates draft | Manager | In-app | `team_name, window` |
+| `schedule.published` | Manager publishes | All assigned soldiers | All channels (per-user toggles) | `team_name, window, assignment_count` |
+| `schedule.manual_override` | Manager edits cell | Affected soldiers (removed + added) | All channels | `team_name, date, slot, previous_soldier, new_soldier` |
+| `swap.proposed` | Soldier A proposes swap to B | Soldier B | All channels | `proposer_name, date, slot` |
+| `swap.accepted_by_counterparty` | Soldier B accepts | Manager | In-app + email | `swap details` |
+| `swap.declined` | Soldier B declines | Soldier A | In-app + email | `swap details` |
+| `swap.approved` | Manager approves (or auto-approves) | Both soldiers | All channels | `swap details` |
+| `swap.rejected` | Manager rejects | Both soldiers | In-app + email | `swap details, reason?` |
+| `report.daily_briefing` | Cron at `CRON_DAILY_REPORT_HOUR` | Subscribed recipients | Email | `team_name, today_assignments, unscheduled_constraints` |
+| `report.weekly_digest` | Cron at weekly slot | Subscribed recipients | Email | `team_name, week_range, schedule_table, anomalies` |
+| `waha.session_down` | WAHA reports session-down | Tenant admin | Email + in-app | `last_alive_at` |
+| `cron.failure` | Cron job throws | Tenant admin | Email + in-app | `job_name, error_message` |
 
 - **Per-user override**: profile UI lets the user pick channels per event. Stored as `notification_pref` rows: (`user_id`, `event_type`, `channels JSONB`).
 - **Per-recipient locale**: each user's preferred locale on `app_user.locale` (set in profile; defaults from `APP_DEFAULT_LOCALE`) drives the language of email/WhatsApp/in-app notifications sent TO that user. The dispatcher loads the recipient's locale at send time and picks the Hebrew or English template accordingly. A Hebrew-only tenant and a mixed-locale tenant both work without admin intervention.
@@ -638,7 +705,7 @@ The schedule lives in Postgres but managers and soldiers want it in the tools th
 
 ## 8. Non-Functional Requirements
 
-### Performance
+### 8.1 Performance
 
 | Surface | Target |
 |---------|--------|
@@ -649,7 +716,7 @@ The schedule lives in Postgres but managers and soldiers want it in the tools th
 | WhatsApp delivery | <30s from event (best-effort) |
 | Push delivery | <5s from event |
 
-### Security
+### 8.2 Security
 
 - All routes authenticated except the magic-link request and the magic-link callback.
 - Tenant scoping enforced server-side; client cannot escalate.
@@ -660,28 +727,96 @@ The schedule lives in Postgres but managers and soldiers want it in the tools th
 - CSRF protection on all state-changing endpoints (NextAuth provides this).
 - Invite codes are not enumerable (no listing endpoint without auth + role check).
 
-### i18n / RTL
+### 8.3 Authorization (RBAC matrix)
 
-- **Default language: Hebrew.** Layout RTL.
-- **English available** as a per-user preference; layout LTR when English is selected.
-- All UI strings live in i18n bundles in `app/locales/he.yaml` and `app/locales/en.yaml`.
-- Date format: `DD/MM/YYYY` (Hebrew and English).
-- Time format: 24-hour (`HH:mm`).
-- Numbers and times remain Latin numerals in Hebrew UI (standard Israeli convention).
-- Email templates: Hebrew templates use `dir="rtl"` on the body; English templates LTR. Recipient locale on `app_user.locale` (or `report_recipient.locale` for external recipients) picks the template at send time.
+Four roles. Permission shorthand: `C`=create, `R`=read, `U`=update, `D`=delete; `CRUD`=all four; `R`=read-only; `R+W`=read and write but not delete; `none`=no access. A role with `R` on an entity sees only rows scoped per the Notes column. Tenant-scoping is implicit on every cell — no role can see another tenant's data.
 
-### Accessibility
+| Area | Entity | tenant_admin | manager (team-scoped) | soldier | unauthenticated | Notes |
+|------|--------|--------------|------------------------|---------|------------------|-------|
+| Tenant & org | `tenant` | R+U | R | R | none | Admin can rename; org_depth immutable post-create |
+| Tenant & org | `unit` (`org_unit` level=1) | CRUD | R | R | none | Single unit per tenant |
+| Tenant & org | `platoon` (`org_unit` level=2) | CRUD | R | R | none | Only in 2/3-level orgs |
+| Tenant & org | `team` (`org_unit` level=3 leaf) | CRUD | R+U on owned teams | R on member teams | none | Manager can rename own team; cannot create |
+| People | `app_user` (own profile) | CRUD | R+U | R+U | none | Includes locale, color, notification prefs |
+| People | `app_user` (other profiles) | CRUD | R within team scope | R within team scope | none | Soldiers see other team members' display data only |
+| People | `soldier` | CRUD | R+U within team scope | R own | none | Manager edits seniority/role_tags/notes for own team |
+| People | `invite_code` | CRUD | C+R+D within team scope | none | none | Manager generates codes only for own teams |
+| Shifts | `team_shift_slot` (`shift_slot`) | CRUD | CRUD within team scope | R within team scope | none | Slot times define soldier-visible availability UI |
+| Shifts | `role_tag` | CRUD | C+R+U within team scope | R | none | Tenant-scoped; inline-create from CSV import path |
+| Shifts | `soldier_role_tags` (`soldier.role_tags`) | CRUD | R+U within team scope | R own | none | Tightening rule: soldier cannot self-grant tags |
+| Rules | `rule` (team-level) | CRUD | CRUD within team scope | R within team scope | none | Manager owns rules for own team |
+| Rules | `rule_override` (per-soldier) | CRUD | CRUD within team scope | R own | none | Override can only tighten (§7.6) |
+| Availability | `availability_blockout` (`availability` rows with source=`range_blockout`) | CRUD | CRUD within team scope | CRUD own (until lock) | none | Post-lock: only manager (audited) |
+| Availability | `availability_slot_override` (`availability` rows with source=`per_slot`) | CRUD | CRUD within team scope | CRUD own (until lock) | none | Same lock rules |
+| Lifecycle | `schedule_draft` (`planning_window` state=draft) | R+U | CRUD within team scope | R within team scope | none | Only manager promotes to published |
+| Lifecycle | `schedule_published` (`planning_window` state=published) | R+U | CRU within team scope (no delete; immutable after window close) | R within team scope | none | Edits captured as `manager_override` audit rows |
+| Lifecycle | `assignment` | R+U | R+U within team scope | R own | none | Soldier can only mutate via swap_request |
+| Lifecycle | `swap_request` | R+U | CRUD within team scope | C own; R+U on own counterparty rows | none | Manager approves; soldier accepts/declines |
+| Solver | `solver_run` (read) | R | R within team scope | none | none | Audit-only |
+| Solver | `solver_run` (trigger) | C | C within team scope | none | none | Triggering creates a draft schedule |
+| Time clock | `time_clock_entry` (own) | CRUD | R+U own | CRUD own | none | Soldier can edit historical entries |
+| Time clock | `time_clock_entry` (team) | R+U | R+U within team scope | none | none | Manager edits another soldier's entry → audit row |
+| Time clock | `time_clock_entry` (tenant) | R+U | none | none | none | Admin sees aggregate across teams |
+| Notifications | `notification_pref` (own) | CRUD | R+U own | R+U own | none | Per-event channel toggles |
+| Notifications | `notification_log` (own) | R | R own | R own | none | History inspectable |
+| Notifications | `notification_log` (team) | R | R within team scope | none | none | Manager sees delivery status for own team |
+| Reporting | `report_subscription` (`report_recipient`) | CRUD | CRUD within team scope | none | none | External recipients managed by admin/manager |
+| Exports | `ical_subscription_token` (own) | CRUD | R+U own | CRUD own | none | Soldier revokes own token; token URL acts as auth |
+| Exports | `pdf_export` | R | C+R within team scope | C+R own (own scope) | none | Ephemeral; no row persisted |
+| Exports | `csv_export` | R | C+R within team scope | C+R own (own scope) | none | Ephemeral; no row persisted |
+| Imports | `roster_import_log` | CRUD | C+R+U within team scope | none | none | Manager runs imports for own team |
+| Audit | `schedule_audit` (read) | R | R within team scope | R own (rows where the soldier is affected) | none | Append-only; no delete or update for any role |
+
+**Enforcement**: a `tenant_id` filter is mandatory on every server-side query — derived from the authenticated session, never from request input. Lowdefy pages set a top-level `auth` block declaring the minimum role required to render the page; pages that mix roles (e.g., a soldier-readable view that hides manager-only controls) gate controls via conditional visibility on the same role check. Every request that mutates data re-checks the role on the server (Lowdefy `requests` block `properties.auth`) — never trust the client. The four-layer defense is: (1) session has a tenant_id; (2) query has a tenant_id filter; (3) page has an auth block; (4) request has a server-side role check. Missing any one of these is a release-blocking bug.
+
+### 8.4 Test strategy
+
+| Test type | Scope | Tool | Run when |
+|-----------|-------|------|----------|
+| Unit | Pure functions (solver constraint encoding, locale picking, HMAC token gen) | pytest (solver), vitest (Node helpers) | Pre-commit + CI |
+| Integration | Solver service end-to-end against a real Postgres | pytest + testcontainers | CI |
+| Schema/migration | Each new SQL migration applies cleanly to a fresh + an existing DB | docker compose + psql | CI |
+| RBAC | Permission matrix enforced — admin/manager/soldier paths | Playwright + seeded fixtures | Pre-release |
+| E2E (golden path) | Signup → invite → roster → availability → solve → publish → export | Playwright | Pre-release |
+| RTL/Hebrew rendering | Email + PDF + UI render correctly in HE | Visual diff (Litmus for email, Playwright for UI) | Pre-release |
+| Load (solver) | 30 soldiers × 30 days × 8 rules p95 ≤ 10s | Locust + synthetic data | Manual, pre-launch |
+| Notification delivery | Email/WhatsApp/push reach recipients | Live integration test in staging | Pre-release |
+
+**Test data**: a fixture set ("the kibbutz fixture") with 12 soldiers / 1 team / 64-day window mirroring the user's actual data, used everywhere. Smart-quote-variant names (one soldier with U+2019 in the display name) are intentionally seeded to enforce the canonical-key rule: every join must succeed against the smart-quoted row, every aggregation must count it correctly. The fixture lives in `tools/fixtures/kibbutz.sql` and is the seed for both local dev and CI integration tests.
+
+### 8.5 i18n / RTL
+
+- **Two locales for v1**: `he` (default, RTL) and `en` (alt, LTR).
+- **Message format**: ICU MessageFormat. Files: `app/locales/he.json`, `app/locales/en.json`. Keys use dot-notation by feature (`shifts.assignment.notify.subject`).
+- **Locale source**: `app_user.locale` column. NextAuth session carries it. Every server-rendered output (Lowdefy pages, email templates, PDF exports) picks the recipient's locale at render time.
+- **RTL detection**: locale-driven (`he` → RTL). Lowdefy's `config.theme.direction` set per-request based on user.
+- **Date/time**: `Asia/Jerusalem` timezone everywhere. Date format derives from locale (`he` → `DD/MM/YYYY`; `en` → `YYYY-MM-DD`). Time format: 24-hour (`HH:mm`) in both locales.
+- **Numbers**: Latin numerals in both Hebrew and English UI (standard Israeli convention).
+- **Hebrew + English in the same template**: Hebrew labels in `he.json` may include English (e.g., "Email" stays "Email" in both — common). No mixing in code.
+- **Email templates**: Hebrew templates use `dir="rtl"` on the body; English templates LTR. Recipient locale on `app_user.locale` (or `report_recipient.locale` for external recipients) picks the template at send time.
+- **Tooling**: a CI check fails the build if any key in `he.json` is missing in `en.json` (and vice versa). Script lives in `tools/check-locales.mjs`.
+
+### 8.6 Accessibility
 
 - WCAG 2.1 AA target for all interactive elements.
 - Keyboard navigation throughout.
 - Color is never the only signifier (leaderboard pairs color with the soldier name and the bar length).
 - Sufficient color contrast on calendar cells.
 
-### Scalability
+### 8.7 Scalability
 
 - v1 design target: 100 tenants × 200 soldiers × 1 active planning window per team. Postgres on a single instance is sufficient.
 - v2 horizon: 1,000 tenants. Solver may need to move to a job queue with workers; database may need partitioning by tenant.
 - Notification dispatch is currently synchronous within the app; if WAHA or Resend latency spikes, this is a known bottleneck. v1 mitigation: 3-retry with backoff. v1.1: extract to a background queue.
+
+### 8.8 Backup & recovery
+
+- **Postgres**: nightly `pg_dump --format=custom` to a hpg5 local path (`C:\shifts-manager\backups\pg\`). Retention: 14 daily + 8 weekly + 6 monthly. A small PowerShell script runs from Windows Task Scheduler; output written to `backups\pg\YYYY-MM-DD.dump`.
+- **Off-host copy**: nightly `rclone` or `restic` push to a separate host (neshernas at `192.168.1.121` over Tailscale, or an S3-compatible bucket if available). The off-host copy is the disaster-recovery copy; the local copy is the convenience copy.
+- **Restore drill**: quarterly. Spin up a parallel postgres container from the latest dump, run a connection-string swap test, point a staging Lowdefy at it, verify a known page renders end-to-end (signin → dashboard → schedule view).
+- **PITR**: out of scope for v1. WAL archiving deferred to v1.1; the nightly-dump RPO of ~24h is acceptable for a tool whose hardest deadline is "tomorrow's schedule must be correct".
+- **App config**: `app/lowdefy.yaml` + `db/migrations/` are in git; nothing else app-level requires backup.
+- **Secrets**: `.env` on hpg5 is backed up encrypted (passphrase in 1Password). Recovery: paste-restore from the password manager.
 
 ---
 
@@ -1060,6 +1195,70 @@ CREATE INDEX idx_ical_subscription_token_soldier_id ON ical_subscription_token(s
 
 The `0001_init.sql` `employees` table is **superseded by `soldier`**. Migration `0008_drop_legacy.sql` will drop `employees` once `soldier` is populated (no production data yet, so it's a one-shot replacement). Until then, `employees` stays for compatibility with the bootstrap app.
 
+### 10.1 State machines
+
+Each lifecycle in the system has a finite state machine. Captured here in one place so that solver, swap, override, and time-clock flows can be cross-checked against the same source of truth. State columns and audit tables are listed beside each diagram.
+
+#### Assignment lifecycle
+
+```
+[null] → [proposed] (draft) → [assigned] (published) → [confirmed] (soldier acks) → [completed] (after shift) → [cancelled]
+                                       ↓                                                         ↑
+                                  [swapped] → [assigned] (with new soldier)         (manager any time before completed)
+```
+
+States: `proposed` (in draft window), `assigned` (published), `confirmed` (soldier acked in-app), `completed` (post-shift `now() > shift_instance.end`), `cancelled` (manager voided), `swapped` (transient marker during swap apply). Persisted on `assignment.state` (new column added in migration `0008_assignment_state.sql`); transitions logged to `schedule_audit`. Drivers: solver writes `proposed`; publish writes `assigned`; soldier ack writes `confirmed`; cron writes `completed`; manager writes `cancelled`; swap apply writes `swapped` then immediately `assigned` against the new soldier id.
+
+#### Swap request lifecycle
+
+```
+[draft] → [pending_counterparty] → [pending_manager] → [approved] → [applied]
+   ↓             ↓                          ↓                ↓
+[cancelled]  [declined]              [rejected]       [reverted]
+```
+
+Persisted on `swap_request.state` (existing column; `state_history JSONB` captures every transition's `{from, to, actor, at, payload}`). Drivers: initiator → `draft` and `pending_counterparty`; counterparty → `declined` or transitions to `pending_manager`; manager → `rejected` or `approved`; system → `applied` (on assignment patch); manager → `reverted` (escape hatch within 24h of `applied`). Each transition fires the corresponding notification event from §7.11.
+
+#### Invite code lifecycle
+
+```
+[active] → [redeemed] (one or more times) → [exhausted] (max_uses hit)
+   ↓                                              ↓
+[revoked] (admin action)                    [expired] (expires_at passes)
+```
+
+Persisted on `invite_code.uses`, `invite_code.expires_at`, and a derived `status` resolved at query time. No explicit state column; the state is the join of those three fields. Drivers: admin creates → `active`; user redeems → `uses++`; admin revokes → sets `revoked_at` (column added in migration `0008_invite_code_revoke.sql`).
+
+#### Schedule (planning window) lifecycle
+
+```
+[no_schedule] → [draft] (solver run) → [published] → [archived] (window passes)
+                  ↓                          ↓
+             [solving]                   [republished] (after manual override)
+```
+
+Persisted on `planning_window.state` (existing). `solving` is the transient state during a solver call — set on `solver_run` insert, cleared on solver response. `republished` is not a distinct stored state; manual overrides increment a `version` on the window row and write `to_state='manager_override'` to `schedule_audit`. Window auto-archives on `end_date + 1 day` via cron.
+
+#### `solver_run` lifecycle
+
+```
+[queued] → [running] → [succeeded] (optimal | feasible)
+              ↓
+         [failed] (timeout | error)
+```
+
+Persisted on `solver_run.status` (existing). Lowdefy inserts a row in `queued`, the solver call transitions through `running`, and the response is persisted with the terminal status (`optimal`, `feasible`, `infeasible`, `timeout`, or `error`). No retry on `failed`; manager re-runs manually.
+
+#### `time_clock_entry` lifecycle
+
+```
+[in_progress] (check-in tapped, no check-out yet) → [closed] (check-out tapped or manual save)
+                                                          ↓
+                                                     [adjusted] (soldier edited times)
+```
+
+Derived state, not stored: `in_progress` when `ended_at IS NULL`; `closed` when both timestamps present; `adjusted` flagged by an `updated_at > created_at` check plus a `source='manual'` row. Drivers: soldier tap → in_progress / closed; soldier manual edit → adjusted; manager edits another soldier's entry → adjusted + a `schedule_audit` row with `actor_kind='user'` and `to_state='time_clock_adjustment'`.
+
 ---
 
 ## 11. Architecture
@@ -1121,6 +1320,31 @@ Cron     ─▶ Lowdefy (internal HTTP, triggers report runs)
 ```
 
 The solver never calls back into Lowdefy. Lowdefy never calls the browser except via Web Push (browser-initiated subscription). The cron service only calls Lowdefy; it never touches Postgres or the solver directly.
+
+### 11.1 HTTP endpoint catalog
+
+Lowdefy doesn't expose arbitrary REST endpoints by default — most requests are page-bound and resolved server-side from YAML. The non-page-bound surface is small and explicit. Below is the complete HTTP surface a caller (browser, webhook source, or peer container) can reach.
+
+#### Lowdefy (port 8080:3000, public via Cloudflare Tunnel)
+
+| Path | Method | Auth | Caller | Purpose |
+|------|--------|------|--------|---------|
+| `/api/auth/*` | various | varies | Browser | NextAuth.js endpoints (signin, callback, session, csrf) |
+| `/api/ical/<token>` | GET | Signed token | Calendar app polling | iCal subscription feed for one soldier |
+| `/api/export/csv/<run_id>` | GET | Session | Browser | Streams CSV of a published schedule scope |
+| `/api/export/pdf/<run_id>` | GET | Session | Browser | Streams PDF rendered via Puppeteer |
+| `/api/webhook/waha` | POST | Shared secret (`WAHA_WEBHOOK_SECRET`) | WAHA | Inbound message acks / session-status |
+| `/api/webhook/resend` | POST | Resend signature | Resend | Delivery / bounce / complaint notifications |
+| `/api/internal/cron/<job_name>` | POST | Cron service secret (`CRON_SHARED_SECRET`) | cron container | Trigger periodic dispatchers (daily report, weekly digest, lock reminders) |
+
+#### Solver (port 8000, internal only)
+
+| Path | Method | Auth | Caller | Purpose |
+|------|--------|------|--------|---------|
+| `/solve` | POST | Bearer (`SOLVER_SHARED_SECRET`) | Lowdefy | Solve a planning window — see §7.8 |
+| `/health` | GET | none | Compose / docker healthcheck | Liveness probe |
+
+The Lowdefy-side `/api/internal/*` surface is not reachable from the public tunnel — only the cron container (same docker network) can hit it. The shared-secret env vars (`WAHA_WEBHOOK_SECRET`, `CRON_SHARED_SECRET`, `SOLVER_SHARED_SECRET`) are added to §17 alongside the existing inventory.
 
 ---
 
@@ -1283,6 +1507,74 @@ Cron tick (07:00 Israel) ───▶ Lowdefy                Postgres           
 - Geofenced time-clock (opt-in per tenant)
 - SLA-backed deliverability (e.g., move from WAHA to a commercial WhatsApp Business API)
 
+### 13.1 v1 build dependency graph
+
+The order in which v1 components must be built. Each arrow is "must precede"; siblings under a fork can be built in parallel by separate sub-agents.
+
+```
+[migrations 0001-0007]
+        ↓
+[auth + tenancy + RBAC]
+        ↓
+        ├──→ [units + platoons + teams CRUD]
+        │           ↓
+        │      [shift slots CRUD]
+        │           ↓
+        │      [role tags + seniority]
+        │           ↓
+        │      [soldiers CRUD] ←──[CSV roster import]
+        │           ↓
+        │      [availability submission UI]
+        │           ↓
+        │      [rules engine config]
+        │           ↓
+        │      [solver service /solve]
+        │           ↓
+        │      [draft generation + manager edit]
+        │           ↓
+        │      [publish + assignment view]
+        │           ↓
+        │      ├──→ [swap workflow]
+        │      ├──→ [manager manual override]
+        │      ├──→ [time clock]
+        │      ├──→ [dashboard]
+        │      └──→ [exports: iCal, CSV, PDF]
+        │
+        └──→ [notification dispatcher + Resend + WAHA + Push + in-app]
+                    ↓
+              [cron service + daily/weekly reports + lock reminders]
+```
+
+Collapsed into phases:
+
+1. **Foundations** — migrations 0001–0007, auth + tenancy + RBAC. Nothing user-visible until this is done.
+2. **Org & people** — units, platoons, teams, soldiers, role tags, CSV roster import. The roster is the precondition for everything else.
+3. **Availability & rules** — availability submission UI, rules engine config, constraint lock. Without these the solver has nothing to chew on.
+4. **Solver & schedule** — solver service, draft generation, manager edit, publish. The headline feature.
+5. **Lifecycle features** — swap workflow, manager manual override, time clock. Make the schedule a living document.
+6. **Notifications & reports** — dispatcher across all four channels, cron service, daily and weekly reports, lock reminders. Built in parallel with phase 5 once the dispatcher is up.
+7. **Polish & exports** — dashboard charts, iCal/CSV/PDF exports, English-locale parity. The last-mile delight features.
+
+### 13.2 Migration from the existing Google Sheet (tenant #1)
+
+The user's existing Google Sheet is the de-facto seed dataset for tenant #1 (the user's own unit). This subsection spells out the one-time migration path. Future tenants do not migrate — they use signup + invite codes + CSV roster import (see closing paragraph).
+
+- **Source**: Google Sheet `1GlT_Qu4Fi3gl0qSMp798mg0wKEEG1_-iSNrVjQkV8wI` — tabs `groups`, `משמרות הערכה ועיבוד`, `settings`.
+- **What migrates**:
+  - **Soldiers** from `groups` tab → roster CSV → Roster CSV Import (§7.3.1).
+  - **Constraints** for the current window from the constraints block (rows 14–29) → `availability_blockout` rows.
+  - **Rules** from `settings` tab (`consecutive_night_limit`, `rule_no_same_day`, `rule_no_consecutive_shift2_shift1`, `rule_weekend_separation`) → team `rule` rows with values transferred.
+  - **Existing assignments** (the hand-typed grid) → `assignment` rows with a `source: 'imported'` marker on `schedule_audit.payload`.
+- **What doesn't migrate**:
+  - Dashboard data, formulas, ASCII bars — re-derive from migrated assignments + a fresh `solver_run` against the next planning window.
+  - Smart-quote-variant names → canonicalized at import (script strips U+2019, replaces with the apostrophe-free canonical form before writing `soldier.display_name`).
+  - The draft tab — assume the prod tab is the source of truth.
+- **How**: a one-off CLI/script in `tools/migrate-from-sheet/` (Python preferred — matches the solver's language; Node acceptable). The sheet is publicly readable, so `https://docs.google.com/spreadsheets/d/<id>/gviz/tq?tqx=out:csv&gid=<tab_gid>` works without auth. The script reads the three CSVs and emits SQL `INSERT` statements ordered by FK dependency (tenant → org_unit → soldier → shift_slot → planning_window → shift_instance → availability → assignment → rule).
+- **Verification**: after import, the user manually compares a sample week's schedule between the sheet and the app, side by side. If they match cell-for-cell, the sheet is archived (set to read-only at the Drive level) and the app becomes canonical. If they don't match, the import is rolled back via `TRUNCATE` on the tenant's rows (the script keeps the tenant_id handy) and the script is fixed.
+- **Out of scope**: ongoing two-way sync. Once migrated, the sheet is frozen. Users who continue to type into the sheet are doing so against an outdated copy.
+
+**Second tenant onwards**: no migration needed. They sign up at `apps.nesher.co`, the founding admin becomes `unit_admin`, they configure org depth, add teams, invite soldiers via codes, and import their roster via CSV. The Google Sheet migration path is tenant-#1-only and is deleted from `tools/` once tenant #1 confirms success.
+
 ---
 
 ## 14. Out of Scope for v1
@@ -1369,11 +1661,14 @@ Inventory only. No secrets included.
 | `RESEND_FROM_EMAIL` | Lowdefy | `shifty@nesher.co` |
 | `WAHA_BASE_URL` | Lowdefy | Internal URL (`http://waha:3000`) |
 | `WAHA_API_KEY` | Lowdefy | WAHA session token |
+| `WAHA_WEBHOOK_SECRET` | Lowdefy | Shared secret for inbound WAHA webhook (`/api/webhook/waha`) |
 | `VAPID_PUBLIC_KEY` | Lowdefy, browser | Web Push public key |
 | `VAPID_PRIVATE_KEY` | Lowdefy | Web Push private key |
 | `VAPID_SUBJECT` | Lowdefy | Contact mailto (`mailto:omernesher@gmail.com`) |
 | `SOLVER_BASE_URL` | Lowdefy | Internal URL (`http://solver:8000`) |
 | `SOLVER_MAX_SECONDS` | Lowdefy | Default solver timeout (10) |
+| `SOLVER_SHARED_SECRET` | Lowdefy, solver | Bearer token for `/solve` |
+| `CRON_SHARED_SECRET` | Lowdefy, cron | Bearer token for `/api/internal/cron/*` |
 | `APP_DEFAULT_LOCALE` | Lowdefy | `he` |
 | `APP_DEFAULT_TIMEZONE` | Lowdefy, solver | `Asia/Jerusalem` |
 | `ICAL_SUBSCRIPTION_BASE_URL` | Lowdefy | Full URL prefix for signed iCal subscription URLs (e.g., `https://apps.nesher.co/api/ical/`) |
