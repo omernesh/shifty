@@ -8,6 +8,9 @@ services:
       POSTGRES_CONNECTION_STRING: "postgresql://${POSTGRES_USER:-shifts}:${POSTGRES_PASSWORD:?missing}@postgres:5432/${POSTGRES_DB:-shifts}"
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?missing}
       NEXTAUTH_URL: ${NEXTAUTH_URL:-https://apps.nesher.co}
+      # RESEND_API_KEY is required by Plan 03 NextAuth EmailProvider. Provision in hpg5 .env before running Plan 03.
+      RESEND_API_KEY: ${RESEND_API_KEY:?missing}
+      RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:-shifty@nesher.co}
     depends_on:
       postgres:
         condition: service_healthy
@@ -22,6 +25,24 @@ services:
       timeout: 10s
       retries: 5
       start_period: 60s
+
+  migrate:
+    image: migrate/migrate:v4.18.3
+    container_name: shifty-migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./db/migrations:/migrations:ro
+    command:
+      - "-path=/migrations"
+      - "-database=postgres://${POSTGRES_USER:-shifts}:${POSTGRES_PASSWORD:?missing}@postgres:5432/${POSTGRES_DB:-shifts}?sslmode=disable"
+      - "up"
+    restart: "no"
+    # One-shot: exits 0 on success. Run manually before each deploy:
+    #   docker compose run --rm migrate
+    # Note: 'up' is already included in the command above; do not append it to the run command.
+    # Do NOT add to lowdefy.depends_on — keeps docker compose up -d fast on restarts.
 
   postgres:
     image: postgres:16
@@ -42,3 +63,22 @@ services:
       start_period: 30s
     # No host port exposed — internal docker network only.
     # Lowdefy reaches it at host=postgres, port=5432.
+
+  # solver:  # Phase 4 — FastAPI CP-SAT solver service; internal-only port; auth via Bearer SOLVER_SHARED_SECRET
+  #   build: ./solver
+  #   environment:
+  #     SOLVER_SHARED_SECRET: ${SOLVER_SHARED_SECRET:?missing}
+  #   restart: unless-stopped
+
+  # cron:    # Phase 6 — notification cron (daily/weekly digests, lock-reminder, window-archiver)
+  #   build: ./cron
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #   restart: unless-stopped
+
+  # waha:    # Phase 6 — WAHA WhatsApp HTTP API; Tailscale-bound UI port; dedicated SIM required
+  #   image: devlikeapro/waha-plus:latest
+  #   ports:
+  #     - "127.0.0.1:3001:3000"   # bind localhost so Tailscale-only access remains true
+  #   restart: unless-stopped
