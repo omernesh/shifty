@@ -185,19 +185,19 @@ Requirements for initial release. Each maps to roadmap phases via Traceability (
 - [x] **SEC-07**: Audit tables (`schedule_audit`, `roster_import_log`) are append-only — migration `0010_audit_revokes.sql` REVOKEs UPDATE/DELETE/TRUNCATE from the app role
 - [ ] **SEC-08**: All secrets in `.env` on hpg5; never in code or committed YAML; Postgres credentials never exposed beyond docker network
 - [x] **SEC-09**: Invite codes are not enumerable (no listing endpoint without auth + role check)
-- [ ] **SEC-10**: Log-redaction middleware scrubs `*_SECRET`, `*_PASSWORD`, `*_KEY` env-var values from any structured log
+- [x] **SEC-10**: Log-redaction middleware scrubs `*_SECRET`, `*_PASSWORD`, `*_KEY` env-var values from any structured log
 
 ### Operations & Observability (PRD §8.4, §8.8)
 
 - [ ] **OPS-01**: Docker Compose stack includes services: `lowdefy`, `postgres`, `solver`, `cron`, `waha`, `migrate` (one-shot)
 - [x] **OPS-02**: `migrate/migrate` (golang-migrate) compose service runs `db/migrations/0001-0010` in order; idempotent re-runs via `schema_migrations` table
-- [ ] **OPS-03**: Nightly `pg_dump --format=custom` to `C:\shifts-manager\backups\pg\YYYY-MM-DD.dump` via Windows Task Scheduler; retention 14 daily + 8 weekly + 6 monthly
-- [ ] **OPS-04**: Off-host nightly copy to neshernas (192.168.1.121) or S3-compatible bucket via `rclone`/`restic`
-- [ ] **OPS-05**: Backup self-test (`pg_restore --list` on latest dump) runs daily; alerts on failure
-- [ ] **OPS-06**: Quarterly restore drill: spin up parallel postgres from dump, point staging Lowdefy at it, verify signin → dashboard → schedule view works end-to-end
-- [ ] **OPS-07**: External uptime monitor (Uptime Kuma on neshernas) watches hpg5 from outside the host; push monitors for cron jobs catch silent-failure case
-- [ ] **OPS-08**: `docs/OPERATIONS.md` runbook covers Windows Update active hours, VHDX compaction (quarterly), AV exclusions, Cloudflared user account, Tailscale-bound WAHA UI port, dedicated WAHA SIM number, backup self-test verification
-- [ ] **OPS-09**: Test strategy per PRD §8.4: unit (pytest+vitest), integration (testcontainers), schema/migration, RBAC (Playwright + seeded fixtures), E2E golden path (Playwright), RTL/Hebrew (Litmus+visual diff), load (Locust), notification delivery (live staging)
+- [x] **OPS-03**: Nightly `pg_dump --format=custom` to `C:\shifts-manager\backups\pg\YYYY-MM-DD.dump` via Windows Task Scheduler; retention 14 daily + 8 weekly + 6 monthly
+- [x] **OPS-04**: Off-host nightly copy to neshernas (192.168.1.121) or S3-compatible bucket via `rclone`/`restic`
+- [x] **OPS-05**: Backup self-test (`pg_restore --list` on latest dump) runs daily; alerts on failure
+- [x] **OPS-06**: Quarterly restore drill: spin up parallel postgres from dump, point staging Lowdefy at it, verify signin → dashboard → schedule view works end-to-end
+- [x] **OPS-07**: External uptime monitor (Uptime Kuma on neshernas) watches hpg5 from outside the host; push monitors for cron jobs catch silent-failure case
+- [x] **OPS-08**: `docs/OPERATIONS.md` runbook covers Windows Update active hours, VHDX compaction (quarterly), AV exclusions, Cloudflared user account, Tailscale-bound WAHA UI port, dedicated WAHA SIM number, backup self-test verification
+- [x] **OPS-09**: Test strategy per PRD §8.4: unit (pytest+vitest), integration (testcontainers), schema/migration, RBAC (Playwright + seeded fixtures), E2E golden path (Playwright), RTL/Hebrew (Litmus+visual diff), load (Locust), notification delivery (live staging)
 - [ ] **OPS-10**: "Kibbutz fixture" (`tools/fixtures/kibbutz.sql`) — 12 soldiers / 1 team / 64-day window with one intentionally smart-quoted name — is the seed for both local dev and CI integration tests
 
 ### Performance (PRD §8.1)
@@ -411,16 +411,16 @@ Each v1 requirement maps to exactly one phase. Phase assignment follows the rule
 | SEC-07 | Phase 1 (Foundations) | Complete |
 | SEC-08 | Phase 1 (Foundations) | Pending |
 | SEC-09 | Phase 1 (Foundations) | Complete |
-| SEC-10 | Phase 1 (Foundations) | Pending |
+| SEC-10 | Phase 1 (Foundations) | Complete |
 | OPS-01 | Phase 1 (Foundations) | Pending |
 | OPS-02 | Phase 1 (Foundations) | Complete |
-| OPS-03 | Phase 1 (Foundations) | Pending |
-| OPS-04 | Phase 1 (Foundations) | Pending |
-| OPS-05 | Phase 1 (Foundations) | Pending |
-| OPS-06 | Phase 1 (Foundations) | Pending |
-| OPS-07 | Phase 1 (Foundations) | Pending |
-| OPS-08 | Phase 1 (Foundations) | Pending |
-| OPS-09 | Phase 1 (Foundations) | Pending |
+| OPS-03 | Phase 1 (Foundations) | Complete |
+| OPS-04 | Phase 1 (Foundations) | Complete |
+| OPS-05 | Phase 1 (Foundations) | Complete |
+| OPS-06 | Phase 1 (Foundations) | Complete |
+| OPS-07 | Phase 1 (Foundations) | Complete |
+| OPS-08 | Phase 1 (Foundations) | Complete |
+| OPS-09 | Phase 1 (Foundations) | Complete |
 | OPS-10 | Phase 1 (Foundations) | Pending |
 | PERF-01 | Phase 4 (Solver & Schedule) | Pending |
 | PERF-02 | Phase 7 (Polish & Exports) | Pending |

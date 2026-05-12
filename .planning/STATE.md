@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: milestone
-status: executing
-stopped_at: Completed 01-04-PLAN.md
-last_updated: "2026-05-12T20:00:00.000Z"
+status: verifying
+stopped_at: Completed 01-05-PLAN.md (Tasks 1-5; Task 6 awaiting human action on hpg5)
+last_updated: "2026-05-12T21:00:00.000Z"
 last_activity: 2026-05-12
 progress:
   total_phases: 8
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 5
-  completed_plans: 4
-  percent: 80
+  completed_plans: 5
+  percent: 100
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-05-12)
 
 ## Current Position
 
-Phase: 1 (foundations) — EXECUTING
+Phase: 1 (foundations) — CHECKPOINT (Task 6 awaiting human action)
 Plan: 5 of 5
-Status: Ready to execute
+Status: Phase code complete — awaiting hpg5 ops setup (rclone + Task Scheduler + Uptime Kuma)
 Last activity: 2026-05-12
 
-Progress: [████████░░] 80%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -55,6 +55,7 @@ Progress: [████████░░] 80%
 | Phase 01-foundations P02 | 210 | 3 tasks | 16 files |
 | Phase 01-foundations P03 | 480 | 7 tasks | 20 files |
 | Phase 01-foundations P04 | 180 | 4 tasks | 14 files |
+| Phase 01-foundations P05 | 45 | 5 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -67,6 +68,9 @@ Recent decisions affecting current work:
 - Plan 04: Self-test uses programmatic scan (not subprocess) to avoid Windows shell quoting issues; global tenant_id removal in mutation because scanner checks 80-line block including parameters sections
 - Plan 04: signInAs() uses set_config(false) for session scope so all queries in the fixture connection see the tenant context; teardown TRUNCATE bypasses RLS (DDL semantics)
 - Plan 04: Playwright specs skip gracefully when Postgres/stack unreachable — CI must set PG_TEST_URL for green runs
+- Plan 05: Log-redact regex uses suffix pattern (_SECRET|_PASSWORD|_KEY)$ not word-boundary \b — RESEND_API_KEY ends with _KEY but \b treats _ as word char so the boundary fails
+- Plan 05: Task Scheduler tasks use LogonType Interactive — docker daemon socket on hpg5 is the Docker Desktop named pipe, accessible only from interactive sessions
+- Plan 05: restore-test.ps1 runs separately at 03:00 (not just inline with backup) — catches stale/corrupt dumps independent of backup task
 - Plan 02: pnpm-workspace.yaml excluded from Docker image (added to .dockerignore); plugin referenced via `file:` protocol in package.json + lowdefy.yaml to prevent Lowdefy inner pnpm workspace-mode hang (2.5h hang diagnosed + fixed)
 - Plan 02: lowdefy.yaml plugin version `file:../../plugins/<name>` is relative from `.lowdefy/server/` — Lowdefy's addCustomPluginsAsDeps.js writes this verbatim into server package.json; path must resolve from server dir
 - Plan 02: Dynamic `import('knex')` in AuditWrite.js (not top-level) enables unit tests without live DB or installed knex
@@ -100,6 +104,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-05-12T20:00:00.000Z
-Stopped at: Completed 01-04-PLAN.md
+Last session: 2026-05-12T21:00:00.000Z
+Stopped at: Completed 01-05-PLAN.md Tasks 1-5; Task 6 is human-action checkpoint (rclone + Task Scheduler + Uptime Kuma on hpg5)
 Resume file: None

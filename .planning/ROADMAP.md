@@ -13,7 +13,7 @@ Shifty's v1 is a Hebrew-RTL, multi-tenant shift-planning SaaS for Israeli reserv
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Foundations** - Lowdefy runtime + tenancy + RBAC + 5-layer tenant defense + custom-plugin scaffold + ops baseline
+- [x] **Phase 1: Foundations** - Lowdefy runtime + tenancy + RBAC + 5-layer tenant defense + custom-plugin scaffold + ops baseline (completed 2026-05-12)
 - [ ] **Phase 2: Org & People** - Units/teams CRUD, soldier roster CRUD, CSV roster import with smart-quote canonicalization
 - [ ] **Phase 3: Availability & Rules** - Shift slots, planning windows, hybrid availability UI, 8-rule catalog with per-soldier tightening
 - [ ] **Phase 4: Solver & Schedule** - FastAPI CP-SAT solver with unsat-core infeasibility, draft → publish lifecycle, manager hand-edit
@@ -40,7 +40,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   - [x] 01-02-PLAN.md — Migrations 0003-0007 (shifts/availability/auth/audit/imports) + shifty-audit-writer plugin
   - [x] 01-03-PLAN.md — shifty-auth plugin (NextAuth + KnexAdapter + RLS hook + log-redact stub) + auth pages + migrations 0009 (RLS) + 0010 (audit REVOKEs)
   - [x] 01-04-PLAN.md — Tenant isolation verification (check-queries hardening + 11 Playwright pen-test specs, 45 tests) [COMPLETE: bbed11f, 4277d34, a884e38, f41f826]
-  - [ ] 01-05-PLAN.md — Ops baseline (backup scripts + Task Scheduler installer + log-redaction middleware + OPERATIONS.md runbook)
+  - [x] 01-05-PLAN.md — Ops baseline (backup scripts + Task Scheduler installer + log-redaction middleware + OPERATIONS.md runbook)
 **Sequencing notes**: Strictly sequential — no shortcuts. Smoke-test Lowdefy runtime FIRST (CLAUDE.md open question may already be resolved at commit `b8afba1`); 5-day timebox with documented escape hatch (switch to npm, or escalate Lowdefy-lock re-open) if smoke test fails.
 **Avoids pitfalls**: P1 (Lowdefy runtime bus factor), P2 (tenant isolation gaps), P6 (hpg5 ops — backup self-test + log redaction).
 **Research flag**: SMOKE-TEST Lowdefy runtime FIRST — CLAUDE.md open question may already be resolved at commit `b8afba1`.
@@ -156,7 +156,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7. Phase M 
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundations | 3/5 | In Progress|  |
+| 1. Foundations | 5/5 | Complete   | 2026-05-12 |
 | 2. Org & People | 0/TBD | Not started | - |
 | 3. Availability & Rules | 0/TBD | Not started | - |
 | 4. Solver & Schedule | 0/TBD | Not started | - |
