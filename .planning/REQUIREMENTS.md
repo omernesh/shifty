@@ -172,7 +172,7 @@ Requirements for initial release. Each maps to roadmap phases via Traceability (
 - [ ] **I18N-04**: All dates use `Asia/Jerusalem`; format derives from locale (`he` → DD/MM/YYYY; `en` → YYYY-MM-DD); time is 24h in both
 - [ ] **I18N-05**: Numbers use Latin numerals in both locales (Israeli convention)
 - [ ] **I18N-06**: CI check fails build if any key in `he.json` is missing in `en.json` or vice versa (`tools/check-locales.mjs`)
-- [ ] **I18N-07**: Postgres Hebrew-text columns declared `COLLATE "he-x-icu"` (default codepoint sort is wrong)
+- [x] **I18N-07**: Postgres Hebrew-text columns declared `COLLATE "he-x-icu"` (default codepoint sort is wrong)
 
 ### Security & Tenant Isolation (PRD §8.2, §8.3)
 
@@ -190,7 +190,7 @@ Requirements for initial release. Each maps to roadmap phases via Traceability (
 ### Operations & Observability (PRD §8.4, §8.8)
 
 - [ ] **OPS-01**: Docker Compose stack includes services: `lowdefy`, `postgres`, `solver`, `cron`, `waha`, `migrate` (one-shot)
-- [ ] **OPS-02**: `migrate/migrate` (golang-migrate) compose service runs `db/migrations/0001-0010` in order; idempotent re-runs via `schema_migrations` table
+- [x] **OPS-02**: `migrate/migrate` (golang-migrate) compose service runs `db/migrations/0001-0010` in order; idempotent re-runs via `schema_migrations` table
 - [ ] **OPS-03**: Nightly `pg_dump --format=custom` to `C:\shifts-manager\backups\pg\YYYY-MM-DD.dump` via Windows Task Scheduler; retention 14 daily + 8 weekly + 6 monthly
 - [ ] **OPS-04**: Off-host nightly copy to neshernas (192.168.1.121) or S3-compatible bucket via `rclone`/`restic`
 - [ ] **OPS-05**: Backup self-test (`pg_restore --list` on latest dump) runs daily; alerts on failure
@@ -205,7 +205,7 @@ Requirements for initial release. Each maps to roadmap phases via Traceability (
 - [ ] **PERF-01**: Solver <10s p95 for 30 soldiers × 30 days × 4 active rules (also gated by SOLV-05/SOLV-10)
 - [ ] **PERF-02**: Dashboard page load <2s p95 on 4G mobile
 - [ ] **PERF-03**: API roundtrip (Lowdefy → Postgres) <500ms p95 for typical queries
-- [ ] **PERF-04**: Composite indexes on `(tenant_id, ...)` for hot query paths (already partially in PRD §10 schemas)
+- [x] **PERF-04**: Composite indexes on `(tenant_id, ...)` for hot query paths (already partially in PRD §10 schemas)
 
 ### Accessibility (PRD §8.6)
 
@@ -401,7 +401,7 @@ Each v1 requirement maps to exactly one phase. Phase assignment follows the rule
 | I18N-04 | Phase 7 (Polish & Exports) | Pending |
 | I18N-05 | Phase 7 (Polish & Exports) | Pending |
 | I18N-06 | Phase 7 (Polish & Exports) | Pending |
-| I18N-07 | Phase 1 (Foundations) | Pending |
+| I18N-07 | Phase 1 (Foundations) | Complete |
 | SEC-01 | Phase 1 (Foundations) | Pending |
 | SEC-02 | Phase 1 (Foundations) | Pending |
 | SEC-03 | Phase 1 (Foundations) | Pending |
@@ -413,7 +413,7 @@ Each v1 requirement maps to exactly one phase. Phase assignment follows the rule
 | SEC-09 | Phase 1 (Foundations) | Pending |
 | SEC-10 | Phase 1 (Foundations) | Pending |
 | OPS-01 | Phase 1 (Foundations) | Pending |
-| OPS-02 | Phase 1 (Foundations) | Pending |
+| OPS-02 | Phase 1 (Foundations) | Complete |
 | OPS-03 | Phase 1 (Foundations) | Pending |
 | OPS-04 | Phase 1 (Foundations) | Pending |
 | OPS-05 | Phase 1 (Foundations) | Pending |
@@ -425,7 +425,7 @@ Each v1 requirement maps to exactly one phase. Phase assignment follows the rule
 | PERF-01 | Phase 4 (Solver & Schedule) | Pending |
 | PERF-02 | Phase 7 (Polish & Exports) | Pending |
 | PERF-03 | Phase 7 (Polish & Exports) | Pending |
-| PERF-04 | Phase 1 (Foundations) | Pending |
+| PERF-04 | Phase 1 (Foundations) | Complete |
 | A11Y-01 | Phase 7 (Polish & Exports) | Pending |
 | A11Y-02 | Phase 7 (Polish & Exports) | Pending |
 | A11Y-03 | Phase 7 (Polish & Exports) | Pending |

@@ -37,7 +37,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   6. The `shifty-audit-writer` Lowdefy custom request plugin scaffold loads and writes a `schedule_audit` row from a mutating page (proves the plugin pattern that unlocks layer-4 RBAC, dispatcher, webhooks, and signed-URL endpoints downstream).
 **Plans**: 5 plans
   - [x] 01-01-PLAN.md — Wave 0 scaffolding + smoke test + migrate compose service + migration 0002 (tenancy + NextAuth schema) [COMPLETE: c422fbb, 0a6dd56, ab23155]
-  - [ ] 01-02-PLAN.md — Migrations 0003-0007 (shifts/availability/auth/audit/imports) + shifty-audit-writer plugin
+  - [x] 01-02-PLAN.md — Migrations 0003-0007 (shifts/availability/auth/audit/imports) + shifty-audit-writer plugin
   - [ ] 01-03-PLAN.md — shifty-auth plugin (NextAuth + KnexAdapter + RLS hook + log-redact stub) + auth pages + migrations 0009 (RLS) + 0010 (audit REVOKEs)
   - [ ] 01-04-PLAN.md — Tenant isolation verification (check-queries hardening + 9 Playwright pen-test specs)
   - [ ] 01-05-PLAN.md — Ops baseline (backup scripts + Task Scheduler installer + log-redaction middleware + OPERATIONS.md runbook)
@@ -156,7 +156,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7. Phase M 
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundations | 0/5 | Planned | - |
+| 1. Foundations | 2/5 | In Progress|  |
 | 2. Org & People | 0/TBD | Not started | - |
 | 3. Availability & Rules | 0/TBD | Not started | - |
 | 4. Solver & Schedule | 0/TBD | Not started | - |

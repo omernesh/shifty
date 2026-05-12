@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: milestone
 status: executing
-stopped_at: Phase 1 Plan 1 complete
-last_updated: "2026-05-12T15:02:00Z"
-last_activity: 2026-05-12 -- Phase 1 Plan 01 execution complete
+stopped_at: Completed 01-01-PLAN.md
+last_updated: "2026-05-12T16:16:46.472Z"
+last_activity: 2026-05-12
 progress:
   total_phases: 8
   completed_phases: 0
   total_plans: 5
-  completed_plans: 1
-  percent: 4
+  completed_plans: 2
+  percent: 40
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-05-12)
 ## Current Position
 
 Phase: 1 (foundations) — EXECUTING
-Plan: 2 of 5
-Status: Plan 01 complete; Plan 02 next
-Last activity: 2026-05-12 -- Phase 1 Plan 01 execution complete
+Plan: 3 of 5
+Status: Ready to execute
+Last activity: 2026-05-12
 
-Progress: [█░░░░░░░░░] 4%
+Progress: [████░░░░░░] 40%
 
 ## Performance Metrics
 
@@ -52,6 +52,7 @@ Progress: [█░░░░░░░░░] 4%
 - Trend: baseline
 
 *Updated after each plan completion*
+| Phase 01-foundations P02 | 210 | 3 tasks | 16 files |
 
 ## Accumulated Context
 
@@ -60,6 +61,10 @@ Progress: [█░░░░░░░░░] 4%
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- Plan 02: Legacy `availability` table renamed to `availability_legacy` in 0004 to preserve D-06 smoke-test surface through Phase 1; drop in migration 0008 at Phase 2 boundary
+- Plan 02: pnpm-workspace.yaml excluded from Docker image (added to .dockerignore); plugin referenced via `file:` protocol in package.json + lowdefy.yaml to prevent Lowdefy inner pnpm workspace-mode hang (2.5h hang diagnosed + fixed)
+- Plan 02: lowdefy.yaml plugin version `file:../../plugins/<name>` is relative from `.lowdefy/server/` — Lowdefy's addCustomPluginsAsDeps.js writes this verbatim into server package.json; path must resolve from server dir
+- Plan 02: Dynamic `import('knex')` in AuditWrite.js (not top-level) enables unit tests without live DB or installed knex
 - Plan 01: golang-migrate requires `.up.sql` suffix — renamed `0001_init.sql` to `0001_init.up.sql`; future migrations use this convention
 - Plan 01: `docker compose run --rm migrate` (no trailing `up`) — YAML command already includes `up`; appending it overrides flags
 - Phase 1: Postgres RLS as 5th defense layer (`0009_rls_policies.sql`) — research-resolved beyond PRD §15 R4 deferral
@@ -90,6 +95,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-05-12T15:02:00Z
-Stopped at: Completed 01-01-PLAN.md
-Resume file: .planning/phases/01-foundations/01-02-PLAN.md
+Last session: 2026-05-12T19:13:00+03:00
+Stopped at: Completed 01-02-PLAN.md
+Resume file: .planning/phases/01-foundations/01-03-PLAN.md
