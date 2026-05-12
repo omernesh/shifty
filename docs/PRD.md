@@ -12,7 +12,7 @@ This document is the contract between product intent and the codebase. Locked de
 
 Shifty is a multi-tenant SaaS for Israeli reserve soldiers (miluim) and their commanders to plan, publish, and adapt shift schedules. The product replaces the spreadsheet-based workflows that miluim units improvise during call-ups — typically a hand-typed Google Sheet maintained by one overworked מפקד (commander), with constraints collected over WhatsApp and a daily report copy-pasted into a unit group chat.
 
-The product wraps a constraint-aware OR-Tools CP-SAT solver in a Hebrew-first, RTL web app. Soldiers self-declare availability inside a planning window; the manager runs the solver to produce a draft schedule, reviews it, publishes it, and from there the schedule is a living document — soldiers can request swaps, the manager approves (auto-approves when no rules are violated), and notifications fan out via Email, WhatsApp, Push, and in-app inbox.
+The product wraps a constraint-aware OR-Tools CP-SAT solver in a Hebrew-first, RTL web app. Soldiers self-declare availability inside a planning window; the manager runs the solver to produce a draft schedule, reviews it, publishes it, and from there the schedule is a living document — soldiers can request swaps, the manager approves (auto-approves when no rules are violated), and notifications fan out via Email, WhatsApp, Push, and in-app inbox. Soldiers can subscribe to their personal schedule from any calendar app (iCal), and managers can hand a printed PDF schedule to the unit board on day one — removing the two largest adoption barriers from the existing spreadsheet workflow.
 
 The animating insight from discovery: **people are dynamic creatures**. A schedule that's perfect on Sunday is broken by Wednesday because someone's kid got sick or someone got pulled into a separate task. The lifecycle model (draft → publish → swap with audit) and the constraint-lock model (firm cutoff for availability changes, manager-only edits after lock) are the core mechanics for absorbing that volatility without losing accountability.
 
@@ -220,6 +220,23 @@ Organized by persona. Each story has a one-line acceptance hint; full acceptance
 
 **v1 acceptance criteria**: roster CRUD works at the unit level; soldier can be assigned to multiple teams within the unit; archived soldiers don't appear in pickers but their history is intact.
 
+#### 7.3.1 Roster CSV import
+
+Elevated from v1.1 to v1.0 (decided 2026-05-12). The single-row "add a soldier" form does not scale beyond 5–10 entries; v1 ships a CSV import to absorb existing rosters in one shot.
+
+- **Trigger**: admin or `team_manager` uploads a `.csv` file from a "Roster import" page under unit settings.
+- **Required columns** (header row): `name, email, role_tags, seniority, team_id`.
+- **`role_tags`**: `|`-separated tag names (e.g., `medic|driver`). Unknown tags surface as warnings; manager can create them inline before confirm.
+- **`seniority`**: integer 0–10; default `0` if blank.
+- **`team_id`**: optional. If absent on every row, the import UI prompts the manager to assign all rows to one team.
+- **Preview**: row-by-row preview with per-row validation status (✓ create / ⚠ warn / ✗ error). Inline editing for fixes before confirm.
+- **Duplicate handling**: rows whose `email` already exists within the tenant are flagged and skipped by default. Manager can opt to "re-invite" the existing row, which regenerates the magic link without touching the rest of the soldier record.
+- **On confirm**: create `soldier` (+ `app_user`) records, dispatch magic-link invite emails via Resend, write a summary row to `roster_import_log`.
+- **Result view**: created N, skipped M, errored K. Error details surfaced inline AND persisted as JSON in `roster_import_log.error_details`.
+- **Audit**: every import run logged in `roster_import_log` (see §10).
+
+**v1 acceptance criteria**: a 50-row CSV imports in <10 seconds; duplicate detection by email works inside the tenant scope; invite emails dispatched to each new soldier; `roster_import_log` row created with accurate counts.
+
 ### 7.4 Teams & shift schemas
 
 - **Shift slot**: `id`, `tenant_id`, `team_id`, `name` (Hebrew default, e.g., "בוקר", "לילה"), `start_time` (TIME), `end_time` (TIME, may cross midnight), `headcount` (integer ≥1), `required_role_tags` (TEXT[], nullable), `min_seniority` (integer, nullable), `display_order`.
@@ -258,6 +275,7 @@ Organized by persona. Each story has a one-line acceptance hint; full acceptance
 
 - **Rules are named toggles + numeric limits attached to a team, optionally overridden per soldier.**
 - **Per-soldier overrides can only tighten** the team-level rule (e.g., team allows `max_consecutive_nights=4`; a soldier can override to 2; cannot override to 6). Loosening is silently ignored with a UI warning.
+- **"Weekend" definition** (used by `weekend_separation`): Friday + Saturday (Israeli weekend), hardcoded in the solver for v1. Configurable per tenant in v2.
 - **Rule catalog (v1, frozen)**:
 
 | Key | Type | Default | Hebrew label | Semantics |
@@ -282,7 +300,7 @@ Organized by persona. Each story has a one-line acceptance hint; full acceptance
 - **States**: `draft` → `published` → (mutated via approved swaps) → `closed` (after window end).
 - **Draft**: created on solver run. Manager can hand-edit (drag-drop or row-edit). Rule violations on hand-edits are highlighted but not blocking — manager always has manual override.
 - **Publish**: state transition Draft → Published. Notifications fire to every assigned soldier. Assignment table becomes the source of truth for swap proposals.
-- **Mutation post-publish**: only via approved swap requests (see §7.10) OR manager direct edit (which writes an audit row labeled `manager_edit`).
+- **Mutation post-publish**: only via approved swap requests (see §7.10) OR manager manual override (see below).
 - **Close**: automatic on `window.end_date + 1 day`. Assignments become immutable. Time-clock entries can still be written for past dates (manual correction).
 
 ```
@@ -309,7 +327,17 @@ Organized by persona. Each story has a one-line acceptance hint; full acceptance
 - **Draft-then-promote** is a beloved feature from the prior-art sheet. Preserved here as the Draft → Publish transition. Manager can run the solver, eyeball it, iterate, and only publish when satisfied.
 - **Versioning**: every state transition writes a row to `schedule_audit` with `from_state`, `to_state`, `actor_user_id`, `timestamp`, `payload_json`. Used by the audit log UI and for dispute resolution.
 
-**v1 acceptance criteria**: full lifecycle works end-to-end; audit log captures every transition; publish triggers notifications; closed windows are immutable except for time-clock corrections.
+#### Manager manual override (post-publish)
+
+The escape hatch for the reality of reserve duty — no-shows, last-minute pulls, emergency reassignments. Distinct from the swap_request flow; this is a unilateral manager edit, not a soldier-initiated negotiation.
+
+- After a schedule is published, the team manager can directly edit any assignment cell — replace one soldier with another, or clear the cell entirely.
+- Each override writes a row to `schedule_audit` with `actor_kind='user'`, a `payload` carrying `{ previous_value, new_value, reason }`, and a `to_state` label of `manager_override`. `reason` is a free-text field, optional but encouraged for audit clarity.
+- The edit is validated against the team's active rules **with per-soldier overrides applied** (overrides tighten, so they're the strictest check). If the edit would produce a rule violation, the manager sees an inline warning listing the violated rules and must click "Override anyway" — that confirmation click is captured in the audit `payload` as `force_override: true`.
+- Affected soldiers (the one removed AND the one added) are notified via `assignment_changed` on their preferred channels within 60 seconds.
+- The audit log UI surfaces "manual override by {manager}" distinctly from "approved swap" entries (different icon, different `to_state` label).
+
+**v1 acceptance criteria**: full lifecycle works end-to-end; audit log captures every transition including manual overrides with `previous_value`/`new_value`; publish triggers notifications; affected soldiers notified within 60 seconds of an override; rule violations surface inline with violated rule names; force-override is logged distinctly; closed windows are immutable except for time-clock corrections.
 
 ### 7.8 Solver service (API contract + behavior)
 
@@ -428,6 +456,7 @@ Response schema:
 - **Performance target**: <10 seconds for a 30-day window with 30 soldiers and 4 active rules.
 - **Timeout behavior**: if `max_seconds` is hit before optimality, return best-feasible with `status=feasible`. If no feasible solution exists, return `status=infeasible` with the offending-rules report.
 - **Determinism**: same input + same seed = same output. Important for reproducible debugging.
+- **`random_seed` exposure**: hidden from the manager UI. Lowdefy generates it server-side (or defaults to a fixed value per run) and persists it on `solver_run.request_payload` for engineer-side debugging only. Surfacing it would confuse non-technical managers without unlocking any user-facing capability.
 - **No persistence**: the solver does not log requests/responses to disk in production (memory-only, with optional debug log to stderr). Lowdefy stores the request and response in `solver_run` for audit.
 
 **v1 acceptance criteria**: solver returns optimal or feasible within target latency for realistic inputs; infeasibility report names the rule(s); stateless behavior verified by black-box test.
@@ -439,6 +468,7 @@ Response schema:
   - **Button**: big mobile-friendly button labeled "Check in" (כניסה). Tap → captures `now()` as start time. Button becomes "Check out" (יציאה). Next tap → captures `now()` as end time, persists the entry, button resets.
   - **Manual time pickers**: type/pick start and end times; submit to create or amend an entry.
 - **Data**: `time_clock_entries` (already in schema). Columns: `id`, `tenant_id`, `soldier_id`, `started_at`, `ended_at`, `source` (`button` | `manual`), `assignment_id` (nullable; for linking to a shift instance), `note`.
+- **Midnight-spanning entries**: one row, not two. A button-tapped "check in" at 23:00 and "check out" at 03:00 yields a single row with `started_at='...23:00'` and `ended_at='...03:00'` (next day). `timestamptz` carries the date boundary cleanly; no special DDL or split-on-midnight logic.
 - **No geofencing.** No location data captured.
 - **Use cases**:
   - Personal stats (total hours, per-week breakdown).
@@ -446,14 +476,14 @@ Response schema:
   - Dispute resolution (soldier says they were on duty; entries support the claim).
 - **Explicitly NOT used for**: future scheduling decisions, payroll, performance reviews.
 
-**v1 acceptance criteria**: soldier can tap-tap on phone to log a shift; soldier can edit a past entry's times; manager can view team-level time-clock summary.
+**v1 acceptance criteria**: soldier can tap-tap on phone to log a shift; soldier can edit a past entry's times; manager can view team-level time-clock summary; midnight-spanning entries display correctly as one row.
 
 ### 7.10 Swap requests
 
 - **Initiator**: soldier A picks one of their own published assignments AND one of soldier B's published assignments. (1-for-1 swap only in v1.)
 - **Counterparty**: soldier B receives a notification and accepts or declines via in-app inbox.
 - **Manager review**: triggered after B accepts.
-  - **Auto-approve**: if running the rules engine on the swapped state produces zero violations, the swap auto-approves. Notifications fire.
+  - **Auto-approve eligibility**: evaluated against the team's active rules **with per-soldier overrides applied** to both soldiers in the swap. Overrides are tightenings, so this is the strictest possible check — if the swapped state passes here, it passes everything. If zero violations, the swap auto-approves and notifications fire.
   - **Manual review**: if any rule violation is detected, the swap goes into the manager's queue. Manager sees the swap, the violated rules, and can approve (overriding) or reject.
 - **On approval**: assignments table is patched atomically. Audit row written. Notifications fire to A, B, and the manager.
 - **State machine**:
@@ -471,7 +501,7 @@ Response schema:
 
 - **`swap_request` row**: `id`, `tenant_id`, `team_id`, `initiator_soldier_id`, `initiator_assignment_id`, `counterparty_soldier_id`, `counterparty_assignment_id`, `state`, `state_history_json`, `auto_approve_eligible`, `manager_decision_at`, `manager_decision_actor_id`, `manager_decision_reason`.
 
-**v1 acceptance criteria**: full swap loop works end-to-end; auto-approve triggers correctly; manual review queue surfaces violations; audit captures every state change.
+**v1 acceptance criteria**: full swap loop works end-to-end; auto-approve triggers correctly with overrides applied; manual review queue surfaces violations; audit captures every state change.
 
 ### 7.11 Notifications
 
@@ -501,9 +531,10 @@ Response schema:
 | `weekly_digest` (to subscribed recipients) | Email |
 
 - **Per-user override**: profile UI lets the user pick channels per event. Stored as `notification_pref` rows: (`user_id`, `event_type`, `channels JSONB`).
+- **Per-recipient locale**: each user's preferred locale on `app_user.locale` (set in profile; defaults from `APP_DEFAULT_LOCALE`) drives the language of email/WhatsApp/in-app notifications sent TO that user. The dispatcher loads the recipient's locale at send time and picks the Hebrew or English template accordingly. A Hebrew-only tenant and a mixed-locale tenant both work without admin intervention.
 - **Sending pipeline**:
   - Event fires in Lowdefy.
-  - Notification dispatcher (a Lowdefy operator OR a small Node helper in the app container) loads per-user prefs, builds the message in Hebrew, dispatches to each channel.
+  - Notification dispatcher (a Lowdefy operator OR a small Node helper in the app container) loads per-user prefs + locale, builds the message in the recipient's language, dispatches to each channel.
   - Each channel has its own delivery target: Resend HTTP, WAHA HTTP, Web Push (VAPID), in-app row insert.
   - All deliveries logged to `notification_log` with `status` (`queued`, `sent`, `delivered`, `failed`, `bounced`) and `provider_response`.
 - **Delivery SLAs**:
@@ -511,9 +542,9 @@ Response schema:
   - WhatsApp: <30 seconds from event (best-effort; no provider SLA — WAHA is self-hosted on an unofficial WhatsApp HTTP gateway).
   - Push: <5 seconds from event (subject to browser availability).
   - In-app: instant.
-- **Hebrew templates**: each event has a Hebrew template file in `app/templates/`. RTL-correct. Variables substituted at send time.
+- **Templates**: each event has Hebrew and English template files in `app/templates/`. RTL-correct for Hebrew. Variables substituted at send time.
 
-**v1 acceptance criteria**: all four channels deliver successfully in dev and prod; per-user prefs honored; failed sends retry up to 3 times with exponential backoff; notification log inspectable by admin.
+**v1 acceptance criteria**: all four channels deliver successfully in dev and prod; per-user prefs and per-user locale honored; failed sends retry up to 3 times with exponential backoff; notification log inspectable by admin.
 
 ### 7.12 Reporting
 
@@ -527,8 +558,9 @@ Response schema:
 
 - **Recipients**: managed in unit's "Reports" settings tab. Each recipient = a row in `report_recipient` with `email`, `display_name`, `subscriptions JSONB` listing which cadences they're on.
 - **Recipients can be users or external (email-only).** External recipients (P4 auditor pattern) have no login.
+- **Per-recipient locale**: for `app_user`-backed recipients, the report is rendered in their `app_user.locale`. For external `report_recipient`-only rows (no login), an optional `locale` column on `report_recipient` controls the language; defaults to `APP_DEFAULT_LOCALE` (`he`) when absent.
 - **Content for daily report** (preserve the prior-art sheet's daily email shape):
-  - Date header (Hebrew, RTL).
+  - Date header (RTL for Hebrew).
   - Today's assignments grouped by team and slot.
   - Soldiers not assigned today, with their declared constraints (`constraint_summary` field).
   - Link to today's calendar view in the app (`https://apps.nesher.co/today`).
@@ -537,9 +569,9 @@ Response schema:
   - Day-by-day mini-table.
   - Leaderboard (ASCII bars; see §7.13).
   - Uncovered slots flagged with a red marker.
-- **Sending**: cron in Lowdefy (or compose-level cron container) triggers; Resend handles delivery; failures logged to `notification_log`.
+- **Sending**: the `cron` service in the compose stack (see §11) triggers; Resend handles delivery; failures logged to `notification_log`.
 
-**v1 acceptance criteria**: a fresh tenant subscribed to daily reports gets their first email the next morning; weekly digest fires Monday; event-driven reports fire within 60s of the trigger.
+**v1 acceptance criteria**: a fresh tenant subscribed to daily reports gets their first email the next morning; weekly digest fires Monday; event-driven reports fire within 60s of the trigger; each recipient receives the report in their preferred locale.
 
 ### 7.13 Dashboard
 
@@ -564,7 +596,43 @@ The dashboard is the home page after login. Layout depends on role.
 
 **Per-person calendar colors**: every soldier has a `color` (hex). UI uses it consistently: calendar cell backgrounds, leaderboard bars, swap-request avatars. Preserved from prior art — beloved feature.
 
-**v1 acceptance criteria**: today view works on first load (no Hebrew encoding bugs); leaderboard renders ASCII bars in a monospaced font; calendar colors persist and are used consistently across all views.
+#### Graphs and statistics views
+
+Beyond the tiles above, the dashboard exposes four scoped analytical views with charts. Chart library: leading candidate is `@lowdefy/blocks-echarts` (ECharts has solid Hebrew RTL support); confirmed at implementation. See §15. All charts render Hebrew labels with correct RTL orientation; cumulative per-soldier counts span all closed windows for that soldier within the tenant.
+
+| View | Scope | Charts and metrics |
+|------|-------|--------------------|
+| Unit-level | Whole tenant | Total shifts assigned in active window; coverage rate (%); shift-slot distribution (bar chart); total swaps in window; top 3 most-swapped soldiers |
+| Team (צוות)-level | One team | Same metrics as unit-level, scoped to the team; Gantt-style timeline of the team's active planning window |
+| Per-soldier | One soldier | Total shifts (current window + cumulative); breakdown by shift-slot type (pie/bar); swap history; time-clock punctuality stats (avg delta between scheduled start and actual check-in); per-month shift-count trend as a sparkline |
+| Leaderboard | One team | ASCII-bar leaderboard (preserved from prior art) AND a horizontal bar chart rendered alongside it for screen-reader accessibility |
+
+**v1 acceptance criteria**: all four views render without errors; charts respect Hebrew RTL; per-soldier punctuality handles missing check-in records gracefully — shows "no data" (אין נתונים), never silently zero; today view works on first load (no Hebrew encoding bugs); leaderboard renders ASCII bars in a monospaced font alongside its accessible bar-chart twin; calendar colors persist and are used consistently across all views.
+
+### 7.14 Schedule exports
+
+The schedule lives in Postgres but managers and soldiers want it in the tools they already use — calendar apps, spreadsheets, printed paper. v1 ships three export formats, all triggered from the schedule view via a single "Export" button (the manager picks date range and scope; download is generated server-side and streamed back).
+
+#### iCal (.ics)
+
+- One `VEVENT` per assignment within the export window. Timezone `Asia/Jerusalem` baked into every event; calendar apps re-render locally.
+- **Per-soldier scope** (most common): a soldier downloads only their own assignments. **Per-team scope**: a manager downloads the whole team's schedule.
+- **Two delivery modes**: download a `.ics` file once (one-shot), OR subscribe to a signed long-lived URL (the calendar app polls it). Subscription URLs are per-soldier, generated lazily on first request, and revocable from the soldier's profile. Backed by `ical_subscription_token` (see §10); URL prefix from `ICAL_SUBSCRIPTION_BASE_URL` (see §17).
+
+#### CSV
+
+- Tabular dump for spreadsheet tools.
+- **Columns** (header row, English names for tool interop): `date, shift_slot_name, start_time, end_time, soldier_id, soldier_name, soldier_role_tags, team_id, team_name`.
+- **Date format**: ISO-8601 (`2026-05-15`). **Time format**: 24h local (`06:00`, `18:00`).
+- **Encoding**: UTF-8 with BOM. The BOM is mandatory for Excel-on-Windows to render Hebrew names correctly; without it, names show as mojibake.
+
+#### PDF
+
+- Printable schedule for unit notice boards and shift handover. **Layout**: calendar grid; manager picks week or month view at export time. Per-day column with shift slots stacked, soldier names in cells, soldier color as the cell background.
+- **Hebrew RTL**, Israeli date format (`DD/MM/YYYY`). **Page size**: A4 default; option for A3 for wider monthly views.
+- **Rendering**: server-side via Puppeteer rendering a hidden HTML view styled for print. Engine choice flagged in §15 — Puppeteer is the leaning answer for RTL/Hebrew correctness; final call deferred to implementation. Timeout governed by `PDF_RENDER_TIMEOUT_SECONDS` (see §17).
+
+**v1 acceptance criteria**: each format generates without errors for a typical 30-soldier × 30-day window in <5 seconds; Hebrew rendering correct in all three; iCal opens in Google Calendar, Apple Calendar, and Outlook without warnings; CSV opens in Excel-on-Windows with Hebrew names intact; PDF prints to A4 with no clipped columns.
 
 ---
 
@@ -600,7 +668,7 @@ The dashboard is the home page after login. Layout depends on role.
 - Date format: `DD/MM/YYYY` (Hebrew and English).
 - Time format: 24-hour (`HH:mm`).
 - Numbers and times remain Latin numerals in Hebrew UI (standard Israeli convention).
-- Email templates: Hebrew templates use `dir="rtl"` on the body; English templates LTR.
+- Email templates: Hebrew templates use `dir="rtl"` on the body; English templates LTR. Recipient locale on `app_user.locale` (or `report_recipient.locale` for external recipients) picks the template at send time.
 
 ### Accessibility
 
@@ -623,7 +691,7 @@ The dashboard is the home page after login. Layout depends on role.
 
 - **API**: HTTP, `POST /emails` with bearer token (`RESEND_API_KEY`).
 - **From address**: `shifty@nesher.co` (verified domain).
-- **Templates**: Hebrew HTML with `dir="rtl"` on `<body>`.
+- **Templates**: Hebrew HTML with `dir="rtl"` on `<body>`; English HTML LTR. Locale resolved per recipient at send time.
 - **Error handling**: 4xx → log, do not retry (likely template bug). 5xx → retry up to 3 times with exponential backoff (1s, 4s, 16s).
 - **Webhooks**: Resend's `email.delivered`, `email.bounced`, `email.complained` events POST to `/api/webhooks/resend`. Used to update `notification_log.status`.
 
@@ -909,6 +977,7 @@ CREATE TABLE report_recipient (
     org_unit_id     UUID NOT NULL REFERENCES org_unit(id) ON DELETE CASCADE,
     email           CITEXT NOT NULL,
     display_name    TEXT,
+    locale          TEXT,
     subscriptions   JSONB NOT NULL DEFAULT '{"daily": false, "weekly": false, "event": false}'::jsonb,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -954,9 +1023,42 @@ ALTER TABLE time_clock_entries
     ADD COLUMN IF NOT EXISTS note TEXT;
 ```
 
+### Migration `0007_imports_and_exports.sql`
+
+Roster import audit log and signed iCal subscription tokens. Manual override events use the existing `schedule_audit` table with `to_state='manager_override'` and a `payload` carrying `{ previous_value, new_value, reason, force_override }`; no new table required. CSV and PDF exports are ephemeral — no DB writes — only iCal subscriptions persist a row.
+
+```sql
+-- Roster import audit log
+CREATE TABLE roster_import_log (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id UUID NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  actor_id UUID NOT NULL REFERENCES app_user(id),
+  started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  finished_at TIMESTAMPTZ,
+  rows_total INTEGER NOT NULL,
+  rows_created INTEGER NOT NULL DEFAULT 0,
+  rows_skipped INTEGER NOT NULL DEFAULT 0,
+  rows_errored INTEGER NOT NULL DEFAULT 0,
+  error_details JSONB
+);
+CREATE INDEX idx_roster_import_log_tenant_id ON roster_import_log(tenant_id);
+
+-- Signed long-lived iCal subscription URLs (one per soldier)
+CREATE TABLE ical_subscription_token (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id UUID NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  soldier_id UUID NOT NULL REFERENCES soldier(id) ON DELETE CASCADE,
+  token TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  expires_at TIMESTAMPTZ,
+  revoked_at TIMESTAMPTZ
+);
+CREATE INDEX idx_ical_subscription_token_soldier_id ON ical_subscription_token(soldier_id);
+```
+
 ### `employees` table
 
-The `0001_init.sql` `employees` table is **superseded by `soldier`**. Migration `0007_drop_legacy.sql` will drop `employees` once `soldier` is populated (no production data yet, so it's a one-shot replacement). Until then, `employees` stays for compatibility with the bootstrap app.
+The `0001_init.sql` `employees` table is **superseded by `soldier`**. Migration `0008_drop_legacy.sql` will drop `employees` once `soldier` is populated (no production data yet, so it's a one-shot replacement). Until then, `employees` stays for compatibility with the bootstrap app.
 
 ---
 
@@ -993,12 +1095,17 @@ The `0001_init.sql` `employees` table is **superseded by `soldier`**. Migration 
                       │   │ postgres 16      │    │
                       │   │ internal only    │    │
                       │   └──────────────────┘    │
+                      │   ┌──────────────────┐    │
+                      │   │ cron (node-cron) │    │
+                      │   │ internal only    │    │
+                      │   └──────────────────┘    │
                       └────────────────────────────┘
 ```
 
-- **Lowdefy** is the only externally-facing service. Owns auth, request validation, persistence orchestration, notification dispatch, and the UI.
+- **Lowdefy** is the only externally-facing service. Owns auth, request validation, persistence orchestration, notification dispatch, export generation, and the UI.
 - **Solver** is internal-only. Stateless. Called by Lowdefy via HTTP on the docker network (`http://solver:8000/solve`).
 - **Postgres** is internal-only. No host port exposed.
+- **Cron service**: a small Node container (alpine + node-cron) responsible for periodic dispatching of daily/weekly digest emails, constraint-lock reminder notifications, and any future scheduled tasks. It reads cron expressions and HTTP target endpoints from env vars (`CRON_DAILY_REPORT_HOUR`, `CRON_WEEKLY_DIGEST_DOW`, `CRON_WEEKLY_DIGEST_HOUR`, etc.) and calls into Lowdefy's API surface at the right times. Stateless; restart-safe.
 - **WAHA**, when added, sits in the same compose network at `http://waha:3000`.
 - **Resend** and **Web Push** are external dependencies; Lowdefy calls them over HTTPS.
 
@@ -1010,9 +1117,10 @@ Browser  ─▶ Lowdefy ─▶ Postgres
                   └──▶ Resend (HTTPS)
                   └──▶ WAHA   (HTTP, internal)
                   └──▶ Web Push (HTTPS)
+Cron     ─▶ Lowdefy (internal HTTP, triggers report runs)
 ```
 
-The solver never calls back into Lowdefy. Lowdefy never calls the browser except via Web Push (browser-initiated subscription).
+The solver never calls back into Lowdefy. Lowdefy never calls the browser except via Web Push (browser-initiated subscription). The cron service only calls Lowdefy; it never touches Postgres or the solver directly.
 
 ---
 
@@ -1125,7 +1233,7 @@ Cron tick (07:00 Israel) ───▶ Lowdefy                Postgres           
   │                          ───▶   read today's assignments
   │                          ───▶   read unscheduled constraints
   │                          ───▶   read report_recipient rows
-  │                          ───▶   render Hebrew RTL email
+  │                          ───▶   render email in recipient locale (RTL for he)
   │                          ───▶   POST /emails ──────────────────────▶ deliver
   │                          ───▶   insert notification_log
   │                                                                       (webhook updates status later)
@@ -1139,25 +1247,31 @@ Cron tick (07:00 Israel) ───▶ Lowdefy                Postgres           
 
 - Tenancy, org tree, auth, invites
 - Roster, shift schemas, planning windows
+- **Roster CSV import** (elevated from v1.1)
 - Availability (hybrid UX), constraint lock
 - Rules engine (8-rule catalog, overrides)
 - Solver service (CP-SAT)
-- Schedule lifecycle (draft → publish, audit)
-- Swap requests (with auto-approve)
-- Time clock (opt-in, button + manual)
-- Notifications (email, WhatsApp, push, in-app)
-- Reports (daily, weekly, event)
-- Dashboard (today view, leaderboard, calendar)
+- Schedule lifecycle (draft → publish, audit, **manager manual override**)
+- Swap requests (with auto-approve, overrides-applied evaluation)
+- Time clock (opt-in, button + manual, midnight-spanning one-row model)
+- Notifications (email, WhatsApp, push, in-app; per-recipient locale)
+- Reports (daily, weekly, event; per-recipient locale)
+- **Dashboard with graphs and statistics** (unit / team / per-soldier / leaderboard views)
+- **Schedule exports** (iCal one-shot + subscribe, CSV, PDF)
 - Hebrew RTL UI, English LTR alternative
+- `cron` service in the compose stack
 
 ### v1.1 (post-launch)
 
-- Google Calendar two-way sync (deferred from v1)
+- Google Calendar two-way sync (deferred from v1; iCal export covers one-way needs)
 - Calendar widget via Lowdefy npm plugin (FullCalendar-react)
-- Bulk operations (bulk invite-code generation, bulk roster import via CSV)
+- Mobile PWA install prompt
+- Bulk operations beyond CSV import (bulk invite-code generation, bulk archive)
 - Background job queue for notifications (extract from synchronous dispatch)
 - Soldier-level "preferred days off" soft preference (informs fairness, not a hard rule)
 - Multi-week recurring shift templates ("alternating weekends" pattern)
+- Advanced reporting (custom date ranges, exportable analytics queries)
+- Tenant-configurable "weekend" definition (Fri+Sat hardcoded in v1)
 
 ### v2 horizon
 
@@ -1183,7 +1297,7 @@ Cron tick (07:00 Israel) ───▶ Lowdefy                Postgres           
 | 6 | SMS auth | Magic link works; SMS adds carrier integrations |
 | 7 | Phone-call notifications | Out of domain |
 | 8 | Rules expression DSL | 8-rule catalog covers prior-art needs; DSL is a future escape valve |
-| 9 | Google Calendar sync | Prior art used it, but it's a v1.1 enabler — not blocking the core loop |
+| 9 | Google Calendar 2-way sync | iCal subscription covers the read-side use case; bidirectional sync is a v1.1 enabler |
 | 10 | Calendar widget via Lowdefy npm plugin | Defer to v1.1; v1 uses a simpler day-list view |
 | 11 | Multi-language UI beyond Hebrew + English | No discovery signal for other languages |
 
@@ -1205,19 +1319,24 @@ Cron tick (07:00 Israel) ───▶ Lowdefy                Postgres           
 | R8 | Smart-quote-style name normalization bugs in display logic (different from join logic, but still UI-breaking) | Medium | Low | Centralize display normalization in one helper; UI never re-derives keys from names |
 | R9 | Solver returns `infeasible` but the manager can't tell which soldier × rule combination is the culprit | Medium | Medium | Solver's `infeasibility_report.offending_rules` field is mandatory in every infeasible response; v1.1 adds soldier-level attribution |
 | R10 | Constraint-lock deadline silently passes during a holiday and soldiers don't realize availability is frozen | High | Low | `constraint_lock_approaching` notification 24h pre-lock; banner in the app post-lock |
+| R11 | iCal subscription URL leaks (forwarded by recipient, screenshotted) — long-lived signed URL with no auth header exposes a soldier's schedule | Medium | Low | Per-token revoke from soldier profile; rate-limit on the endpoint; token carries `tenant_id + soldier_id + HMAC`; optional expiry; documented as accepted residual risk |
 
-### Open questions
+### Decided since draft
 
-These are genuinely undecided. Decisions needed before or during build.
+1. **Cron location**: Separate compose service `cron`. (Decided 2026-05-12.)
+2. **VAPID key rotation**: v1 does NOT rotate keys; rotation invalidates all push subscriptions and forces re-subscribe — acceptable v1 trade-off. (Decided 2026-05-12.)
+3. **Swap auto-approve evaluation**: Evaluate against team rules WITH per-soldier overrides applied. Overrides are tightenings, so the strictest check is correct. (Decided 2026-05-12.)
+4. **Per-recipient email locale**: Each user sets their preferred locale in their profile. Outbound emails respect the recipient's profile locale. (Decided 2026-05-12.)
+5. **"Weekend" definition**: Friday + Saturday (Israeli weekend), hardcoded in solver for v1. Configurable per tenant in v2. (Decided 2026-05-12.)
+6. **Midnight-spanning time-clock entries**: One row with `started_at` and `ended_at` that may cross the date boundary. No special DDL — just standard `timestamptz` range. (Decided 2026-05-12.)
+7. **Solver `random_seed` exposure**: Hidden from the manager UI. Stored on `solver_run` for engineer-side debugging only. (Decided 2026-05-12.)
+8. **CSV roster import**: MOVED FROM v1.1 to v1.0. Spec'd in new §7.3.1. (Decided 2026-05-12.)
 
-1. **Where does the cron live?** Lowdefy doesn't have a built-in scheduler. Options: (a) a tiny Node sidecar in the app container reading cron expressions from env, (b) a separate `cron` service in the compose stack, (c) external (GitHub Actions hitting a webhook). Leaning toward (b) for isolation.
-2. **VAPID key rotation policy.** What happens when we rotate? Existing push subscriptions break. v1 may simply not rotate.
-3. **Auto-approve eligibility on swaps: should manager_override rules participate?** When evaluating "no rule violation," do we use the team rules or the team rules with all soldier overrides? Leaning toward "with overrides" since overrides are tightenings, so they're the strictest check.
-4. **Per-user locale on email reports.** A daily report goes to a list of recipients. Each could prefer a different locale. v1 defaults to Hebrew for everyone; per-recipient locale is a v1.1 candidate.
-5. **What "weekend" means.** `weekend_separation` rule needs a definition. Israeli weekend is Fri–Sat. Hardcode for v1; expose as a tenant setting in v1.1.
-6. **Time-clock entries that span midnight.** A button-tapped "check in" at 23:00 followed by "check out" at 03:00. Two database rows or one? Leaning toward one row with `started_at`/`ended_at` spanning the boundary.
-7. **Solver `random_seed` exposure.** Should the manager see it? Helpful for reproducible debugging; might confuse non-technical users. Default: hidden, but stored on `solver_run`.
-8. **Roster import format for v1.1.** CSV with which columns? Defer to v1.1 spec.
+### Open (fresh)
+
+1. **PDF rendering engine**: Puppeteer-in-container (heavier; reliable RTL Hebrew + custom fonts) vs wkhtmltopdf (lighter; flaky on RTL). Decide at implementation. Leaning Puppeteer for Hebrew correctness.
+2. **Dashboard chart library**: `@lowdefy/blocks-echarts` (ECharts) is the leading candidate — ECharts has solid RTL and Hebrew text support. Confirm at implementation by rendering a sample bar chart with Hebrew labels.
+3. **iCal subscription token security**: Long-lived signed URLs are necessary because calendar apps (Google/Apple/Outlook) don't carry auth headers. Mitigation: per-token revoke, optional expiry, rate-limit on the endpoint, signed token includes tenant_id + soldier_id + secret HMAC. Confirm acceptable security posture before launch.
 
 ---
 
@@ -1257,6 +1376,8 @@ Inventory only. No secrets included.
 | `SOLVER_MAX_SECONDS` | Lowdefy | Default solver timeout (10) |
 | `APP_DEFAULT_LOCALE` | Lowdefy | `he` |
 | `APP_DEFAULT_TIMEZONE` | Lowdefy, solver | `Asia/Jerusalem` |
+| `ICAL_SUBSCRIPTION_BASE_URL` | Lowdefy | Full URL prefix for signed iCal subscription URLs (e.g., `https://apps.nesher.co/api/ical/`) |
+| `PDF_RENDER_TIMEOUT_SECONDS` | Lowdefy | Server-side PDF render timeout (default 30) |
 | `CRON_DAILY_REPORT_HOUR` | cron service | Default 7 (local time) |
 | `CRON_WEEKLY_DIGEST_DOW` | cron service | Default `MON` |
 | `CRON_WEEKLY_DIGEST_HOUR` | cron service | Default 8 |
