@@ -1,0 +1,27 @@
+# tools/backup/.rclone.conf.example
+# Template rclone configuration for the shifty off-host backup remote.
+# Copy to C:\shifts-manager\.rclone.conf on hpg5 (NOT committed to git — add to .gitignore).
+# See OPERATIONS.md §Backup Self-Test Verification for user-side configuration steps.
+#
+# Setup steps:
+#   1. Install rclone: winget install rclone (on hpg5 as user `claude`)
+#   2. Generate SSH key: ssh-keygen -t ed25519 -f C:\shifts-manager\.ssh\neshernas_rclone_key
+#   3. Copy public key to NAS: ssh-copy-id -i C:\shifts-manager\.ssh\neshernas_rclone_key.pub omer@192.168.1.121
+#      (or paste into the Synology NAS SSH authorized_keys for user `omer`)
+#   4. Copy this file to C:\shifts-manager\.rclone.conf and fill in the values below
+#   5. Test with: rclone ls neshernas_pg_backup: --config C:\shifts-manager\.rclone.conf
+#
+# IMPORTANT: The actual .rclone.conf file must NOT be committed to git.
+# Add to hpg5 .gitignore: .rclone.conf
+
+[neshernas_pg_backup]
+type = sftp
+host = 192.168.1.121
+user = omer
+# Use SSH key file (preferred) — generated with `ssh-keygen -t ed25519`
+key_file = C:\shifts-manager\.ssh\neshernas_rclone_key
+# OR fall back to password (not recommended — password stored via `rclone obscure`):
+# pass = <obscured_password_from_rclone_obscure_output>
+#
+# Optional: limit bandwidth to avoid saturating LAN during backup
+# bwlimit = 10M
