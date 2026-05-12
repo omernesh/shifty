@@ -35,7 +35,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. `curl http://hpg5:8080/employees` returns 200 with a live Postgres-backed row visible; no `ERR_MODULE_NOT_FOUND` in container logs across 10 page loads (smoke test).
   5. Nightly `pg_dump` runs via Task Scheduler, off-host copy to neshernas succeeds, and `pg_restore --list` self-test alerts on failure; `docs/OPERATIONS.md` runbook stub exists.
   6. The `shifty-audit-writer` Lowdefy custom request plugin scaffold loads and writes a `schedule_audit` row from a mutating page (proves the plugin pattern that unlocks layer-4 RBAC, dispatcher, webhooks, and signed-URL endpoints downstream).
-**Plans**: TBD
+**Plans**: 5 plans
+  - [ ] 01-01-PLAN.md — Wave 0 scaffolding + smoke test + migrate compose service + migration 0002 (tenancy + NextAuth schema)
+  - [ ] 01-02-PLAN.md — Migrations 0003-0007 (shifts/availability/auth/audit/imports) + shifty-audit-writer plugin
+  - [ ] 01-03-PLAN.md — shifty-auth plugin (NextAuth + KnexAdapter + RLS hook + log-redact stub) + auth pages + migrations 0009 (RLS) + 0010 (audit REVOKEs)
+  - [ ] 01-04-PLAN.md — Tenant isolation verification (check-queries hardening + 9 Playwright pen-test specs)
+  - [ ] 01-05-PLAN.md — Ops baseline (backup scripts + Task Scheduler installer + log-redaction middleware + OPERATIONS.md runbook)
 **Sequencing notes**: Strictly sequential — no shortcuts. Smoke-test Lowdefy runtime FIRST (CLAUDE.md open question may already be resolved at commit `b8afba1`); 5-day timebox with documented escape hatch (switch to npm, or escalate Lowdefy-lock re-open) if smoke test fails.
 **Avoids pitfalls**: P1 (Lowdefy runtime bus factor), P2 (tenant isolation gaps), P6 (hpg5 ops — backup self-test + log redaction).
 **Research flag**: SMOKE-TEST Lowdefy runtime FIRST — CLAUDE.md open question may already be resolved at commit `b8afba1`.
@@ -151,7 +156,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7. Phase M 
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundations | 0/TBD | Not started | - |
+| 1. Foundations | 0/5 | Planned | - |
 | 2. Org & People | 0/TBD | Not started | - |
 | 3. Availability & Rules | 0/TBD | Not started | - |
 | 4. Solver & Schedule | 0/TBD | Not started | - |
