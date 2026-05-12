@@ -1,5 +1,5 @@
 id: signup
-type: PageCenteredHero
+type: PageHeaderMenu
 auth:
   protected: false
 properties:
@@ -49,7 +49,7 @@ blocks:
           params:
             requestId: bootstrap_tenant
         - id: signin_after
-          type: SignIn
+          type: Login
           params:
             providerId: email
             email:

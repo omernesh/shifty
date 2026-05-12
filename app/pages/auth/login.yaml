@@ -1,11 +1,9 @@
 id: login
-type: PageCenteredHero
+type: PageHeaderMenu
 auth:
   protected: false
 properties:
   title: Sign in | shifty
-layout:
-  contentJustify: center
 blocks:
   - id: signin_title
     type: Title
@@ -28,7 +26,7 @@ blocks:
     events:
       onClick:
         - id: do_signin
-          type: SignIn
+          type: Login
           params:
             providerId: email
             email:

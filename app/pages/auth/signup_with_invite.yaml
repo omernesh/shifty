@@ -1,5 +1,5 @@
 id: signup_with_invite
-type: PageCenteredHero
+type: PageHeaderMenu
 auth:
   protected: false
 properties:
@@ -53,7 +53,7 @@ blocks:
               params:
                 error_message: 'קוד הזמנה לא תקף או פג תוקף'
         - id: signin_after
-          type: SignIn
+          type: Login
           params:
             providerId: email
             email:

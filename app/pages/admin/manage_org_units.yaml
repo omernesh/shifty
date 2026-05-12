@@ -24,9 +24,8 @@ requests:
   - id: create_org_unit
     type: KnexRaw
     connectionId: shifts_db
-    auth:
-      roles:
-        - unit_admin
+    # Note: request-level auth.roles not supported in Lowdefy 5.3.0; page-level auth.roles provides gate.
+    # tenant_id derived from _user:tenant_id (server-side session) — cannot be spoofed by client.
     payload:
       tenant_id: { _user: tenant_id }
       parent_id: { _state: parent_id_select }
@@ -46,9 +45,7 @@ requests:
   - id: rename_org_unit
     type: KnexRaw
     connectionId: shifts_db
-    auth:
-      roles:
-        - unit_admin
+    # Note: request-level auth.roles not supported in Lowdefy 5.3.0; page-level auth.roles provides gate.
     payload:
       tenant_id: { _user: tenant_id }
       id: { _state: edit_unit_id }
@@ -66,9 +63,7 @@ requests:
   - id: delete_org_unit
     type: KnexRaw
     connectionId: shifts_db
-    auth:
-      roles:
-        - unit_admin
+    # Note: request-level auth.roles not supported in Lowdefy 5.3.0; page-level auth.roles provides gate.
     payload:
       tenant_id: { _user: tenant_id }
       id: { _state: delete_unit_id }

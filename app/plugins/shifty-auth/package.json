@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "exports": {
+    "./auth/adapters": "./src/auth/adapters.js",
     "./auth/callbacks": "./src/auth/callbacks.js",
     "./connections": "./src/connections.js",
     "./types": "./src/types.js",

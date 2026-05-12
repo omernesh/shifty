@@ -43,9 +43,7 @@ requests:
   - id: create_invite
     type: KnexRaw
     connectionId: shifts_db
-    auth:
-      roles:
-        - unit_admin
+    # Note: request-level auth.roles not supported in Lowdefy 5.3.0; page-level auth.roles provides gate.
     payload:
       tenant_id:
         _user: tenant_id

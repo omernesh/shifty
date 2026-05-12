@@ -29,6 +29,10 @@ COPY package.json pnpm-lock.yaml* ./
 COPY plugins/ ./plugins/
 RUN pnpm install --no-frozen-lockfile
 COPY . .
+# NEXTAUTH_SECRET must be set at build time (Lowdefy validates it when providers are configured).
+# A placeholder is used here — the real secret is injected at runtime via docker-compose .env.
+ARG NEXTAUTH_SECRET=build-time-placeholder-not-used-at-runtime
+ENV NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
 RUN npx lowdefy build
 RUN cd .lowdefy/server && pnpm exec next build
 

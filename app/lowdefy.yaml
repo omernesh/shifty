@@ -7,7 +7,9 @@ plugins:
     version: '5.3.0'
   - name: '@lowdefy/blocks-aggrid'
     version: '5.3.0'
-  - name: '@lowdefy/plugin-nextauth'
+  - name: '@lowdefy/blocks-antd'
+    version: '5.3.0'
+  - name: '@lowdefy/plugin-next-auth'
     version: '5.3.0'
   - name: 'shifty-auth'
     version: 'file:../../plugins/shifty-auth'
@@ -40,6 +42,8 @@ auth:
         - my_dashboard
       viewer:
         - my_dashboard
+  authPages:
+    signIn: /login
   providers:
     - id: email
       type: EmailProvider
@@ -55,6 +59,7 @@ auth:
           _secret: RESEND_FROM_EMAIL
         maxAge: 1800
   adapter:
+    id: knex_adapter
     type: KnexAdapter
     properties:
       connectionId: shifts_db
@@ -64,8 +69,6 @@ auth:
   callbacks:
     - id: shifty_session
       type: ShiftySessionCallback
-  pages:
-    signIn: /login
 
 menus:
   - id: default

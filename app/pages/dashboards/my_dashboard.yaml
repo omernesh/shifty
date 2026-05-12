@@ -28,4 +28,4 @@ blocks:
       title: התנתק
     events:
       onClick:
-        - { id: do_signout, type: SignOut, params: { callbackUrl: /login } }
+        - { id: do_signout, type: Logout, params: { callbackUrl: /login } }

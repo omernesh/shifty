@@ -24,9 +24,7 @@ requests:
   - id: write_test_audit
     type: AuditWrite
     connectionId: shifts_db
-    auth:
-      roles:
-        - unit_admin
+    # Note: request-level auth.roles not supported in Lowdefy 5.3.0; page-level auth.roles provides gate.
     properties:
       to_state: test_mutation
       actor_kind: user
