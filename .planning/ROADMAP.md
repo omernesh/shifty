@@ -39,7 +39,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   - [x] 01-01-PLAN.md — Wave 0 scaffolding + smoke test + migrate compose service + migration 0002 (tenancy + NextAuth schema) [COMPLETE: c422fbb, 0a6dd56, ab23155]
   - [x] 01-02-PLAN.md — Migrations 0003-0007 (shifts/availability/auth/audit/imports) + shifty-audit-writer plugin
   - [x] 01-03-PLAN.md — shifty-auth plugin (NextAuth + KnexAdapter + RLS hook + log-redact stub) + auth pages + migrations 0009 (RLS) + 0010 (audit REVOKEs)
-  - [ ] 01-04-PLAN.md — Tenant isolation verification (check-queries hardening + 9 Playwright pen-test specs)
+  - [x] 01-04-PLAN.md — Tenant isolation verification (check-queries hardening + 11 Playwright pen-test specs, 45 tests) [COMPLETE: bbed11f, 4277d34, a884e38, f41f826]
   - [ ] 01-05-PLAN.md — Ops baseline (backup scripts + Task Scheduler installer + log-redaction middleware + OPERATIONS.md runbook)
 **Sequencing notes**: Strictly sequential — no shortcuts. Smoke-test Lowdefy runtime FIRST (CLAUDE.md open question may already be resolved at commit `b8afba1`); 5-day timebox with documented escape hatch (switch to npm, or escalate Lowdefy-lock re-open) if smoke test fails.
 **Avoids pitfalls**: P1 (Lowdefy runtime bus factor), P2 (tenant isolation gaps), P6 (hpg5 ops — backup self-test + log redaction).

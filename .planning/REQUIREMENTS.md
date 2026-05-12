@@ -176,12 +176,12 @@ Requirements for initial release. Each maps to roadmap phases via Traceability (
 
 ### Security & Tenant Isolation (PRD §8.2, §8.3)
 
-- [ ] **SEC-01**: Every domain table has `tenant_id` FK; every backend query filters by `tenant_id` derived from session (NEVER request input); cross-tenant access returns 403 with no information leak
+- [x] **SEC-01**: Every domain table has `tenant_id` FK; every backend query filters by `tenant_id` derived from session (NEVER request input); cross-tenant access returns 403 with no information leak
 - [x] **SEC-02**: RBAC matrix from PRD §8.3 enforced server-side; client-side gating is for UX only, never for security
 - [x] **SEC-03**: Lowdefy pages declare top-level `auth` block with minimum required role; mutating `request` blocks set `properties.auth` with server-side role re-check
 - [x] **SEC-04**: Migration `0009_rls_policies.sql` enables Postgres RLS on every domain table; `app.current_tenant` session variable set per-connection-checkout via Knex `afterCreate` hook (5th defense layer)
-- [ ] **SEC-05**: CI grep gate (`tools/check-queries.mjs`) fails build on any YAML query missing `tenant_id` filter
-- [ ] **SEC-06**: Playwright pen-test fixture asserts every list/detail/mutation route returns 403 for cross-tenant access; manual penetration of `?tenant_id=` overrides returns 403
+- [x] **SEC-05**: CI grep gate (`tools/check-queries.mjs`) fails build on any YAML query missing `tenant_id` filter
+- [x] **SEC-06**: Playwright pen-test fixture asserts every list/detail/mutation route returns 403 for cross-tenant access; manual penetration of `?tenant_id=` overrides returns 403
 - [x] **SEC-07**: Audit tables (`schedule_audit`, `roster_import_log`) are append-only — migration `0010_audit_revokes.sql` REVOKEs UPDATE/DELETE/TRUNCATE from the app role
 - [ ] **SEC-08**: All secrets in `.env` on hpg5; never in code or committed YAML; Postgres credentials never exposed beyond docker network
 - [x] **SEC-09**: Invite codes are not enumerable (no listing endpoint without auth + role check)
@@ -402,12 +402,12 @@ Each v1 requirement maps to exactly one phase. Phase assignment follows the rule
 | I18N-05 | Phase 7 (Polish & Exports) | Pending |
 | I18N-06 | Phase 7 (Polish & Exports) | Pending |
 | I18N-07 | Phase 1 (Foundations) | Complete |
-| SEC-01 | Phase 1 (Foundations) | Pending |
+| SEC-01 | Phase 1 (Foundations) | Complete |
 | SEC-02 | Phase 1 (Foundations) | Complete |
 | SEC-03 | Phase 1 (Foundations) | Complete |
 | SEC-04 | Phase 1 (Foundations) | Complete |
-| SEC-05 | Phase 1 (Foundations) | Pending |
-| SEC-06 | Phase 1 (Foundations) | Pending |
+| SEC-05 | Phase 1 (Foundations) | Complete |
+| SEC-06 | Phase 1 (Foundations) | Complete |
 | SEC-07 | Phase 1 (Foundations) | Complete |
 | SEC-08 | Phase 1 (Foundations) | Pending |
 | SEC-09 | Phase 1 (Foundations) | Complete |

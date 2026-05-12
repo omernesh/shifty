@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-02-PLAN.md
-last_updated: "2026-05-12T18:01:02.933Z"
+stopped_at: Completed 01-04-PLAN.md
+last_updated: "2026-05-12T20:00:00.000Z"
 last_activity: 2026-05-12
 progress:
   total_phases: 8
   completed_phases: 0
   total_plans: 5
-  completed_plans: 3
-  percent: 60
+  completed_plans: 4
+  percent: 80
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-05-12)
 ## Current Position
 
 Phase: 1 (foundations) — EXECUTING
-Plan: 4 of 5
+Plan: 5 of 5
 Status: Ready to execute
 Last activity: 2026-05-12
 
-Progress: [██████░░░░] 60%
+Progress: [████████░░] 80%
 
 ## Performance Metrics
 
@@ -54,6 +54,7 @@ Progress: [██████░░░░] 60%
 *Updated after each plan completion*
 | Phase 01-foundations P02 | 210 | 3 tasks | 16 files |
 | Phase 01-foundations P03 | 480 | 7 tasks | 20 files |
+| Phase 01-foundations P04 | 180 | 4 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -63,6 +64,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
 - Plan 02: Legacy `availability` table renamed to `availability_legacy` in 0004 to preserve D-06 smoke-test surface through Phase 1; drop in migration 0008 at Phase 2 boundary
+- Plan 04: Self-test uses programmatic scan (not subprocess) to avoid Windows shell quoting issues; global tenant_id removal in mutation because scanner checks 80-line block including parameters sections
+- Plan 04: signInAs() uses set_config(false) for session scope so all queries in the fixture connection see the tenant context; teardown TRUNCATE bypasses RLS (DDL semantics)
+- Plan 04: Playwright specs skip gracefully when Postgres/stack unreachable — CI must set PG_TEST_URL for green runs
 - Plan 02: pnpm-workspace.yaml excluded from Docker image (added to .dockerignore); plugin referenced via `file:` protocol in package.json + lowdefy.yaml to prevent Lowdefy inner pnpm workspace-mode hang (2.5h hang diagnosed + fixed)
 - Plan 02: lowdefy.yaml plugin version `file:../../plugins/<name>` is relative from `.lowdefy/server/` — Lowdefy's addCustomPluginsAsDeps.js writes this verbatim into server package.json; path must resolve from server dir
 - Plan 02: Dynamic `import('knex')` in AuditWrite.js (not top-level) enables unit tests without live DB or installed knex
@@ -96,6 +100,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-05-12T18:01:02.919Z
-Stopped at: Completed 01-02-PLAN.md
+Last session: 2026-05-12T20:00:00.000Z
+Stopped at: Completed 01-04-PLAN.md
 Resume file: None
