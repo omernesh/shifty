@@ -19,7 +19,14 @@ WORKDIR /build
 # (which Lowdefy's @lowdefy/server pulls), exits non-zero, and Lowdefy treats
 # the whole install as failed. pnpm 9 has the older, lenient default.
 RUN corepack enable && corepack prepare pnpm@9.15.5 --activate
+# Copy package manifests and local plugin sources before install.
+# pnpm-workspace.yaml is intentionally excluded via .dockerignore so that
+# Lowdefy's inner @lowdefy/server pnpm install (cwd .lowdefy/server/) doesn't
+# enter workspace mode, which previously caused a 2.5-hour hang and hoisting
+# issues. The plugin is referenced via file: protocol in package.json and
+# lowdefy.yaml instead of workspace:*.
 COPY package.json pnpm-lock.yaml* ./
+COPY plugins/ ./plugins/
 RUN pnpm install --no-frozen-lockfile
 COPY . .
 RUN npx lowdefy build

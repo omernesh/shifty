@@ -4,3 +4,4 @@ node_modules
 .env
 *.log
 README.md
+pnpm-workspace.yaml
