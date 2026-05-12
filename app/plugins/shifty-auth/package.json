@@ -5,6 +5,7 @@
   "exports": {
     "./auth/adapters": "./src/auth/adapters.js",
     "./auth/callbacks": "./src/auth/callbacks.js",
+    "./auth/providers": "./src/auth/providers.js",
     "./connections": "./src/connections.js",
     "./types": "./src/types.js",
     "./hooks/knex-tenant": "./src/hooks/knex-tenant.js"
