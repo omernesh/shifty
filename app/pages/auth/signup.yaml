@@ -16,7 +16,7 @@ blocks:
       label: שם המערך
       required: true
   - id: org_depth_select
-    type: SelectInput
+    type: Selector
     properties:
       label: עומק היררכיה
       options:

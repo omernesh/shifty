@@ -97,13 +97,13 @@ blocks:
       title: יצירת קוד חדש
     blocks:
       - id: org_unit_select
-        type: SelectInput
+        type: Selector
         properties:
           label: יחידה ארגונית
           options:
             _request: list_org_units_for_select
       - id: role_select
-        type: SelectInput
+        type: Selector
         properties:
           label: תפקיד
           options:
@@ -117,7 +117,7 @@ blocks:
           label: 'מקסימום שימושים (ריק = ללא הגבלה)'
           min: 1
       - id: expires_at_input
-        type: DateTimeInput
+        type: DateTimeSelector
         properties:
           label: 'תאריך תפוגה (ריק = ללא תפוגה)'
       - id: create_btn
