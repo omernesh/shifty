@@ -36,7 +36,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   5. Nightly `pg_dump` runs via Task Scheduler, off-host copy to neshernas succeeds, and `pg_restore --list` self-test alerts on failure; `docs/OPERATIONS.md` runbook stub exists.
   6. The `shifty-audit-writer` Lowdefy custom request plugin scaffold loads and writes a `schedule_audit` row from a mutating page (proves the plugin pattern that unlocks layer-4 RBAC, dispatcher, webhooks, and signed-URL endpoints downstream).
 **Plans**: 5 plans
-  - [ ] 01-01-PLAN.md — Wave 0 scaffolding + smoke test + migrate compose service + migration 0002 (tenancy + NextAuth schema)
+  - [x] 01-01-PLAN.md — Wave 0 scaffolding + smoke test + migrate compose service + migration 0002 (tenancy + NextAuth schema) [COMPLETE: c422fbb, 0a6dd56, ab23155]
   - [ ] 01-02-PLAN.md — Migrations 0003-0007 (shifts/availability/auth/audit/imports) + shifty-audit-writer plugin
   - [ ] 01-03-PLAN.md — shifty-auth plugin (NextAuth + KnexAdapter + RLS hook + log-redact stub) + auth pages + migrations 0009 (RLS) + 0010 (audit REVOKEs)
   - [ ] 01-04-PLAN.md — Tenant isolation verification (check-queries hardening + 9 Playwright pen-test specs)

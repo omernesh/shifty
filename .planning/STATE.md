@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: milestone
 status: executing
-stopped_at: Phase 1 context gathered
-last_updated: "2026-05-12T12:31:52.028Z"
-last_activity: 2026-05-12 -- Phase 1 planning complete
+stopped_at: Phase 1 Plan 1 complete
+last_updated: "2026-05-12T15:02:00Z"
+last_activity: 2026-05-12 -- Phase 1 Plan 01 execution complete
 progress:
   total_phases: 8
   completed_phases: 0
   total_plans: 5
-  completed_plans: 0
-  percent: 0
+  completed_plans: 1
+  percent: 4
 ---
 
 # Project State
@@ -21,35 +21,35 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-12)
 
 **Core value:** Manager spends 30 minutes per planning window instead of 4 hours, with zero cross-tenant data leaks, in a Hebrew-first RTL UI.
-**Current focus:** Phase 1 — Foundations
+**Current focus:** Phase 1 — foundations
 
 ## Current Position
 
-Phase: 1 of 7 (Foundations) + Phase M (parallel migration track, not on critical path)
-Plan: 0 of TBD in current phase
-Status: Ready to execute
-Last activity: 2026-05-12 -- Phase 1 planning complete
+Phase: 1 (foundations) — EXECUTING
+Plan: 2 of 5
+Status: Plan 01 complete; Plan 02 next
+Last activity: 2026-05-12 -- Phase 1 Plan 01 execution complete
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█░░░░░░░░░] 4%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 0
-- Average duration: —
-- Total execution time: 0.0 hours
+- Total plans completed: 1
+- Average duration: ~2h
+- Total execution time: ~2h
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| — | — | — | — |
+| 01-foundations | 1/5 | ~2h | ~2h |
 
 **Recent Trend:**
 
-- Last 5 plans: —
-- Trend: —
+- Last 5 plans: Plan 01 (2h)
+- Trend: baseline
 
 *Updated after each plan completion*
 
@@ -60,6 +60,8 @@ Progress: [░░░░░░░░░░] 0%
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- Plan 01: golang-migrate requires `.up.sql` suffix — renamed `0001_init.sql` to `0001_init.up.sql`; future migrations use this convention
+- Plan 01: `docker compose run --rm migrate` (no trailing `up`) — YAML command already includes `up`; appending it overrides flags
 - Phase 1: Postgres RLS as 5th defense layer (`0009_rls_policies.sql`) — research-resolved beyond PRD §15 R4 deferral
 - Phase 1: Custom Lowdefy request plugin scaffold (`shifty-audit-writer`) is a Foundations prerequisite — unlocks layer-4 RBAC + dispatcher + webhooks + signed-URL endpoints
 - Phase 1: `migrate/migrate` (golang-migrate) compose service replaces manual `psql` for migration runs
@@ -88,6 +90,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-05-12T11:30:04.394Z
-Stopped at: Phase 1 context gathered
-Resume file: .planning/phases/01-foundations/01-CONTEXT.md
+Last session: 2026-05-12T15:02:00Z
+Stopped at: Completed 01-01-PLAN.md
+Resume file: .planning/phases/01-foundations/01-02-PLAN.md
