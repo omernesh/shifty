@@ -1,0 +1,60 @@
+id: admin_test_audit
+type: PageHeaderMenu
+auth:
+  roles:
+    - unit_admin
+properties:
+  title: 'בדיקת רישום ביקורת | shifty'
+requests:
+  - id: list_recent_audit
+    type: KnexRaw
+    connectionId: shifts_db
+    payload:
+      tenant_id: { _user: tenant_id }
+    properties:
+      query: |
+        SELECT id, to_state, actor_kind, payload::text AS payload_text, created_at
+        FROM schedule_audit
+        WHERE tenant_id = :tenant_id
+        ORDER BY created_at DESC
+        LIMIT 20
+      parameters:
+        tenant_id: { _payload: tenant_id }
+
+  - id: write_test_audit
+    type: AuditWrite
+    connectionId: shifts_db
+    auth:
+      roles:
+        - unit_admin
+    properties:
+      to_state: test_mutation
+      actor_kind: user
+      payload_json:
+        test: true
+        note: 'Phase 1 plugin smoke test'
+
+blocks:
+  - id: title
+    type: Title
+    properties:
+      content: 'בדיקת רישום ביקורת'
+      level: 1
+  - id: write_button
+    type: Button
+    properties:
+      title: 'כתוב שורת ביקורת'
+    events:
+      onClick:
+        - { id: do_write, type: Request, params: { requestId: write_test_audit } }
+        - { id: refresh, type: Request, params: { requestId: list_recent_audit } }
+  - id: audit_grid
+    type: AgGridAlpine
+    properties:
+      rowData:
+        _request: list_recent_audit
+      columnDefs:
+        - { field: to_state, headerName: 'מצב חדש' }
+        - { field: actor_kind, headerName: 'סוג שחקן' }
+        - { field: payload_text, headerName: 'מטען' }
+        - { field: created_at, headerName: 'נוצר ב' }

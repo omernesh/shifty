@@ -1,0 +1,56 @@
+id: admin_dashboard
+type: PageHeaderMenu
+auth:
+  roles:
+    - unit_admin
+properties:
+  title: 'לוח בקרה - מנהל מערך | shifty'
+requests:
+  - id: list_org_units
+    type: KnexRaw
+    connectionId: shifts_db
+    payload:
+      tenant_id:
+        _user: tenant_id
+    properties:
+      query: |
+        SELECT id, parent_id, level, name FROM org_unit
+        WHERE tenant_id = :tenant_id
+        ORDER BY level, name
+      parameters:
+        tenant_id: { _payload: tenant_id }
+blocks:
+  - id: greeting
+    type: Title
+    properties:
+      content:
+        _nunjucks:
+          template: 'שלום, {{ user.display_name | default("מנהל") }}'
+          on:
+            user:
+              _user: true
+      level: 1
+  - id: org_tree
+    type: AgGridAlpine
+    properties:
+      rowData:
+        _request: list_org_units
+      columnDefs:
+        - { field: level, headerName: רמה }
+        - { field: name, headerName: שם }
+        - { field: parent_id, headerName: 'הורה (UUID)' }
+  - id: invite_link
+    type: Link
+    properties:
+      title: ניהול קודי הזמנה
+      pageId: manage_invites
+  - id: org_units_link
+    type: Link
+    properties:
+      title: ניהול יחידות ארגוניות
+      pageId: manage_org_units
+  - id: audit_smoke_link
+    type: Link
+    properties:
+      title: 'בדיקת מערכת ביקורת (smoke test)'
+      pageId: admin_test_audit

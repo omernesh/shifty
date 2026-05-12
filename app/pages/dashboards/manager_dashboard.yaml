@@ -1,0 +1,29 @@
+id: manager_dashboard
+type: PageHeaderMenu
+auth:
+  roles:
+    - unit_admin
+    - team_manager
+properties:
+  title: 'לוח בקרה - מנהל צוות | shifty'
+blocks:
+  - id: greeting
+    type: Title
+    properties:
+      content:
+        _nunjucks:
+          template: 'שלום, {{ user.display_name | default("מנהל") }}'
+          on:
+            user: { _user: true }
+      level: 1
+  - id: placeholder
+    type: Paragraph
+    properties:
+      content: 'לוח בקרה של מנהל הצוות — יורחב בשלבים הבאים עם תצוגת לוח שנה ושיבוץ.'
+  - id: signout_button
+    type: Button
+    properties:
+      title: התנתק
+    events:
+      onClick:
+        - { id: do_signout, type: SignOut, params: { callbackUrl: /login } }

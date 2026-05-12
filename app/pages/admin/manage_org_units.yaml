@@ -1,0 +1,174 @@
+id: manage_org_units
+type: PageHeaderMenu
+auth:
+  roles:
+    - unit_admin
+properties:
+  title: 'ניהול יחידות ארגוניות | shifty'
+requests:
+  - id: list_units
+    type: KnexRaw
+    connectionId: shifts_db
+    payload:
+      tenant_id:
+        _user: tenant_id
+    properties:
+      query: |
+        SELECT id, parent_id, level, name
+        FROM org_unit
+        WHERE tenant_id = :tenant_id
+        ORDER BY level, name
+      parameters:
+        tenant_id: { _payload: tenant_id }
+
+  - id: create_org_unit
+    type: KnexRaw
+    connectionId: shifts_db
+    auth:
+      roles:
+        - unit_admin
+    payload:
+      tenant_id: { _user: tenant_id }
+      parent_id: { _state: parent_id_select }
+      level: { _state: level_input }
+      name: { _state: name_input }
+    properties:
+      query: |
+        INSERT INTO org_unit (tenant_id, parent_id, level, name)
+        VALUES (:tenant_id, :parent_id, :level, :name)
+        RETURNING id, parent_id, level, name
+      parameters:
+        tenant_id: { _payload: tenant_id }
+        parent_id: { _payload: parent_id }
+        level: { _payload: level }
+        name: { _payload: name }
+
+  - id: rename_org_unit
+    type: KnexRaw
+    connectionId: shifts_db
+    auth:
+      roles:
+        - unit_admin
+    payload:
+      tenant_id: { _user: tenant_id }
+      id: { _state: edit_unit_id }
+      new_name: { _state: edit_name_input }
+    properties:
+      query: |
+        UPDATE org_unit SET name = :new_name
+        WHERE id = :id AND tenant_id = :tenant_id
+        RETURNING id, name
+      parameters:
+        tenant_id: { _payload: tenant_id }
+        id: { _payload: id }
+        new_name: { _payload: new_name }
+
+  - id: delete_org_unit
+    type: KnexRaw
+    connectionId: shifts_db
+    auth:
+      roles:
+        - unit_admin
+    payload:
+      tenant_id: { _user: tenant_id }
+      id: { _state: delete_unit_id }
+    properties:
+      # Hard DELETE with leaf-only guard — Phase 1 schema has no archived_at on org_unit.
+      # Guard prevents orphaning subtrees: only leaf nodes (no children) can be deleted.
+      # Both tenant_id filters provide defense-in-depth: query-level AND RLS (layer 5).
+      query: |
+        DELETE FROM org_unit
+        WHERE id = :id
+          AND tenant_id = :tenant_id
+          AND NOT EXISTS (SELECT 1 FROM org_unit child WHERE child.parent_id = :id)
+        RETURNING id
+      parameters:
+        tenant_id: { _payload: tenant_id }
+        id: { _payload: id }
+
+blocks:
+  - id: title
+    type: Title
+    properties:
+      content: ניהול יחידות ארגוניות
+      level: 1
+  - id: tree_grid
+    type: AgGridAlpine
+    properties:
+      rowData: { _request: list_units }
+      columnDefs:
+        - { field: name, headerName: שם }
+        - { field: level, headerName: רמה }
+        - { field: parent_id, headerName: 'יחידת אם' }
+  - id: create_card
+    type: Card
+    properties:
+      title: יצירת יחידה חדשה
+    blocks:
+      - id: parent_id_select
+        type: SelectInput
+        properties:
+          label: יחידת אם
+          options:
+            _request: list_units
+      - id: level_input
+        type: NumberInput
+        properties:
+          label: רמה
+          min: 1
+          max: 3
+      - id: name_input
+        type: TextInput
+        properties:
+          label: שם
+      - id: create_btn
+        type: Button
+        properties:
+          title: צור יחידה
+        events:
+          onClick:
+            - { id: do_create, type: Request, params: { requestId: create_org_unit } }
+            - { id: refresh, type: Request, params: { requestId: list_units } }
+  - id: edit_card
+    type: Card
+    properties:
+      title: שינוי שם ליחידה קיימת
+    blocks:
+      - id: edit_unit_id
+        type: SelectInput
+        properties:
+          label: יחידה לשינוי
+          options:
+            _request: list_units
+      - id: edit_name_input
+        type: TextInput
+        properties:
+          label: שם חדש
+      - id: rename_btn
+        type: Button
+        properties:
+          title: שנה שם
+        events:
+          onClick:
+            - { id: do_rename, type: Request, params: { requestId: rename_org_unit } }
+            - { id: refresh_after_rename, type: Request, params: { requestId: list_units } }
+  - id: delete_card
+    type: Card
+    properties:
+      title: 'מחיקת יחידה (עלים בלבד)'
+    blocks:
+      - id: delete_unit_id
+        type: SelectInput
+        properties:
+          label: יחידה למחיקה
+          options:
+            _request: list_units
+      - id: delete_btn
+        type: Button
+        properties:
+          title: מחק יחידה
+          danger: true
+        events:
+          onClick:
+            - { id: do_delete, type: Request, params: { requestId: delete_org_unit } }
+            - { id: refresh_after_delete, type: Request, params: { requestId: list_units } }

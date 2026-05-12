@@ -1,0 +1,31 @@
+id: my_dashboard
+type: PageHeaderMenu
+auth:
+  roles:
+    - unit_admin
+    - team_manager
+    - member
+    - viewer
+properties:
+  title: 'הדף שלי | shifty'
+blocks:
+  - id: greeting
+    type: Title
+    properties:
+      content:
+        _nunjucks:
+          template: 'ברוך הבא, {{ user.display_name | default("חבר") }}'
+          on:
+            user: { _user: true }
+      level: 1
+  - id: placeholder
+    type: Paragraph
+    properties:
+      content: 'הדף יורחב בשלב 7. כעת זה דף נחיתה ריק שמוכיח שהמערכת מכירה אותך.'
+  - id: signout_button
+    type: Button
+    properties:
+      title: התנתק
+    events:
+      onClick:
+        - { id: do_signout, type: SignOut, params: { callbackUrl: /login } }
