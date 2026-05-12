@@ -2,8 +2,8 @@
 phase: 1
 slug: foundations
 status: draft
-nyquist_compliant: false
-wave_0_complete: false
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-05-12
 ---
 
@@ -108,14 +108,32 @@ Files Plan 01 (Infrastructure scaffolding) MUST create before any other plan can
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies declared
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references in the Per-Task Verification Map
-- [ ] No watch-mode flags (`--watch`, `--ui`) in CI commands
-- [ ] Feedback latency: <5s for quick (grep), <60s for full E2E
-- [ ] `nyquist_compliant: true` set in frontmatter after planner verifies coverage
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies declared (verified 2026-05-12: 24 tasks / 25 `<automated>` blocks across plans 01-05; no task without automated)
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify (verified by tooling grep across all 5 plans)
+- [x] Wave 0 covers all MISSING references in the Per-Task Verification Map (Plan 01 Task 2 creates every Wave-0-flagged file; SEC-08 gitignore assertion added per Blocker 1)
+- [x] No watch-mode flags (`--watch`, `--ui`) in CI commands (greps confirm absence)
+- [x] Feedback latency: <5s for quick (grep), <60s for full E2E
+- [x] `nyquist_compliant: true` set in frontmatter after planner verifies coverage
 
-**Approval:** pending (planner sets `nyquist_compliant: true` after all per-task `<automated>` blocks reference rows in the Per-Task Verification Map above)
+**Approval:** approved 2026-05-12
+
+---
+
+## Revision Audit Trail (2026-05-12)
+
+Post-checker revision pass addressed 5 blockers + 6 warnings flagged in the prior verification check. See plans 01-05 for the changes; summary:
+
+- **Blocker 1** (SEC-08 .gitignore assertion): added to Plan 01 Task 2 `<automated>` (`git ls-files | grep -E "^.env$"` returns empty + `grep -q ^.env$ .gitignore`)
+- **Blocker 2** (nyquist sign-off): every plan task `<automated>` confirmed to reference rows in the Per-Task Verification Map above; 25 automated blocks / 24 tasks; sign-off granted today
+- **Blocker 3** (SEC-09 role-gate): new `tests/e2e/role-gate.spec.ts` in Plan 04 Task 4 seeds a member-role user in tenant A; asserts GET /manage_invites returns 403/302 AND POST to create_invite returns 403; positive-control test confirms admin allowed
+- **Blocker 4** (planning_window uncomment): Plan 02 Task 1 now owns uncommenting `INSERT INTO planning_window` in `tools/fixtures/kibbutz.sql` after migration 0003 applies, re-loading the fixture, and asserting ≥1 row visible for the kibbutz tenant
+- **Blocker 5** (TEN-03 org-unit CRUD): Plan 03 Task 5 adds `manage_org_units.yaml` with create_org_unit + rename_org_unit + delete_org_unit (each with `auth.roles: [unit_admin]`); Plan 04 Task 4 adds `tests/e2e/org-unit-crud.spec.ts` covering admin happy-path + member-rejected role gate
+- **Warning 6** (audit-writer test count): Plan 02 Task 3 acceptance criteria clarified to "3 tests passing 5 of 6 behaviors; behavior 6 deferred to Plan 04 integration spec"
+- **Warning 7** (D-12 → SEC-10): Plan 05 Task 1 reference fixed (D-12 was unrelated)
+- **Warning 8** (Plan 03 scope): scope acknowledgement note added to Plan 03 `<objective>` (~20 files, 7 tasks — coupling justifies no split)
+- **Warning 9** (Hebrew collation per-task verify): added to Plan 02 Task 1 `<automated>` (≥6 columns with he-x-icu collation)
+- **Warning 10** (Knex afterCreate full-stack test): added a new test case to Plan 04 Task 3 `audit-writer.spec.ts` — writes via Lowdefy, then asserts RLS visibility with two different `app.current_tenant` settings
+- **Warning 11** (OPS-08 section greps): Plan 05 Task 5 `<automated>` strengthened with explicit grep assertions for the four required D-09 section headers
 
 ---
 
