@@ -14,7 +14,7 @@ import { teardownTestData } from './_fixtures/teardown';
 
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:8080';
 
-/** Discover all page IDs from app/pages/**/*.yaml by looking for `id:` + `type: *Page*` */
+/** Discover all page IDs from app/pages by looking for id + type containing 'Page' */
 function collectPageIds(): string[] {
   const out: string[] = [];
   function walk(dir: string) {
