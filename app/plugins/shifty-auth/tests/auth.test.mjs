@@ -43,7 +43,8 @@ test('ShiftySessionCallback hydrates known user', async () => {
   });
   const callback = makeShiftySessionCallback(knexMock);
   const session = { user: { email: 'admin-a@example.test' } };
-  const out = await callback({ session, token: {}, user: {} }, {});
+  // New Lowdefy interface: single { properties, session, token, user } arg
+  const out = await callback({ properties: { connectionString: 'mock' }, session, token: {}, user: {} });
   assert.equal(out.user.user_id, 'u1');
   assert.equal(out.user.tenant_id, 't1');
   assert.equal(out.user.locale, 'he');
@@ -55,7 +56,8 @@ test('ShiftySessionCallback defaults for unknown email', async () => {
   const knexMock = makeMockKnex({ app_user: null, memberships: [] });
   const callback = makeShiftySessionCallback(knexMock);
   const session = { user: { email: 'nobody@example.test' } };
-  const out = await callback({ session, token: {}, user: {} }, {});
+  // New Lowdefy interface: single { properties, session, token, user } arg
+  const out = await callback({ properties: { connectionString: 'mock' }, session, token: {}, user: {} });
   assert.equal(out.user.tenant_id, null);
   assert.equal(out.user.locale, 'he');
   assert.deepEqual(out.user.roles, []);
