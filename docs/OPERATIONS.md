@@ -15,10 +15,10 @@ See `CLAUDE.md` for the full deployment topology.
 **Nightly pg_dump** of the `shifts` database at **02:00 Israel time** via Windows Task Scheduler.
 
 - Produces: `C:\shifts-manager\backups\pg\YYYY-MM-DD.dump`
-- Off-host copy: rclone `neshernas_pg_backup:pg-backups/` (Synology NAS at 192.168.1.121)
-- Retention: 14 most-recent daily dumps (older files pruned automatically)
+- Off-host copy: `Z:\backups\pg\YYYY-MM-DD.dump` (Z: is mapped to `\\192.168.1.121\homes\shifty` on the Synology NAS; mapped at user `claude` login on hpg5). If Z: is unmapped, the local dump still succeeds and Event ID 2001 logs the warning — there is no crash; manual remediation is to remap the drive.
+- Retention: 14 most-recent daily dumps (older files pruned automatically); Z: copies are NOT pruned by the script (the NAS handles its own retention).
 - Logs: `C:\shifts-manager\backups\logs\backup-YYYY-MM-DD.log`
-- Event Log: Application log, source `ShiftyBackup` — Event ID 1000 (success), 1001/1002 (failure)
+- Event Log: Application log, source `ShiftyBackup` — Event ID 1000 (success), 1001/1002 (failure), 2001 (Z: off-host warning, local dump OK)
 
 **Task name:** `shifty-backup-nightly`
 
@@ -26,6 +26,8 @@ See `CLAUDE.md` for the full deployment topology.
 ```powershell
 # Most recent backup
 Get-ChildItem C:\shifts-manager\backups\pg\*.dump | Sort-Object LastWriteTime -Desc | Select-Object -First 1
+# Off-host copy reachable
+Test-Path Z:\backups\pg\
 # Recent Event Log entries
 Get-EventLog -LogName Application -Source ShiftyBackup -Newest 10
 # Both scheduled tasks present
@@ -33,17 +35,21 @@ Get-ScheduledTask -TaskName 'shifty-*'
 ```
 
 **Failure response:**
-- Event ID 1001 or 1002 → inspect `backup-YYYY-MM-DD.log`
+- Event ID 1001 or 1002 → inspect `backup-YYYY-MM-DD.log` (hard failure of local dump)
+- Event ID 2001 → Z: drive unreachable; local dump succeeded, off-host copy did not. Remap the drive via `net use Z: \\192.168.1.121\homes\shifty /persistent:yes` (substitute Synology creds if prompted).
 - Common causes: postgres container stopped; pg_restore version mismatch; disk full
 - Immediate manual run: `Start-ScheduledTask -TaskName 'shifty-backup-nightly'`
 
 **Setup steps (one-time per hpg5 install):**
-1. Install rclone: `winget install rclone` (as user `claude`)
-2. Generate SSH key: `ssh-keygen -t ed25519 -f C:\shifts-manager\.ssh\neshernas_rclone_key`
-3. Authorize key on NAS: paste the `.pub` content into Synology NAS SSH authorized_keys for user `omer`
-4. Configure rclone: copy `tools/backup/.rclone.conf.example` to `C:\shifts-manager\.rclone.conf` and fill in values
-5. Register tasks: elevated PowerShell → `C:\shifts-manager\tools\backup\install-task-scheduler.ps1`
-6. Verify: run health-check commands above
+1. Store NAS credentials machine-wide so Task Scheduler / SSH sessions can authenticate to the share (Windows isolates credential-manager entries per logon session by default; `cmdkey` stores them in a way that Task Scheduler's "Run as `claude`" picks up):
+   ```powershell
+   cmdkey /add:192.168.1.121 /user:<NAS_USERNAME> /pass:<NAS_PASSWORD>
+   ```
+   The user can verify with `cmdkey /list`. The mapped Z: drive at interactive login does NOT cover Task Scheduler runs (per-session) — Step 1 is the actual prerequisite.
+2. Register tasks: elevated PowerShell → `C:\shifts-manager\tools\backup\install-task-scheduler.ps1`
+3. Verify: run health-check commands above; first nightly run should NOT log Event ID 2001 (off-host warning). If 2001 appears, re-run `cmdkey /add:` with corrected credentials.
+
+**Historical note:** earlier iterations of this section used `rclone copy` to an SFTP remote, then a Z: drive mapping. Replaced with the UNC path (`\\192.168.1.121\homes\shifty\backups\pg\`) on 2026-05-12 — drive letters are per-session on Windows so neither Z: nor an SSH-mapped letter survives a Task Scheduler context. The UNC path works as long as `cmdkey` cached the credentials (Step 1).
 
 ---
 
@@ -164,18 +170,21 @@ WhatsApp Web simultaneously. The session drops at daily frequency with a shared 
 
 ## External Monitor (Uptime Kuma)
 
-**Forward-declared for Phase 6 (OPS-07).** Uptime Kuma on neshernas (192.168.1.121) watches
-`https://apps.nesher.co/login` from outside hpg5 — provides external reachability monitoring
-independent of the hpg5 process.
+**Deferred to v1.1** (per 2026-05-12 user decision). Originally specified for OPS-07 to provide
+external reachability monitoring of `https://apps.nesher.co/login` from outside hpg5, independent
+of the hpg5 process. For v1 the Cloudflare Tunnel agent provides an implicit health gate (the
+tunnel goes down if the upstream is unreachable, surfacing in Cloudflare's status page) and the
+nightly backup self-test catches Postgres-side regressions, so the marginal value of a separate
+external monitor is low pre-launch.
 
-**Setup (one-time on neshernas Uptime Kuma):**
-1. Open Uptime Kuma web UI on neshernas
+**Setup-when-resumed (one-time on whatever runs Uptime Kuma):**
+1. Open Uptime Kuma web UI
 2. Add HTTP monitor → URL: `https://apps.nesher.co/login` → expected HTTP 200
 3. Check interval: 5 minutes
 4. Alert: email to `omernesher@gmail.com` on failure
-5. Also add a Push monitor named `shifty-backup-nightly` (WAHA heartbeat once backup infra is wired)
+5. Also add a Push monitor named `shifty-backup-nightly` for backup heartbeat
 
-**Phase 1 status:** Not yet configured (neshernas Uptime Kuma availability not confirmed).
+**Status:** Deferred — revisit before any public-user launch.
 
 ---
 
@@ -271,5 +280,25 @@ Expected runtime: ~90 seconds on a warm Postgres stack.
 
 ---
 
-*Last updated: 2026-05-12 by Phase 1 Plan 05.*
+## Postgres role split
+
+The Postgres cluster has three roles. Use the right one for the job:
+
+| Role | Privileges | Used by | Connection |
+|------|------------|---------|------------|
+| `shifts` | LOGIN, **SUPERUSER** (forced by Postgres — bootstrap role cannot lose SUPERUSER) | Lowdefy app runtime | `postgresql://shifts:****@postgres:5432/shifts` (default in `.env`) |
+| `migrator` | LOGIN, SUPERUSER | `migrate/migrate` compose service only | `postgres://migrator:${MIGRATOR_PASSWORD}@postgres:5432/shifts` (compose `migrate` service) |
+| `postgres` | (does not exist in this cluster — `shifts` IS the bootstrap user) | — | — |
+
+**Why `shifts` is SUPERUSER:** Postgres rejects `ALTER ROLE <bootstrap> NOSUPERUSER` with "The bootstrap user must have the SUPERUSER attribute." There is no way to drop SUPERUSER from the role named in `POSTGRES_USER` at container init without re-initializing the data volume — and at that point you're better off picking a different bootstrap username from the start.
+
+**RLS bypass risk:** A SUPERUSER can bypass every Row-Level Security policy via `SET row_security = off`. The mitigation is a CI grep gate in `tools/check-queries.mjs --no-rls-bypass` that fails the build if any source file contains the literal `SET row_security = off|false|0`. The gate runs automatically in default mode (just `node tools/check-queries.mjs`). Allowlist marker for genuine exceptions: `// @gsd-allow-rls-bypass: <reason>` on the same line.
+
+**Why `migrator` exists despite the constraint:** Credential isolation. The Lowdefy app and the migration runner have different lifecycles and different threat models — keeping their credentials separate means a compromise of one doesn't compromise the other. Storing the `migrator` password only in `.env` on hpg5 (never in repo) and only loaded by the `migrate` compose service (never by Lowdefy) shrinks the blast radius.
+
+**Future hardening (v1.1):** Re-initialize the Postgres data volume with a distinct bootstrap user (e.g., `pg_root`) and create `shifts` as a regular NOSUPERUSER role at first start. This is a one-time destructive change; safe to do before any production data exists; gives the cleanest possible role split. Not in scope for v1.
+
+---
+
+*Last updated: 2026-05-12 by Phase 1 Plan 05 + post-execution role split.*
 *Phase 1 owners: Omer (product) + Claude (build agent).*

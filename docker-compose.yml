@@ -36,7 +36,10 @@ services:
       - ./db/migrations:/migrations:ro
     command:
       - "-path=/migrations"
-      - "-database=postgres://${POSTGRES_USER:-shifts}:${POSTGRES_PASSWORD:?missing}@postgres:5432/${POSTGRES_DB:-shifts}?sslmode=disable"
+      # Connect as `migrator` (dedicated SUPERUSER). The app role `shifts` is NOSUPERUSER
+      # so it cannot bypass RLS via `SET row_security = off`. See `docs/OPERATIONS.md`
+      # § "Postgres role split" for the rationale and the rollback recipe.
+      - "-database=postgres://migrator:${MIGRATOR_PASSWORD:?missing}@postgres:5432/${POSTGRES_DB:-shifts}?sslmode=disable"
       - "up"
     restart: "no"
     # One-shot: exits 0 on success. Run manually before each deploy:

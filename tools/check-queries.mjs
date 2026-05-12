@@ -31,8 +31,13 @@ if (args.includes('--self-test')) {
   runSelfTest();
 } else if (args.includes('--auth-blocks')) {
   runAuthBlocksCheck();
+} else if (args.includes('--no-rls-bypass')) {
+  runNoRlsBypassCheck();
 } else {
+  // Default mode runs both the tenant_id gate AND the RLS-bypass gate — they share a
+  // codepath cost (one filesystem walk) and are both release-blocking.
   runDefaultCheck();
+  runNoRlsBypassCheck();
 }
 
 // ─────────────────────────────────────────────
@@ -72,7 +77,7 @@ function runDefaultCheck(targetFiles) {
   }
   if (!targetFiles) {
     console.log('check-queries: all Knex request blocks have tenant_id filters.');
-    process.exit(0);
+    // Do NOT exit — default mode chains into runNoRlsBypassCheck() in the dispatcher.
   }
   return failures;
 }
@@ -202,6 +207,52 @@ function runAuthBlocksCheck() {
   }
   console.log('check-queries --auth-blocks: all mutating requests are on auth-gated pages.');
   process.exit(0);
+}
+
+// ─────────────────────────────────────────────
+// NO-RLS-BYPASS MODE: fail on any literal `SET row_security = off`
+// ─────────────────────────────────────────────
+// The Postgres bootstrap user (`shifts`) is forced to retain SUPERUSER by
+// Postgres itself — `ALTER ROLE shifts NOSUPERUSER` is rejected with "The
+// bootstrap user must have the SUPERUSER attribute." (a hard Postgres rule).
+// A SUPERUSER can bypass every RLS policy via `SET row_security = off`.
+// Defense-in-depth: this gate refuses the build if any source file contains
+// that literal anywhere — YAML, JS, SQL, anywhere — so a developer can't
+// quietly add it. See `docs/OPERATIONS.md` § "Postgres role split".
+function runNoRlsBypassCheck() {
+  const FORBIDDEN = /SET\s+(LOCAL\s+|SESSION\s+)?row_security\s*(=|\s+TO\s+)\s*(off|false|0)/i;
+  const ALLOW_MARKER = '@gsd-allow-rls-bypass:';
+  const ROOTS = ['app', 'tools', 'db', 'tests'];
+  const EXTS = /\.(yaml|yml|js|mjs|ts|tsx|jsx|sql|json)$/;
+  let failures = 0;
+
+  function walk(dir) {
+    if (!existsSync(dir)) return;
+    for (const entry of readdirSync(dir)) {
+      if (entry === 'node_modules' || entry.startsWith('.')) continue;
+      const full = join(dir, entry);
+      if (statSync(full).isDirectory()) { walk(full); continue; }
+      if (!EXTS.test(full)) continue;
+      // Skip this file itself — it's the gate and must reference the literal in its messages.
+      if (full.endsWith('check-queries.mjs') || full.replace(/\\/g, '/').endsWith('tools/check-queries.mjs')) continue;
+      const content = readFileSync(full, 'utf-8');
+      const lines = content.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        if (FORBIDDEN.test(lines[i]) && !lines[i].includes(ALLOW_MARKER)) {
+          console.error(`${full}:${i + 1}: forbidden RLS bypass — ${lines[i].trim()}`);
+          failures++;
+        }
+      }
+    }
+  }
+  for (const root of ROOTS) walk(root);
+
+  if (failures === 0) {
+    console.log('NO-RLS-BYPASS PASS: no `SET row_security = off` found in tracked source.');
+  } else {
+    console.error(`NO-RLS-BYPASS FAIL: ${failures} forbidden literal(s) found. The bootstrap user is SUPERUSER by Postgres design (see docs/OPERATIONS.md § Postgres role split); never use SET row_security = off in code.`);
+    process.exit(1);
+  }
 }
 
 // ─────────────────────────────────────────────

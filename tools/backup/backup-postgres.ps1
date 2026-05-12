@@ -10,7 +10,13 @@ $BackupDir = "C:\shifts-manager\backups\pg"
 $LogDir = "C:\shifts-manager\backups\logs"
 $DumpFile = "$BackupDir\$Date.dump"
 $LogFile = "$LogDir\backup-$Date.log"
-$RcloneConf = "C:\shifts-manager\.rclone.conf"
+# Off-host copy destination — UNC path to the NAS share, NOT the Z: drive letter.
+# The user mapped Z: → \\192.168.1.121\homes\shifty at interactive login, but Windows drive
+# letter mappings are per-logon-session (SSH and Task Scheduler runs DO NOT see Z:). Using
+# the UNC path directly bypasses that constraint as long as the user's Windows credential
+# cache has authenticated to the share at least once (which `net use Z: /persistent:yes`
+# accomplishes). See docs/OPERATIONS.md § "Off-host backup".
+$OffHostDir = "\\192.168.1.121\homes\shifty\backups\pg"
 $EventSource = 'ShiftyBackup'
 
 # Ensure dirs exist
@@ -46,13 +52,18 @@ try {
   $size = (Get-Item $DumpFile).Length
   Write-BackupLog "Dump copied to $DumpFile (size: $size bytes)"
 
-  # 3. Off-host copy via rclone
-  if (Test-Path $RcloneConf) {
-    rclone copy $DumpFile "neshernas_pg_backup:pg-backups/" --config $RcloneConf 2>&1 | Out-File -Append $LogFile
-    if ($LASTEXITCODE -ne 0) { throw "rclone copy failed with exit code $LASTEXITCODE" }
-    Write-BackupLog "Off-host copy to neshernas_pg_backup succeeded"
-  } else {
-    Write-BackupLog "rclone config not found at $RcloneConf - skipping off-host copy" 'WARN'
+  # 3. Off-host copy to NAS share (UNC path; same destination as the user's Z: mapping)
+  try {
+    New-Item -ItemType Directory -Force -Path $OffHostDir -ErrorAction Stop | Out-Null
+    Copy-Item -Path $DumpFile -Destination "$OffHostDir\$Date.dump" -Force -ErrorAction Stop
+    Write-BackupLog "Off-host copy to $OffHostDir succeeded"
+  } catch {
+    # Don't throw — local dump still succeeded; alert via Event Log so the user sees it
+    Write-BackupLog "Off-host copy to $OffHostDir failed: $_" 'WARN'
+    try {
+      Write-EventLog -LogName Application -Source $EventSource -EventId 2001 -EntryType Warning `
+        -Message "Off-host copy to $OffHostDir failed but local dump $Date.dump succeeded. Error: $_"
+    } catch { }
   }
 
   # 4. Self-test: pg_restore --list

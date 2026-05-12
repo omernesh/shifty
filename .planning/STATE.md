@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: milestone
-status: verifying
-stopped_at: Completed 01-05-PLAN.md (Tasks 1-5; Task 6 awaiting human action on hpg5)
-last_updated: "2026-05-12T21:00:00.000Z"
+status: completed
+stopped_at: Completed 01-05-PLAN.md Tasks 1-5; Task 6 is human-action checkpoint (rclone + Task Scheduler + Uptime Kuma on hpg5)
+last_updated: "2026-05-12T19:14:00.416Z"
 last_activity: 2026-05-12
 progress:
   total_phases: 8

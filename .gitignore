@@ -5,3 +5,4 @@ postgres-data/
 .DS_Store
 node_modules/
 package-lock.json
+.claude/scheduled_tasks.lock
