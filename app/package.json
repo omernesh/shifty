@@ -12,6 +12,10 @@
     "lowdefy": "5.3.0",
     "@lowdefy/connection-knex": "5.3.0",
     "@lowdefy/blocks-aggrid": "5.3.0",
-    "shifty-audit-writer": "file:./plugins/shifty-audit-writer"
+    "@lowdefy/plugin-nextauth": "5.3.0",
+    "resend": "6.12.3",
+    "shifty-auth": "file:./plugins/shifty-auth",
+    "shifty-audit-writer": "file:./plugins/shifty-audit-writer",
+    "knex": "^3.1.0"
   }
 }

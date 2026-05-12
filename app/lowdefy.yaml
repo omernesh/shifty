@@ -7,17 +7,65 @@ plugins:
     version: '5.3.0'
   - name: '@lowdefy/blocks-aggrid'
     version: '5.3.0'
+  - name: '@lowdefy/plugin-nextauth'
+    version: '5.3.0'
+  - name: 'shifty-auth'
+    version: 'file:../../plugins/shifty-auth'
   - name: 'shifty-audit-writer'
     version: 'file:../../plugins/shifty-audit-writer'
 
 connections:
-  - id: shifts_db
-    type: Knex
+  - _ref: connections/shifts_db.yaml
+
+auth:
+  pages:
+    protected: true
+    public:
+      - login
+      - signup
+      - signup_with_invite
+      - '404'
+    roles:
+      unit_admin:
+        - admin_dashboard
+        - admin_test_audit
+        - manage_invites
+        - manage_org_units
+        - manager_dashboard
+        - my_dashboard
+      team_manager:
+        - manager_dashboard
+        - my_dashboard
+      member:
+        - my_dashboard
+      viewer:
+        - my_dashboard
+  providers:
+    - id: email
+      type: EmailProvider
+      properties:
+        server:
+          host: smtp.resend.com
+          port: 465
+          auth:
+            user: resend
+            pass:
+              _secret: RESEND_API_KEY
+        from:
+          _secret: RESEND_FROM_EMAIL
+        maxAge: 1800
+  adapter:
+    type: KnexAdapter
     properties:
-      client: pg
-      connection:
-        connectionString:
-          _secret: POSTGRES_CONNECTION_STRING
+      connectionId: shifts_db
+  session:
+    strategy: database
+    maxAge: 2592000
+  callbacks:
+    - id: shifty_session
+      type: ShiftySessionCallback
+  pages:
+    signIn: /login
 
 menus:
   - id: default
@@ -32,6 +80,34 @@ menus:
         pageId: employees
         properties:
           title: Employees
+      - id: admin_dashboard_link
+        type: MenuLink
+        pageId: admin_dashboard
+        properties:
+          title: לוח בקרה
+        visible:
+          _user: tenant_id
+      - id: manage_invites_link
+        type: MenuLink
+        pageId: manage_invites
+        properties:
+          title: קודי הזמנה
+        visible:
+          _user: tenant_id
+      - id: manage_org_units_link
+        type: MenuLink
+        pageId: manage_org_units
+        properties:
+          title: יחידות ארגוניות
+        visible:
+          _user: tenant_id
+      - id: my_dashboard_link
+        type: MenuLink
+        pageId: my_dashboard
+        properties:
+          title: הדף שלי
+        visible:
+          _user: tenant_id
 
 pages:
   - id: home
@@ -101,3 +177,13 @@ pages:
               headerName: Max Hrs/Week
             - field: active
               headerName: Active
+
+  - _ref: pages/auth/login.yaml
+  - _ref: pages/auth/signup.yaml
+  - _ref: pages/auth/signup_with_invite.yaml
+  - _ref: pages/admin/admin_dashboard.yaml
+  - _ref: pages/admin/manage_invites.yaml
+  - _ref: pages/admin/admin_test_audit.yaml
+  - _ref: pages/admin/manage_org_units.yaml
+  - _ref: pages/dashboards/my_dashboard.yaml
+  - _ref: pages/dashboards/manager_dashboard.yaml
