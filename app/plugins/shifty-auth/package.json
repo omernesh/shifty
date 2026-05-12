@@ -1,0 +1,14 @@
+{
+  "name": "shifty-auth",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": {
+    "./auth/callbacks": "./src/auth/callbacks.js",
+    "./connections": "./src/connections.js",
+    "./types": "./src/types.js",
+    "./hooks/knex-tenant": "./src/hooks/knex-tenant.js"
+  },
+  "dependencies": {
+    "knex": "^3.1.0"
+  }
+}
