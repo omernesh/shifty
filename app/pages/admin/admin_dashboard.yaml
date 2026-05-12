@@ -40,17 +40,32 @@ blocks:
         - { field: name, headerName: שם }
         - { field: parent_id, headerName: 'הורה (UUID)' }
   - id: invite_link
-    type: Link
+    type: Button
     properties:
       title: ניהול קודי הזמנה
-      pageId: manage_invites
+    events:
+      onClick:
+        - id: go_invites
+          type: Link
+          params:
+            pageId: manage_invites
   - id: org_units_link
-    type: Link
+    type: Button
     properties:
       title: ניהול יחידות ארגוניות
-      pageId: manage_org_units
+    events:
+      onClick:
+        - id: go_org_units
+          type: Link
+          params:
+            pageId: manage_org_units
   - id: audit_smoke_link
-    type: Link
+    type: Button
     properties:
       title: 'בדיקת מערכת ביקורת (smoke test)'
-      pageId: admin_test_audit
+    events:
+      onClick:
+        - id: go_audit
+          type: Link
+          params:
+            pageId: admin_test_audit
