@@ -6,6 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Active build as of 2026-05-12. Stack pivoted from Appsmith to Lowdefy (see below for why).
 
+**Product spec: `docs/PRD.md`.** Read it before making product-level decisions. Locked decisions live there as decisions, not options; open questions live in §15.
+
+**Lowdefy reference: `.claude/skills/lowdefy/`.** Use this skill when authoring `app/*.yaml` or debugging the Lowdefy runtime — `SKILL.md` is the router; each `reference/0N-*.md` is a focused domain.
+
 - **Public URL: `https://apps.nesher.co`** (Cloudflare Tunnel; `cloudflared` runs on hpg5 under a separate Windows user account, out-of-scope for SSH operations). Also reachable internally as `http://hpg5:8080` over Tailscale.
 - **Postgres 16** runs in the compose stack alongside Lowdefy. The v1 schema is applied (`employees`, `shifts`, `assignments`, `availability`, `time_clock_entries`). All empty.
 - **Lowdefy** is being scaffolded; the minimal app in `app/` boots a home page + an employees list (PostgreSQL query). Build pipeline (Dockerfile multi-stage → Next.js standalone) is in place.
