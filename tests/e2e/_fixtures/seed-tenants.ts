@@ -1,89 +1,150 @@
 // tests/e2e/_fixtures/seed-tenants.ts
+// Full implementation (Plan 01 was a scaffold; Plan 04 replaces it entirely).
 // Seeds two independent tenants for cross-tenant isolation tests.
 // Uses the `pg` package directly (not Lowdefy) — connects to localhost:5432.
 // DDL never; only INSERT. Schema must already be applied via migrations.
 
 import { Client } from 'pg';
+import { randomUUID, randomBytes } from 'node:crypto';
 
-const PG_TEST_URL = process.env.PG_TEST_URL ?? 'postgres://shifts:changeme@localhost:5432/shifts';
+const PG_URL = process.env.PG_TEST_URL ?? 'postgres://shifts:changeme@localhost:5432/shifts';
 
-export interface TenantSeed {
+export interface TenantFixture {
   tenantId: string;
-  adminEmail: string;
   orgUnitId: string;
-  soldierId: string;
+  adminEmail: string;
+  adminUserId: string;    // app_user.id
+  adminAuthUserId: string; // users.id (Auth.js)
+  adminSoldierId: string;
+  inviteCode: string;     // 8-char Crockford base32
+  inviteCodeId: string;
 }
 
-export interface SeedResult {
-  tenantA: TenantSeed;
-  tenantB: TenantSeed;
+/** Generates a random 8-character Crockford base32 string (AUTH-04 format). */
+function crockford8(): string {
+  const alphabet = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+  const bytes = randomBytes(8);
+  let out = '';
+  for (let i = 0; i < 8; i++) out += alphabet[bytes[i] % 32];
+  return out;
 }
 
-export async function seedTwoTenants(): Promise<SeedResult> {
-  const client = new Client({ connectionString: PG_TEST_URL });
+async function seedOne(client: Client, label: 'A' | 'B'): Promise<TenantFixture> {
+  const tenantId = randomUUID();
+  const orgUnitId = randomUUID();
+  const adminEmail = `admin-${label.toLowerCase()}@example.test`;
+  const adminAuthUserId = randomUUID(); // users.id (Auth.js)
+  const adminUserId = randomUUID();     // app_user.id
+  const adminSoldierId = randomUUID();
+  const inviteCodeId = randomUUID();
+  const inviteCode = crockford8();
+
+  // Set RLS context before each tenant's inserts.
+  // The `shifts` role is superuser (migration 0001), so RLS applies but can be bypassed
+  // by set_config. set_config with false (not local) persists for the connection session.
+  await client.query(`SELECT set_config('app.current_tenant', $1, false)`, [tenantId]);
+
+  await client.query(
+    `INSERT INTO tenant (id, name, org_depth) VALUES ($1, $2, 1) ON CONFLICT (id) DO NOTHING`,
+    [tenantId, `Test Tenant ${label}`]
+  );
+  await client.query(
+    `INSERT INTO org_unit (id, tenant_id, parent_id, level, name) VALUES ($1, $2, NULL, 1, $3) ON CONFLICT (id) DO NOTHING`,
+    [orgUnitId, tenantId, `Test Unit ${label}`]
+  );
+  // Insert Auth.js users row first (app_user.user_id FK references users.id)
+  await client.query(
+    `INSERT INTO "users" (id, name, email, "emailVerified") VALUES ($1, $2, $3, now()) ON CONFLICT (id) DO NOTHING`,
+    [adminAuthUserId, `admin-${label}`, adminEmail]
+  );
+  await client.query(
+    `INSERT INTO app_user (id, tenant_id, email, display_name, locale, user_id) VALUES ($1, $2, $3, $4, 'he', $5) ON CONFLICT (id) DO NOTHING`,
+    [adminUserId, tenantId, adminEmail, `Admin ${label}`, adminAuthUserId]
+  );
+  await client.query(
+    `INSERT INTO soldier (id, tenant_id, user_id, display_name) VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO NOTHING`,
+    [adminSoldierId, tenantId, adminUserId, `Admin ${label} Soldier`]
+  );
+  await client.query(
+    `INSERT INTO membership (id, tenant_id, soldier_id, org_unit_id, role)
+     VALUES ($1, $2, $3, $4, 'unit_admin')
+     ON CONFLICT (soldier_id, org_unit_id) DO NOTHING`,
+    [randomUUID(), tenantId, adminSoldierId, orgUnitId]
+  );
+  await client.query(
+    `INSERT INTO invite_code (id, tenant_id, code, org_unit_id, role, created_by)
+     VALUES ($1, $2, $3, $4, 'member', $5)
+     ON CONFLICT (id) DO NOTHING`,
+    [inviteCodeId, tenantId, inviteCode, orgUnitId, adminUserId]
+  );
+
+  return { tenantId, orgUnitId, adminEmail, adminUserId, adminAuthUserId, adminSoldierId, inviteCode, inviteCodeId };
+}
+
+export async function seedTwoTenants(): Promise<{ tenantA: TenantFixture; tenantB: TenantFixture }> {
+  const client = new Client({ connectionString: PG_URL });
   await client.connect();
   try {
-    // Tenant A
-    const tenantAId = '11111111-1111-1111-1111-111111111111';
-    const tenantBId = '22222222-2222-2222-2222-222222222222';
-    const orgUnitAId = 'aaaaaaaa-0000-0000-0000-000000000001';
-    const orgUnitBId = 'bbbbbbbb-0000-0000-0000-000000000001';
-    const appUserAId = 'aaaaaaaa-0000-0000-0000-000000000002';
-    const appUserBId = 'bbbbbbbb-0000-0000-0000-000000000002';
-    const soldierAId = 'aaaaaaaa-0000-0000-0000-000000000003';
-    const soldierBId = 'bbbbbbbb-0000-0000-0000-000000000003';
-
-    await client.query(`
-      INSERT INTO tenant (id, name, org_depth) VALUES
-        ($1, 'Tenant A (test)', 1),
-        ($2, 'Tenant B (test)', 1)
-      ON CONFLICT (id) DO NOTHING
-    `, [tenantAId, tenantBId]);
-
-    await client.query(`
-      INSERT INTO org_unit (id, tenant_id, parent_id, level, name) VALUES
-        ($1, $3, NULL, 1, 'Unit A'),
-        ($2, $4, NULL, 1, 'Unit B')
-      ON CONFLICT (id) DO NOTHING
-    `, [orgUnitAId, orgUnitBId, tenantAId, tenantBId]);
-
-    await client.query(`
-      INSERT INTO app_user (id, tenant_id, email, display_name, locale) VALUES
-        ($1, $3, 'admin-a@example.test', 'Admin A', 'he'),
-        ($2, $4, 'admin-b@example.test', 'Admin B', 'he')
-      ON CONFLICT (id) DO NOTHING
-    `, [appUserAId, appUserBId, tenantAId, tenantBId]);
-
-    await client.query(`
-      INSERT INTO soldier (id, tenant_id, display_name, user_id) VALUES
-        ($1, $3, 'Admin Soldier A', $5),
-        ($2, $4, 'Admin Soldier B', $6)
-      ON CONFLICT (id) DO NOTHING
-    `, [soldierAId, soldierBId, tenantAId, tenantBId, appUserAId, appUserBId]);
-
-    await client.query(`
-      INSERT INTO membership (id, tenant_id, soldier_id, org_unit_id, role) VALUES
-        (gen_random_uuid(), $3, $1, $5, 'unit_admin'),
-        (gen_random_uuid(), $4, $2, $6, 'unit_admin')
-      ON CONFLICT (soldier_id, org_unit_id) DO NOTHING
-    `, [soldierAId, soldierBId, tenantAId, tenantBId, orgUnitAId, orgUnitBId]);
-
-    return {
-      tenantA: { tenantId: tenantAId, adminEmail: 'admin-a@example.test', orgUnitId: orgUnitAId, soldierId: soldierAId },
-      tenantB: { tenantId: tenantBId, adminEmail: 'admin-b@example.test', orgUnitId: orgUnitBId, soldierId: soldierBId },
-    };
+    const tenantA = await seedOne(client, 'A');
+    const tenantB = await seedOne(client, 'B');
+    return { tenantA, tenantB };
   } finally {
     await client.end();
   }
 }
 
-// TODO (Plan 03 will implement): signs in as the given email via the NextAuth magic-link flow
-// and returns session cookies. Until then, tests using this function should be skipped.
-export async function signInAs(_email: string): Promise<{ cookies: string[]; userId: string }> {
-  return { cookies: [], userId: '' };
+export interface SignInResult {
+  sessionToken: string;
+  userId: string;       // Auth.js users.id
+  cookies: string;      // Cookie header value for Playwright request context
 }
 
-export function getTenantBIds(tenantB: TenantSeed): { soldiers: string[]; windows: string[]; assignments: string[] } {
-  // Phase 1 only seeds tenants + soldiers; later phases extend with windows and assignments.
-  return { soldiers: [tenantB.soldierId], windows: [], assignments: [] };
+/**
+ * Inserts a session row directly into the `sessions` table (bypassing the email link click).
+ * Returns the cookie value that NextAuth would set after a successful magic-link callback.
+ * Used for test speed — NOT a production attack surface.
+ */
+export async function signInAs(email: string): Promise<SignInResult> {
+  const client = new Client({ connectionString: PG_URL });
+  await client.connect();
+  try {
+    const userResult = await client.query<{ id: string }>(
+      `SELECT id FROM "users" WHERE email = $1`,
+      [email]
+    );
+    if (userResult.rows.length === 0) {
+      throw new Error(`signInAs: no users row for email ${email}`);
+    }
+    const userId = userResult.rows[0].id;
+    const sessionToken = randomBytes(32).toString('hex');
+    await client.query(
+      `INSERT INTO sessions (id, "sessionToken", "userId", expires)
+       VALUES ($1, $2, $3, now() + interval '30 days')`,
+      [randomUUID(), sessionToken, userId]
+    );
+    // NextAuth default cookie name for HTTP: `next-auth.session-token`
+    // (in HTTPS production: `__Secure-next-auth.session-token`)
+    const cookies = `next-auth.session-token=${sessionToken}; Path=/; HttpOnly`;
+    return { sessionToken, userId, cookies };
+  } finally {
+    await client.end();
+  }
+}
+
+export function getTenantBIds(tenantB: TenantFixture): {
+  soldiers: string[];
+  windows: string[];    // empty in Phase 1 (no planning_window seeded)
+  assignments: string[]; // empty in Phase 1
+  orgUnits: string[];
+  invites: string[];
+  tenantId: string;
+} {
+  return {
+    soldiers: [tenantB.adminSoldierId],
+    windows: [],
+    assignments: [],
+    orgUnits: [tenantB.orgUnitId],
+    invites: [tenantB.inviteCodeId],
+    tenantId: tenantB.tenantId,
+  };
 }
