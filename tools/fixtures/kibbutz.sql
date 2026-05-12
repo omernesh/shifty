@@ -6,7 +6,7 @@
 --
 -- Dependencies:
 --   - Migration 0002 must be applied (provides tenant, org_unit, soldier tables).
---   - planning_window INSERT is commented out until migration 0003 applies (Plan 02).
+--   - Migration 0003 must be applied (provides planning_window table).
 
 BEGIN;
 
@@ -36,11 +36,10 @@ INSERT INTO soldier (id, tenant_id, display_name) VALUES
   --                                                                                        ^-- U+2019 RIGHT SINGLE QUOTATION MARK
 
 -- 64-day planning window (Phase 1 only seeds the window; Phase 4 solver test uses it)
--- Uncomment after migration 0003 applies (Plan 02):
--- INSERT INTO planning_window (id, tenant_id, team_id, start_date, end_date, constraint_lock_at, state)
--- VALUES ('99999999-9999-9999-9999-999999999999',
---         '11111111-1111-1111-1111-111111111111',
---         '22222222-2222-2222-2222-222222222222',
---         CURRENT_DATE, CURRENT_DATE + 63, CURRENT_DATE + 58, 'open');
+INSERT INTO planning_window (id, tenant_id, team_id, start_date, end_date, constraint_lock_at, state)
+VALUES ('99999999-9999-9999-9999-999999999999',
+        '11111111-1111-1111-1111-111111111111',
+        '22222222-2222-2222-2222-222222222222',
+        CURRENT_DATE, CURRENT_DATE + 63, CURRENT_DATE + 58, 'open');
 
 COMMIT;
