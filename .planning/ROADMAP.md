@@ -61,7 +61,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   - [x] 02-03-PLAN.md — Wave 1 manage_org_units tree-table upgrade (D-01, D-02, D-04 grow-depth)
   - [x] 02-04-PLAN.md — Wave 1 manage_soldiers admin tenant-wide soldier roster + Add-soldier Modal
   - [x] 02-05-PLAN.md — Wave 1 manage_role_tags read-only autocomplete viewer
-  - [ ] 02-06-PLAN.md — Wave 2 soldier_detail + color_swatches block + CreateSoldier/UpdateSoldier/ArchiveSoldier/InviteLater bodies
+  - [x] 02-06-PLAN.md — Wave 2 soldier_detail + color_swatches block + CreateSoldier/UpdateSoldier/ArchiveSoldier/InviteLater bodies
   - [ ] 02-07-PLAN.md — Wave 2 team_detail (Add/Remove member) + my_profile color override + CreateMembership body
   - [ ] 02-08-PLAN.md — Wave 3 CSV import wizard + ParseCsvAndValidate + CommitRosterImport (Auth.js spike + Resend dispatch loop)
   - [ ] 02-09-PLAN.md — Wave 4 lowdefy.yaml wiring + 0008_legacy_drop (UI ships before migration)
