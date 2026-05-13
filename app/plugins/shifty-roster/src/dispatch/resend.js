@@ -11,12 +11,19 @@
 // own node_modules tree does not contain `resend` symlinks. Same idiom as shifty-auth/providers.js.
 //
 // ====================================================================================
-// IMPORTANT — Assumption A1 (from 02-RESEARCH §"Magic-Link Invites"):
+// VERIFIED A1 (Plan 02-06 Task 0 spike, B3 upstream gate, 2026-05-13):
 // The verification_tokens.token column holds sha256(rawToken + NEXTAUTH_SECRET) hex.
-// This MUST be confirmed against the live node_modules/next-auth source in the running
-// container during the plan-08 2-hour spike BEFORE shipping the bulk-invite path
-// (T-02-04 in the phase threat register). If the algorithm differs, invite-link clicks
-// will fail verification at the NextAuth callback step. Document outcome in plan 08.
+// Confirmed against live next-auth v4.24.14 source in shifty-lowdefy container:
+//   /build/node_modules/.pnpm/next-auth@4.24.14_.../node_modules/next-auth/core/lib/utils.js
+//   function hashToken(token, options) {
+//     return createHash('sha256').update(`${token}${provider.secret ?? secret}`).digest('hex');
+//   }
+// Our shifty-auth EmailProvider (auth/providers.js) supplies no per-provider `secret`,
+// so the `provider.secret ?? secret` fallback resolves to NEXTAUTH_SECRET — byte-equal
+// to our pre-computed hash below. Magic-link URL carries the RAW token (next-auth's
+// core/lib/email/signin.js builds `${url}/callback/${provider.id}?token=${token}`);
+// callback verifies by re-hashing and matching against verification_tokens.token.
+// Plan 02-08 Task 1 is now a Wave-3 re-confirmation step, not the first verification.
 // ====================================================================================
 
 import { createRequire } from 'module';
@@ -81,7 +88,8 @@ ${RLM}קישור זה תקף ל-30 דקות בלבד.`;
  * and dispatches a Hebrew-RTL invitation email via Resend.
  *
  * The raw token is generated as randomBytes(32).toString('hex') (256 bits entropy).
- * Storage: sha256(rawToken + NEXTAUTH_SECRET) hex. See Assumption A1 caveat above.
+ * Storage: sha256(rawToken + NEXTAUTH_SECRET) hex — byte-equal to next-auth v4.24.14
+ * core/lib/utils.js hashToken (VERIFIED A1 above; Plan 02-06 Task 0 spike).
  *
  * @param {object} param0
  * @param {string} param0.email — recipient email (lowercased before storage)
