@@ -11,8 +11,8 @@ requests:
     type: KnexRaw
     connectionId: shifts_db
     # Recursive CTE emits a `path TEXT[]` so AgGrid `treeData: true` can rebuild the
-    # tree via `getDataPath: data => data.path` (Task 2). The `counts` CTE adds
-    # `child_count` used by the leaf-only delete affordance gate (col_delete cellRenderer).
+    # tree via `getDataPath: data => data.path`. The `counts` CTE adds `child_count`
+    # used by the leaf-only delete affordance gate (col_delete cellRenderer).
     # Both arms of the UNION ALL filter by tenant_id (Layer 2 tenant isolation).
     payload:
       tenant_id:
@@ -49,8 +49,8 @@ requests:
   - id: get_tenant_depth
     type: KnexRaw
     connectionId: shifts_db
-    # Reads the tenant's current org_depth ceiling so the UI can detect when an
-    # Add-child action at level == org_depth requires the D-04 grow-depth modal.
+    # Reads the tenant's current org_depth ceiling so the UI can detect when
+    # an Add-child action at level == org_depth requires the D-04 grow-depth modal.
     # tenant_id from _user:tenant_id (server-side session) — cannot be spoofed.
     payload:
       tenant_id:
@@ -195,18 +195,307 @@ blocks:
     properties:
       content: ניהול יחידות ארגוניות
       level: 1
+
   - id: tree_grid
     type: AgGridAlpine
+    # D-01 tree-table upgrade. enableRtl corrects the Phase-1 oversight (D-02).
+    #
+    # W6 (revision iter 1) — PURE Pattern A from RESEARCH P9: three SEPARATE action
+    # columns (col_add_child, col_rename, col_delete), each rendering ONE icon-button
+    # cellRenderer. Dispatch via onCellClicked branching purely on _event.column.field.
+    # NO HTML data attribute bridge — Lowdefy cannot reliably hook click events on
+    # nunjucks-rendered HTML spans. The column-dispatch pattern is documented in
+    # skill reference/05-blocks-data.md (line 107: onCellClicked { data, value, column.field }).
     properties:
+      enableRtl: true
+      treeData: true
+      animateRows: true
+      groupDefaultExpanded: -1
       rowData: { _request: list_units }
+      autoGroupColumnDef:
+        headerName: יחידה
+        minWidth: 280
+        cellRendererParams:
+          suppressCount: false
+      getDataPath:
+        _function:
+          __args: 0
+          __return: { __args: 0.path }
       columnDefs:
-        - { field: name, headerName: שם }
-        - { field: level, headerName: רמה }
-        - { field: parent_id, headerName: 'יחידת אם' }
+        - { field: level, headerName: רמה, width: 80 }
+        - { field: child_count, headerName: ילדים, width: 80 }
+
+        # Action column 1 — add child (admin only)
+        - field: col_add_child
+          headerName: ''
+          width: 60
+          sortable: false
+          filter: false
+          cellRenderer:
+            _function:
+              __args: 0
+              __return:
+                _nunjucks:
+                  template: |
+                    {% if isAdmin %}<span title="הוסף תת" style="cursor:pointer">＋</span>{% endif %}
+                  on:
+                    isAdmin:
+                      _array.includes:
+                        on: { _user: roles }
+                        value: unit_admin
+
+        # Action column 2 — rename (admin OR team_manager on own team row)
+        - field: col_rename
+          headerName: ''
+          width: 60
+          sortable: false
+          filter: false
+          cellRenderer:
+            _function:
+              __args: 0
+              __return:
+                _nunjucks:
+                  template: |
+                    {% if canRename %}<span title="שינוי שם" style="cursor:pointer">✎</span>{% endif %}
+                  on:
+                    canRename:
+                      _or:
+                        - _array.includes:
+                            on: { _user: roles }
+                            value: unit_admin
+                        - _and:
+                            - _array.includes:
+                                on: { _user: roles }
+                                value: team_manager
+                            - _array.includes:
+                                on: { _user: team_ids }
+                                value: { __args: 0.data.id }
+
+        # Action column 3 — delete (admin only, leaf only)
+        - field: col_delete
+          headerName: ''
+          width: 60
+          sortable: false
+          filter: false
+          cellRenderer:
+            _function:
+              __args: 0
+              __return:
+                _nunjucks:
+                  template: |
+                    {% if isAdmin and children == 0 %}<span title="מחק" style="cursor:pointer;color:#FF4D4F">🗑</span>{% endif %}
+                  on:
+                    isAdmin:
+                      _array.includes:
+                        on: { _user: roles }
+                        value: unit_admin
+                    children: { __args: 0.data.child_count }
+      events:
+        # W6 Pattern A: route by column.field, never by an HTML data attribute.
+        # Captures row context to _state for the chained Confirm + Request actions
+        # rendered in the modals/cards below.
+        onCellClicked:
+          - id: capture_row
+            type: SetState
+            params:
+              clicked_column: { _event: column.field }
+              clicked_row_id: { _event: data.id }
+              clicked_row_name: { _event: data.name }
+              clicked_row_level: { _event: data.level }
+              clicked_row_child_count: { _event: data.child_count }
+
+          # ---- col_rename branch — admin OR team_manager on own team row ----
+          - id: prefill_rename
+            type: SetState
+            if:
+              _and:
+                - { _eq: [{ _state: clicked_column }, col_rename] }
+                - _or:
+                    - _array.includes:
+                        on: { _user: roles }
+                        value: unit_admin
+                    - _and:
+                        - _array.includes:
+                            on: { _user: roles }
+                            value: team_manager
+                        - _array.includes:
+                            on: { _user: team_ids }
+                            value: { _state: clicked_row_id }
+            params:
+              edit_unit_id: { _state: clicked_row_id }
+              edit_name_input: { _state: clicked_row_name }
+              show_rename_modal: true
+
+          # ---- col_delete branch — admin only, leaf only ----
+          - id: confirm_delete
+            type: Confirm
+            if:
+              _and:
+                - { _eq: [{ _state: clicked_column }, col_delete] }
+                - _array.includes:
+                    on: { _user: roles }
+                    value: unit_admin
+                - { _eq: [{ _state: clicked_row_child_count }, 0] }
+            params:
+              title: מחיקת יחידה
+              content:
+                _nunjucks:
+                  template: 'האם למחוק את היחידה "{{ name }}"? פעולה זו אינה הפיכה.'
+                  on:
+                    name: { _state: clicked_row_name }
+              okText: מחק
+              cancelText: ביטול
+              okType: danger
+          - id: stage_delete_id
+            type: SetState
+            if:
+              _and:
+                - { _eq: [{ _state: clicked_column }, col_delete] }
+                - _array.includes:
+                    on: { _user: roles }
+                    value: unit_admin
+                - { _eq: [{ _state: clicked_row_child_count }, 0] }
+            params:
+              delete_unit_id: { _state: clicked_row_id }
+          - id: do_delete
+            type: Request
+            if:
+              _and:
+                - { _eq: [{ _state: clicked_column }, col_delete] }
+                - _array.includes:
+                    on: { _user: roles }
+                    value: unit_admin
+                - { _eq: [{ _state: clicked_row_child_count }, 0] }
+            params:
+              requestId: delete_org_unit
+          - id: refresh_after_delete
+            type: Request
+            if: { _eq: [{ _state: clicked_column }, col_delete] }
+            params:
+              requestId: list_units
+
+          # ---- col_add_child branch — admin only, may need D-04 grow-depth modal ----
+          - id: stash_add_target
+            type: SetState
+            if:
+              _and:
+                - { _eq: [{ _state: clicked_column }, col_add_child] }
+                - _array.includes:
+                    on: { _user: roles }
+                    value: unit_admin
+            params:
+              add_child_target_id: { _state: clicked_row_id }
+              add_child_target_level: { _state: clicked_row_level }
+          - id: fetch_tenant_depth
+            type: Request
+            if:
+              _and:
+                - { _eq: [{ _state: clicked_column }, col_add_child] }
+                - _array.includes:
+                    on: { _user: roles }
+                    value: unit_admin
+            params:
+              requestId: get_tenant_depth
+          - id: confirm_grow_depth
+            type: Confirm
+            # Only when admin clicks add-child on a node whose level + 1 exceeds
+            # current tenant.org_depth (i.e., child would be deeper than allowed
+            # — admin must consent to grow the hierarchy).
+            if:
+              _and:
+                - { _eq: [{ _state: clicked_column }, col_add_child] }
+                - _array.includes:
+                    on: { _user: roles }
+                    value: unit_admin
+                - _gt:
+                    - { _sum: [{ _state: clicked_row_level }, 1] }
+                    - { _request: get_tenant_depth.0.org_depth }
+            params:
+              title: הגדלת עומק היררכיה
+              content:
+                _nunjucks:
+                  template: 'ההוספה תעלה את המבנה ל-{{ n }} רמות. פעולה זו משנה את מבנה הארגון. להמשיך?'
+                  on:
+                    n: { _sum: [{ _state: clicked_row_level }, 1] }
+              okText: המשך
+              cancelText: ביטול
+              okType: danger
+          - id: stage_new_depth
+            type: SetState
+            if:
+              _and:
+                - { _eq: [{ _state: clicked_column }, col_add_child] }
+                - _array.includes:
+                    on: { _user: roles }
+                    value: unit_admin
+                - _gt:
+                    - { _sum: [{ _state: clicked_row_level }, 1] }
+                    - { _request: get_tenant_depth.0.org_depth }
+            params:
+              confirmed_new_depth: { _sum: [{ _state: clicked_row_level }, 1] }
+          - id: open_add_child_modal
+            type: SetState
+            if:
+              _and:
+                - { _eq: [{ _state: clicked_column }, col_add_child] }
+                - _array.includes:
+                    on: { _user: roles }
+                    value: unit_admin
+            params:
+              show_add_child_modal: true
+
+  # ----- Add child modal (D-04 path; calls grow_org_depth_and_add_child) -----
+  - id: add_child_modal
+    type: Modal
+    properties:
+      visible: { _state: show_add_child_modal }
+      title:
+        _nunjucks:
+          template: 'הוספת תת-יחידה תחת "{{ parent }}"'
+          on:
+            parent: { _state: clicked_row_name }
+      okText: צור
+      cancelText: ביטול
+    events:
+      onOk:
+        - { id: do_grow_or_add, type: Request, params: { requestId: grow_org_depth_and_add_child } }
+        - { id: close_modal, type: SetState, params: { show_add_child_modal: false, add_child_name_input: '' } }
+        - { id: refresh_units, type: Request, params: { requestId: list_units } }
+        - { id: refresh_depth, type: Request, params: { requestId: get_tenant_depth } }
+      onCancel:
+        - { id: close_modal, type: SetState, params: { show_add_child_modal: false, add_child_name_input: '' } }
+    blocks:
+      - id: add_child_name_input
+        type: TextInput
+        properties:
+          label: שם היחידה החדשה
+
+  # ----- Rename modal (D-02; calls rename_org_unit unchanged) -----
+  - id: rename_modal
+    type: Modal
+    properties:
+      visible: { _state: show_rename_modal }
+      title: שינוי שם יחידה
+      okText: שמור
+      cancelText: ביטול
+    events:
+      onOk:
+        - { id: do_rename, type: Request, params: { requestId: rename_org_unit } }
+        - { id: close_rename, type: SetState, params: { show_rename_modal: false } }
+        - { id: refresh_after_rename, type: Request, params: { requestId: list_units } }
+      onCancel:
+        - { id: close_rename, type: SetState, params: { show_rename_modal: false } }
+    blocks:
+      - id: edit_name_input
+        type: TextInput
+        properties:
+          label: שם חדש
+
+  # ----- Phase 1 fallback create form (UI-SPEC: "Cards from Phase 1 KEPT as fallback create form below the tree") -----
   - id: create_card
     type: Card
     properties:
-      title: יצירת יחידה חדשה
+      title: יצירת יחידה חדשה (טופס fallback)
     blocks:
       - id: parent_id_select
         type: Selector
@@ -232,46 +521,3 @@ blocks:
           onClick:
             - { id: do_create, type: Request, params: { requestId: create_org_unit } }
             - { id: refresh, type: Request, params: { requestId: list_units } }
-  - id: edit_card
-    type: Card
-    properties:
-      title: שינוי שם ליחידה קיימת
-    blocks:
-      - id: edit_unit_id
-        type: Selector
-        properties:
-          label: יחידה לשינוי
-          options:
-            _request: list_units
-      - id: edit_name_input
-        type: TextInput
-        properties:
-          label: שם חדש
-      - id: rename_btn
-        type: Button
-        properties:
-          title: שנה שם
-        events:
-          onClick:
-            - { id: do_rename, type: Request, params: { requestId: rename_org_unit } }
-            - { id: refresh_after_rename, type: Request, params: { requestId: list_units } }
-  - id: delete_card
-    type: Card
-    properties:
-      title: 'מחיקת יחידה (עלים בלבד)'
-    blocks:
-      - id: delete_unit_id
-        type: Selector
-        properties:
-          label: יחידה למחיקה
-          options:
-            _request: list_units
-      - id: delete_btn
-        type: Button
-        properties:
-          title: מחק יחידה
-          danger: true
-        events:
-          onClick:
-            - { id: do_delete, type: Request, params: { requestId: delete_org_unit } }
-            - { id: refresh_after_delete, type: Request, params: { requestId: list_units } }
