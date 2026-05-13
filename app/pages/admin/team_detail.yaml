@@ -361,37 +361,33 @@ blocks:
                     _nunjucks:
                       template: '<span title="הסר" style="cursor:pointer;color:#FF4D4F">🗑</span>'
         events:
+          # Lowdefy 5.3 has no `If` action — branch via per-action `if:` gates.
+          # The two mutually-exclusive branches share `clicked-column == actions`
+          # as the discriminator: actions column → remove flow; any other body
+          # column → navigate to soldier_detail.
           onCellClicked:
-            - id: handle_cell_click
-              type: If
+            # ── actions column branch: capture row + open ConfirmModal ──
+            - id: set_remove_target
+              type: SetState
+              if: { _eq: [{ _event: column.field }, actions] }
               params:
-                test:
-                  _eq:
-                    - { _event: column.field }
-                    - actions
-                then:
-                  # Capture the clicked row's membership_id + name into state
-                  # so the ConfirmModal can render the name AND the modal's
-                  # onOk DELETE can read remove_target_membership_id (Lowdefy
-                  # 5.3 canonical ConfirmModal block + CallMethod toggleOpen
-                  # replaces the legacy inline `Confirm` action).
-                  - id: set_remove_target
-                    type: SetState
-                    params:
-                      remove_target_membership_id: { _event: data.membership_id }
-                      remove_target_display_name: { _event: data.display_name }
-                  - id: open_remove_confirm
-                    type: CallMethod
-                    params:
-                      blockId: remove_confirm_modal
-                      method: toggleOpen
-                else:
-                  - id: open_detail
-                    type: Link
-                    params:
-                      pageId: soldier_detail
-                      urlQuery:
-                        id: { _event: data.id }
+                remove_target_membership_id: { _event: data.membership_id }
+                remove_target_display_name: { _event: data.display_name }
+            - id: open_remove_confirm
+              type: CallMethod
+              if: { _eq: [{ _event: column.field }, actions] }
+              params:
+                blockId: remove_confirm_modal
+                method: toggleOpen
+            # ── body-column branch: open soldier_detail in same window ──
+            - id: open_detail
+              type: Link
+              if:
+                _not: { _eq: [{ _event: column.field }, actions] }
+              params:
+                pageId: soldier_detail
+                urlQuery:
+                  id: { _event: data.id }
 
       # Empty-state for the members grid (UI-SPEC Hebrew copy table line 229).
       - id: members_empty_state
