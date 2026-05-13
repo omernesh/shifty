@@ -1,0 +1,106 @@
+id: manage_role_tags
+type: PageHeaderMenu
+auth:
+  roles:
+    - unit_admin
+properties:
+  title: 'תגיות תפקיד | shifty'
+
+# D-13 per-tenant role-tag catalog viewer (READ-ONLY in Phase 2; edit/delete deferred to v1.1).
+# New tags are created in-flight via plan 02-08 CSV import "צור" affordance, or as a side-effect
+# of plan 02-06 single-row Add-soldier path (CreateSoldier handler inserts unknown tags).
+# This page closes ROST-07's "tenant-defined autocomplete" surface area for admins who want to
+# confirm the canonical tag set without opening a CSV import workflow.
+#
+# Layer 1 (session): payload.tenant_id from `_user: tenant_id` — never from request input.
+# Layer 2 (query):   KnexRaw filters by WHERE tenant_id = :tenant_id (CI grep gate).
+# Layer 3 (page):    auth.roles = [unit_admin] only — team_manager NOT listed (per RESEARCH Layer 3 table).
+# Layer 5 (RLS):     migration 0011 inline policy on role_tag covers cross-tenant DB-level breach.
+#
+# Sidebar nav entry wiring lands in plan 02-09 lowdefy.yaml update.
+
+requests:
+  # ── List tenant's role_tag catalog ─────────────────────────────────────────
+  # D-13: per-tenant scoped via Layer 2 + Layer 5 (inline RLS policy from 0011).
+  # ORDER BY key ASC for predictable browsing (slug naming is alphabet-friendly).
+  - id: list_role_tags
+    type: KnexRaw
+    connectionId: shifts_db
+    payload:
+      tenant_id:
+        _user: tenant_id
+    properties:
+      query: |
+        SELECT id, key, label, created_at
+        FROM role_tag
+        WHERE tenant_id = :tenant_id
+        ORDER BY key
+      parameters:
+        tenant_id: { _payload: tenant_id }
+
+blocks:
+  - id: title
+    type: Title
+    properties:
+      content: 'תגיות תפקיד'
+      level: 1
+
+  # ── Read-only deferral notice (UI-SPEC §"Page 8" + Reusable Component 7) ──
+  # Phase 2 intentionally ships no edit/create/delete affordances on this page.
+  # Alert copy quoted verbatim from UI-SPEC (Hebrew RTL primary; English Phase 7).
+  - id: read_only_notice
+    type: Alert
+    properties:
+      type: info
+      message: 'עריכת תגיות תתווסף בשלב v1.1.'
+      description: 'בינתיים, ניתן ליצור תגיות חדשות בעת ייבוא CSV או הוספת חייל.'
+      showIcon: true
+
+  # ── Read-only role_tag grid (UI-SPEC §"Page 8" column shape) ───────────────
+  # enableRtl: true is MANDATORY on every AgGrid in Phase 2 (UI-SPEC Reusable
+  # Component 8 — AgGrid base config). DD/MM/YYYY HH:mm format hardcoded per
+  # I18N-04 (he-locale; Phase 7 switches to locale-aware DateFormat).
+  - id: tags_grid
+    type: AgGridAlpine
+    properties:
+      enableRtl: true
+      rowData:
+        _request: list_role_tags
+      domLayout: autoHeight
+      defaultColDef:
+        sortable: true
+        resizable: true
+        filter: true
+        flex: 1
+      columnDefs:
+        - field: key
+          headerName: 'מפתח (key)'
+          flex: 1
+        - field: label
+          headerName: 'תיוג בעברית'
+          flex: 1
+        - field: created_at
+          headerName: 'נוצר'
+          flex: 1
+          valueFormatter:
+            _function:
+              __args: 0
+              __return:
+                _date.format:
+                  on: { __args: 0.value }
+                  format: 'DD/MM/YYYY HH:mm'
+
+  # ── Empty state (UI-SPEC §"Empty states" — copy quoted verbatim) ───────────
+  # Visible only when list_role_tags returns zero rows. Result block with
+  # AiOutlineInbox icon (Ant Design canonical for "no data" empty states).
+  - id: empty_state
+    type: Result
+    visible:
+      _eq:
+        - _array.length: { _request: list_role_tags }
+        - 0
+    properties:
+      status: info
+      icon: AiOutlineInbox
+      title: 'אין תגיות תפקיד'
+      subTitle: 'תגיות נוצרות אוטומטית עם הוספת חיילים'
