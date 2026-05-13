@@ -113,7 +113,7 @@ blocks:
           # i18n: profile.color_intro
           content: 'הצבע שלך מופיע בלוח המשמרות. בחר צבע מהפלטה שלמטה.'
 
-      - _ref: ../blocks/color_swatches.yaml
+      - _ref: blocks/color_swatches.yaml
 
       - id: save_color_btn
         type: Button

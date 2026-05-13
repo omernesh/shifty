@@ -312,7 +312,7 @@ blocks:
       style:
         marginBottom: 24
     blocks:
-      - _ref: ../../blocks/color_swatches.yaml
+      - _ref: blocks/color_swatches.yaml
 
   # ───────────────────── Footer: Save / Cancel / Archive ────────────────
   - id: footer_actions
