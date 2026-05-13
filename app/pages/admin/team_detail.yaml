@@ -1,0 +1,518 @@
+id: team_detail
+type: PageHeaderMenu
+auth:
+  roles:
+    - unit_admin
+    - team_manager
+properties:
+  title: 'צוות | shifty'
+
+# Plan 02-07 Task 2 — per-team detail page (D-03, D-05, D-08).
+#
+# URL: /team_detail?id={uuid}. The :id query param is read via _url_query.id
+# (Lowdefy 5.3.x; same pattern as soldier_detail in plan 02-06).
+#
+# 3-card layout per UI-SPEC §"Page 4":
+#   1. פרטי צוות (team metadata)        — read-only
+#   2. חברי צוות (team members)         — AgGrid + Add/Remove + Phase 3 placeholder
+#   3. תבנית משמרות placeholder         — D-03 promise card for Phase 3
+#
+# Membership writes (D-08) live HERE in Phase 2; soldier_detail's Teams
+# MultipleSelector is read-only (plan 02-06 scope choice). Concentrating
+# add/remove on team_detail keeps the audit trail unambiguous.
+#
+# 4-layer tenant isolation:
+#   Layer 1 (session):  every payload sets tenant_id from `_user: tenant_id`.
+#   Layer 2 (query):    every KnexRaw filters by WHERE tenant_id = :tenant_id;
+#                       list queries additionally filter by `s.status = 'active'`
+#                       as one canonical SQL token (W4 fix).
+#   Layer 3 (page):     auth.roles allowlist above.
+#   Layer 4 (plugin / SQL gate):
+#                       CreateMembership reads tenant_id from request.user;
+#                       remove_membership KnexRaw includes the SQL gate
+#                       `(:is_admin OR :team_id = ANY(:caller_team_ids))`.
+#                       *** caller_team_ids binding is LITERALLY `_user: team_ids`
+#                       (W7 fix — verify-command grep regex
+#                       `caller_team_ids\s*:\s*\{\s*_user:\s*team_ids\s*\}` locks
+#                       this so future edits cannot rebind it to a forgeable
+#                       _state / _payload / _input source). ***
+#   Layer 5 (RLS):      0009 policy on membership covers DB-level breach.
+
+requests:
+  # ── Load the team row ──────────────────────────────────────────────────────
+  - id: get_team
+    type: KnexRaw
+    connectionId: shifts_db
+    payload:
+      tenant_id:
+        _user: tenant_id
+      team_id:
+        _url_query: id
+    properties:
+      query: |
+        SELECT ou.id,
+               ou.name,
+               ou.parent_id,
+               ou.level,
+               ou.last_color_index,
+               (SELECT p.name FROM org_unit p
+                 WHERE p.id = ou.parent_id
+                   AND p.tenant_id = :tenant_id) AS parent_name
+          FROM org_unit ou
+         WHERE ou.tenant_id = :tenant_id
+           AND ou.id = :team_id
+      parameters:
+        tenant_id: { _payload: tenant_id }
+        team_id: { _payload: team_id }
+
+  # ── List the team's active members (D-08) ─────────────────────────────────
+  # Both `s.tenant_id = :tenant_id` AND `m.tenant_id = :tenant_id` filters
+  # — defense-in-depth even though FK chain already implies tenant equality.
+  # `s.status = 'active'` is one canonical SQL token (W4 fix); archived
+  # soldiers preserve membership rows (D-08) but are hidden from this picker.
+  - id: list_team_members
+    type: KnexRaw
+    connectionId: shifts_db
+    payload:
+      tenant_id:
+        _user: tenant_id
+      team_id:
+        _url_query: id
+    properties:
+      query: |
+        SELECT s.id,
+               s.display_name,
+               s.color,
+               s.seniority,
+               s.role_tags,
+               s.status,
+               au.email,
+               m.id AS membership_id,
+               m.role AS membership_role
+          FROM soldier s
+          JOIN membership m ON m.soldier_id = s.id
+          LEFT JOIN app_user au ON au.id = s.user_id
+         WHERE s.tenant_id = :tenant_id
+           AND m.tenant_id = :tenant_id
+           AND m.org_unit_id = :team_id
+           AND s.status = 'active'
+         ORDER BY s.display_name
+      parameters:
+        tenant_id: { _payload: tenant_id }
+        team_id: { _payload: team_id }
+
+  # ── List soldiers in the tenant who are NOT yet on this team ───────────────
+  # Feeds the Add-member MultipleSelector. NOT EXISTS sub-select filtered by
+  # tenant_id on both arms. Only active soldiers are eligible.
+  - id: list_addable_soldiers
+    type: KnexRaw
+    connectionId: shifts_db
+    payload:
+      tenant_id:
+        _user: tenant_id
+      team_id:
+        _url_query: id
+    properties:
+      query: |
+        SELECT s.id AS value,
+               s.display_name AS label
+          FROM soldier s
+         WHERE s.tenant_id = :tenant_id
+           AND s.status = 'active'
+           AND NOT EXISTS (
+             SELECT 1
+               FROM membership m
+              WHERE m.soldier_id = s.id
+                AND m.org_unit_id = :team_id
+                AND m.tenant_id = :tenant_id
+           )
+         ORDER BY s.display_name
+      parameters:
+        tenant_id: { _payload: tenant_id }
+        team_id: { _payload: team_id }
+
+  # ── CreateMembership — shifty-roster plugin handler (DB-touching) ─────────
+  # The handler reads tenant_id, caller_team_ids, is_admin from request.user
+  # (session) — never from request.properties. The payload below supplies the
+  # add-member form's soldier_id, team_id from the URL, and a fixed
+  # role='member' (Phase 2 ships single membership-role on Add).
+  - id: create_membership_request
+    type: CreateMembership
+    connectionId: shifts_db
+    payload:
+      soldier_id: { _state: add_member_form.soldier_id }
+      team_id: { _url_query: id }
+      role: member
+
+  # ── remove_membership — KnexRaw DELETE with Layer-4 SQL gate ──────────────
+  # The SQL gate `(:is_admin OR :team_id = ANY(:caller_team_ids))` allows
+  # admins unconditionally + team_managers only when the team is in their
+  # caller_team_ids.
+  #
+  # *** W7 fix — caller_team_ids in this payload binds LITERALLY to
+  # `_user: team_ids` (session-derived). The verify command greps for the
+  # regex `caller_team_ids\s*:\s*\{\s*_user:\s*team_ids\s*\}` to lock this
+  # binding so a future edit cannot accidentally rebind it to
+  # `_state.something` or `_input.something` and forge it. ***
+  #
+  # D-08 chose hard DELETE for membership rows because:
+  #   - membership has no archive concept (UNIQUE(soldier_id, org_unit_id)
+  #     plus historical correctness lives in `assignment` snapshots from
+  #     Phase 3+, not in membership row retention).
+  #   - Schedule history is preserved by snapshot pattern on assignment.
+  - id: remove_membership
+    type: KnexRaw
+    connectionId: shifts_db
+    payload:
+      tenant_id: { _user: tenant_id }
+      membership_id: { _state: remove_target_membership_id }
+      team_id: { _url_query: id }
+      caller_team_ids: { _user: team_ids }
+      is_admin:
+        _array.includes:
+          on: { _user: roles }
+          value: unit_admin
+    properties:
+      query: |
+        DELETE FROM membership
+         WHERE id = :membership_id
+           AND org_unit_id = :team_id
+           AND tenant_id = :tenant_id
+           AND (:is_admin OR :team_id = ANY(:caller_team_ids))
+         RETURNING soldier_id, org_unit_id
+      parameters:
+        tenant_id: { _payload: tenant_id }
+        membership_id: { _payload: membership_id }
+        team_id: { _payload: team_id }
+        caller_team_ids: { _payload: caller_team_ids }
+        is_admin: { _payload: is_admin }
+
+  # ── audit_remove_membership — chained audit write after DELETE ────────────
+  # Matches the shifty-audit-writer plugin's AuditWrite schema:
+  # to_state required; actor_user_id derived from session inside the handler.
+  - id: audit_remove_membership
+    type: AuditWrite
+    connectionId: shifts_db
+    payload:
+      to_state: membership_removed
+      actor_kind: user
+      payload_json:
+        membership_id: { _state: remove_target_membership_id }
+        team_id: { _url_query: id }
+        soldier_id: { _request: remove_membership.0.soldier_id }
+
+blocks:
+  - id: page_title
+    type: Title
+    properties:
+      content:
+        _nunjucks:
+          template: '{{ name }} | צוות'
+          on:
+            name: { _request: get_team.0.name }
+      level: 1
+
+  # ─────────────────────── Card 1: פרטי צוות ─────────────────────────────
+  - id: card_team_meta
+    type: Card
+    properties:
+      title: פרטי צוות
+      headStyle:
+        textAlign: right
+      style:
+        marginBottom: 24
+    blocks:
+      - id: team_name_display
+        type: Paragraph
+        properties:
+          content:
+            _nunjucks:
+              template: 'שם: {{ name }}'
+              on:
+                name: { _request: get_team.0.name }
+      - id: team_parent_display
+        type: Paragraph
+        visible: { _request: get_team.0.parent_name }
+        properties:
+          content:
+            _nunjucks:
+              template: 'שייכות: {{ parent }} › {{ name }}'
+              on:
+                parent: { _request: get_team.0.parent_name }
+                name: { _request: get_team.0.name }
+      - id: team_level_display
+        type: Paragraph
+        properties:
+          content:
+            _nunjucks:
+              template: 'רמה: {{ level }}'
+              on:
+                level: { _request: get_team.0.level }
+
+  # ─────────────────────── Card 2: חברי צוות ─────────────────────────────
+  - id: card_team_members
+    type: Card
+    properties:
+      title: חברי צוות
+      headStyle:
+        textAlign: right
+      style:
+        marginBottom: 24
+    blocks:
+      # Toolbar — primary "+ Add member" button.
+      - id: members_toolbar
+        type: Box
+        properties:
+          contentGutter: [8, 8]
+          contentJustify: flex-start
+          contentAlign: middle
+          style:
+            marginBottom: 12
+        blocks:
+          - id: add_member_btn
+            type: Button
+            properties:
+              # i18n: team_detail.add_member_button
+              title: הוסף חבר לצוות
+              type: primary
+              icon: AiOutlinePlus
+            events:
+              onClick:
+                - id: open_add_member_modal
+                  type: SetState
+                  params:
+                    show_add_member_modal: true
+
+      # Members AgGrid (UI-SPEC §"Reusable Components — 8" enableRtl + §9 dot)
+      # Action column "actions" (W6 Pattern A): one single-affordance icon-button
+      # per row. onCellClicked branches on _event.column.field — the body
+      # columns dispatch to soldier_detail/{id}; the actions column dispatches
+      # the remove flow with a Confirm step.
+      - id: team_members_grid
+        type: AgGridAlpine
+        properties:
+          enableRtl: true
+          pagination: false
+          rowSelection: single
+          animateRows: true
+          rowData: { _request: list_team_members }
+          defaultColDef:
+            sortable: true
+            resizable: true
+            filter: true
+            flex: 1
+          columnDefs:
+            - field: color
+              headerName: ''
+              width: 40
+              editable: false
+              sortable: false
+              filter: false
+              cellRenderer:
+                _function:
+                  __args: 0
+                  __return:
+                    _nunjucks:
+                      template: '<span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:{{ value }};border:1px solid #fff;box-shadow:0 0 0 1px #D9D9D9"></span>'
+                      on:
+                        value: { __args: 0.value }
+            - field: display_name
+              headerName: שם
+              flex: 2
+            - field: email
+              headerName: אימייל
+              flex: 2
+            - field: seniority
+              headerName: ותק
+              width: 80
+              type: numericColumn
+            - field: role_tags
+              headerName: תגיות
+              flex: 2
+              valueFormatter:
+                _function:
+                  __args: 0
+                  __return:
+                    _nunjucks:
+                      template: '{{ value | join(", ") }}'
+                      on:
+                        value: { __args: 0.value }
+            - field: status
+              headerName: מצב
+              width: 100
+              cellRenderer:
+                _function:
+                  __args: 0
+                  __return:
+                    _nunjucks:
+                      template: "{{ 'פעיל' if value == 'active' else 'מארכב' }}"
+                      on:
+                        value: { __args: 0.value }
+            # Action column — single icon: remove member.
+            - field: actions
+              headerName: ''
+              width: 60
+              sortable: false
+              filter: false
+              cellRenderer:
+                _function:
+                  __args: 0
+                  __return:
+                    _nunjucks:
+                      template: '<span title="הסר" style="cursor:pointer;color:#FF4D4F">🗑</span>'
+        events:
+          onCellClicked:
+            - id: handle_cell_click
+              type: If
+              params:
+                test:
+                  _eq:
+                    - { _event: column.field }
+                    - actions
+                then:
+                  - id: set_remove_target
+                    type: SetState
+                    params:
+                      remove_target_membership_id: { _event: data.membership_id }
+                      remove_target_display_name: { _event: data.display_name }
+                  - id: confirm_remove
+                    type: Confirm
+                    params:
+                      title: הסרת חבר מצוות
+                      content:
+                        _nunjucks:
+                          template: 'החייל "{{ name }}" יוסר מצוות זה. ניתן להוסיף אותו שוב מאוחר יותר.'
+                          on:
+                            name: { _state: remove_target_display_name }
+                      okText: הסר
+                      cancelText: ביטול
+                      okType: danger
+                  - id: do_remove
+                    type: Request
+                    params:
+                      requestId: remove_membership
+                  - id: do_audit_remove
+                    type: Request
+                    params:
+                      requestId: audit_remove_membership
+                  - id: refresh_members
+                    type: Request
+                    params:
+                      requestId: list_team_members
+                  - id: refresh_addable
+                    type: Request
+                    params:
+                      requestId: list_addable_soldiers
+                  - id: remove_toast
+                    type: Message
+                    params:
+                      type: success
+                      content: החייל הוסר מהצוות
+                      duration: 3
+                else:
+                  - id: open_detail
+                    type: Link
+                    params:
+                      pageId: soldier_detail
+                      urlQuery:
+                        id: { _event: data.id }
+
+      # Empty-state for the members grid (UI-SPEC Hebrew copy table line 229).
+      - id: members_empty_state
+        type: Result
+        visible:
+          _eq:
+            - { _request: list_team_members.length }
+            - 0
+        properties:
+          status: info
+          icon: AiOutlineInbox
+          # i18n: team_detail.empty_title
+          title: הצוות ריק
+          # i18n: team_detail.empty_subtitle
+          subTitle: הוסף חברים כדי לראות אותם כאן
+        blocks:
+          - id: empty_add_btn
+            type: Button
+            properties:
+              title: הוסף חבר לצוות
+              type: primary
+              icon: AiOutlinePlus
+            events:
+              onClick:
+                - id: open_modal_from_empty
+                  type: SetState
+                  params:
+                    show_add_member_modal: true
+
+  # ────────────────── Card 3: תבנית משמרות (D-03 placeholder) ────────────────
+  # Phase 3 promise card per D-03 + UI-SPEC §"Page 4".
+  - id: card_phase3_placeholder
+    type: Result
+    properties:
+      status: info
+      icon: AiOutlineClockCircle
+      # i18n: team_detail.phase3_placeholder_title
+      title: פתח תבנית משמרות בשלב הבא
+      subTitle: מדדי צוות (אחוז עומס, משמרות שמרים) יתווספו בשלב 3.
+
+  # ────────────────── Add-member Modal ─────────────────────────────────────
+  # Single-pick MultipleSelector per Phase 2 scope (UI-SPEC line 420 allows
+  # multi-pick later). On confirm → CreateMembership → refresh both lists →
+  # close + reset + toast.
+  - id: add_member_modal
+    type: Modal
+    properties:
+      visible: { _state: show_add_member_modal }
+      title: הוספת חבר לצוות
+      okText: הוסף
+      cancelText: ביטול
+      width: 480
+    events:
+      onOk:
+        - id: validate_form
+          type: Validate
+          params: add_member_form
+        - id: do_create
+          type: Request
+          params:
+            requestId: create_membership_request
+        - id: refresh_members_after_add
+          type: Request
+          params:
+            requestId: list_team_members
+        - id: refresh_addable_after_add
+          type: Request
+          params:
+            requestId: list_addable_soldiers
+        - id: close_add_modal
+          type: SetState
+          params:
+            show_add_member_modal: false
+        - id: reset_add_form
+          type: Reset
+          params: add_member_form
+        - id: add_success_toast
+          type: Message
+          params:
+            type: success
+            content: החייל נוסף לצוות
+            duration: 3
+      onCancel:
+        - id: close_add_modal_cancel
+          type: SetState
+          params:
+            show_add_member_modal: false
+    blocks:
+      - id: add_member_form
+        type: Box
+        blocks:
+          - id: add_member_form.soldier_id
+            type: Selector
+            required: true
+            properties:
+              # i18n: team_detail.form.soldier
+              label: חייל
+              size: large
+              options: { _request: list_addable_soldiers }
+              allowClear: true
