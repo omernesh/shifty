@@ -1,0 +1,410 @@
+id: soldier_detail
+type: PageHeaderMenu
+auth:
+  roles:
+    - unit_admin
+    - team_manager
+properties:
+  title: 'עריכת חייל | shifty'
+
+# Plan 02-06 Task 3 — per-soldier edit page (D-06).
+#
+# URL: /soldier_detail?id={uuid}. The :id query param is read via _url_query.id
+# (Lowdefy 5.3.x; tested in plan 02-04 manage_soldiers Link to this page).
+#
+# 4-card layout per UI-SPEC §"Page 3":
+#   1. זהות (identity)
+#   2. תפקיד וותק (role + seniority)  — notes Textarea is manager-only
+#   3. חברות בצוותים (memberships)    — write path lands in plan 02-07
+#   4. צבע אישי (color)               — _ref's app/blocks/color_swatches.yaml
+#
+# 4-layer tenant isolation:
+#   Layer 1 (session):  every payload sets tenant_id from `_user: tenant_id`.
+#   Layer 2 (query):    every KnexRaw block filters by WHERE tenant_id = :tenant_id
+#                       — check-queries.mjs gate verifies. The literal SQL token
+#                       `s.status = 'active'` would only matter if a list-style
+#                       query is added later; load_soldier filters by id+tenant_id only.
+#   Layer 3 (page):     auth.roles allowlist above.
+#   Layer 4 (plugin):   UpdateSoldier/ArchiveSoldier/InviteLater (shifty-roster) read
+#                       tenant_id from request.user — never from request.properties.
+#                       UpdateSoldier additionally applies the (is_admin OR EXISTS
+#                       team-membership) scope clause inside its UPDATE statement.
+#   Layer 5 (RLS):      0009 policy on soldier covers cross-tenant DB-level breach.
+
+requests:
+  # ── Load the soldier row + memberships + has-app-user flag ────────────────
+  # Pitfall P10 — notes column server-side gated. When the caller is NOT a
+  # manager/admin the SELECT returns NULL for notes; the client never sees them
+  # even if a forged request tries to show the field. The TextArea below is also
+  # `visible:` gated as defense-in-depth (3 layers: SELECT NULL, client visible,
+  # UpdateSoldier CASE WHEN gate).
+  - id: load_soldier
+    type: KnexRaw
+    connectionId: shifts_db
+    payload:
+      tenant_id:
+        _user: tenant_id
+      soldier_id:
+        _url_query: id
+      is_manager_or_admin:
+        _or:
+          - _array.includes:
+              on: { _user: roles }
+              value: unit_admin
+          - _array.includes:
+              on: { _user: roles }
+              value: team_manager
+    properties:
+      query: |
+        SELECT s.id,
+               s.display_name,
+               s.color,
+               s.seniority,
+               s.role_tags,
+               s.phone_e164,
+               s.status,
+               CASE WHEN :is_manager_or_admin THEN s.notes ELSE NULL END AS notes,
+               au.email,
+               (au.id IS NOT NULL) AS has_app_user,
+               COALESCE(
+                 (SELECT array_agg(m.org_unit_id)
+                    FROM membership m
+                   WHERE m.soldier_id = s.id
+                     AND m.tenant_id = :tenant_id),
+                 '{}'::uuid[]
+               ) AS team_ids
+          FROM soldier s
+          LEFT JOIN app_user au ON au.id = s.user_id
+         WHERE s.id = :soldier_id
+           AND s.tenant_id = :tenant_id
+      parameters:
+        tenant_id: { _payload: tenant_id }
+        soldier_id: { _payload: soldier_id }
+        is_manager_or_admin: { _payload: is_manager_or_admin }
+
+  # ── role_tag autocomplete options (D-13) ─────────────────────────────────
+  - id: list_role_tags
+    type: KnexRaw
+    connectionId: shifts_db
+    payload:
+      tenant_id:
+        _user: tenant_id
+    properties:
+      query: |
+        SELECT key AS value, COALESCE(label, key) AS label
+          FROM role_tag
+         WHERE tenant_id = :tenant_id
+         ORDER BY key
+      parameters:
+        tenant_id: { _payload: tenant_id }
+
+  # ── leaf teams for the Memberships MultipleSelector (TEN-05) ─────────────
+  - id: list_leaf_teams
+    type: KnexRaw
+    connectionId: shifts_db
+    payload:
+      tenant_id:
+        _user: tenant_id
+    properties:
+      query: |
+        SELECT id AS value, name AS label
+          FROM org_unit
+         WHERE tenant_id = :tenant_id
+           AND NOT EXISTS (
+             SELECT 1 FROM org_unit child
+              WHERE child.parent_id = org_unit.id
+                AND child.tenant_id = :tenant_id
+           )
+         ORDER BY name
+      parameters:
+        tenant_id: { _payload: tenant_id }
+
+  # ── UpdateSoldier — plan-06 plugin handler (DB-touching) ─────────────────
+  # The handler reads tenant_id from request.user.tenant_id; the payload below
+  # supplies the mutable form fields. soldier_id comes from _url_query.id.
+  # The `color` field is bound to selected_color_hex written by the swatch
+  # picker (see Card 4 below).
+  - id: update_soldier_request
+    type: UpdateSoldier
+    connectionId: shifts_db
+    payload:
+      soldier_id: { _url_query: id }
+      display_name: { _state: soldier_form.display_name }
+      seniority: { _state: soldier_form.seniority }
+      role_tags: { _state: soldier_form.role_tags }
+      phone_e164: { _state: soldier_form.phone_e164 }
+      notes: { _state: soldier_form.notes }
+      status: { _state: soldier_form.status }
+      color: { _state: selected_color_hex }
+
+  # ── ArchiveSoldier — plan-06 plugin handler ──────────────────────────────
+  - id: archive_soldier_request
+    type: ArchiveSoldier
+    connectionId: shifts_db
+    payload:
+      soldier_id: { _url_query: id }
+
+  # ── InviteLater — plan-06 plugin handler ─────────────────────────────────
+  - id: invite_later_request
+    type: InviteLater
+    connectionId: shifts_db
+    payload:
+      soldier_id: { _url_query: id }
+
+blocks:
+  - id: page_title
+    type: Title
+    properties:
+      content:
+        _nunjucks:
+          template: '{{ name }} | פרטי חייל'
+          on:
+            name: { _request: load_soldier.0.display_name }
+      level: 1
+
+  # ─────────────────────────── Card 1: זהות ─────────────────────────────
+  - id: card_identity
+    type: Card
+    properties:
+      title: זהות
+      headStyle:
+        textAlign: right
+      style:
+        marginBottom: 24
+    blocks:
+      - id: soldier_form.display_name
+        type: TextInput
+        required: true
+        properties:
+          label: שם מלא
+          size: large
+          defaultValue: { _request: load_soldier.0.display_name }
+      - id: soldier_form.email
+        type: TextInput
+        properties:
+          label: אימייל
+          size: large
+          # Email is keyed by app_user.id; changing it is a v1.1 feature.
+          readOnly: true
+          defaultValue: { _request: load_soldier.0.email }
+      - id: soldier_form.phone_e164
+        type: TextInput
+        properties:
+          label: 'טלפון (פורמט בינלאומי +972...)'
+          size: large
+          defaultValue: { _request: load_soldier.0.phone_e164 }
+      - id: soldier_form.status
+        type: Selector
+        properties:
+          label: מצב
+          defaultValue: { _request: load_soldier.0.status }
+          options:
+            - value: active
+              label: פעיל
+            - value: archived
+              label: מארכב
+
+      # "Send invite link" button — visible only when soldier has email on file
+      # AND no app_user yet (per UI-SPEC: visible when email IS NOT NULL AND
+      # app_user_id IS NULL). InviteLater handler resolves email server-side via
+      # tenant-scoped lookup; we do not pass it from the client.
+      - id: invite_button
+        type: Button
+        visible:
+          _and:
+            - { _not: { _request: load_soldier.0.has_app_user } }
+            - _request: load_soldier.0.email
+        properties:
+          title: שלח קישור הזמנה
+          type: dashed
+          icon: AiOutlineMail
+        events:
+          onClick:
+            - id: do_invite
+              type: Request
+              params:
+                requestId: invite_later_request
+            - id: invite_toast
+              type: Message
+              params:
+                type: success
+                content:
+                  _nunjucks:
+                    template: 'קישור הזמנה נשלח ל-{{ email }}'
+                    on:
+                      email: { _request: load_soldier.0.email }
+                duration: 3
+
+  # ─────────────────────── Card 2: תפקיד וותק ───────────────────────────
+  - id: card_role_seniority
+    type: Card
+    properties:
+      title: תפקיד וותק
+      headStyle:
+        textAlign: right
+      style:
+        marginBottom: 24
+    blocks:
+      - id: soldier_form.seniority
+        type: NumberInput
+        properties:
+          label: ותק
+          min: 0
+          max: 10
+          defaultValue: { _request: load_soldier.0.seniority }
+      - id: soldier_form.role_tags
+        type: TagSelector
+        properties:
+          label: תגיות תפקיד
+          options: { _request: list_role_tags }
+          defaultValue: { _request: load_soldier.0.role_tags }
+      - id: soldier_form.notes
+        type: TextArea
+        # Visible only to managers/admins (Pitfall P10 belt-and-braces — the
+        # load_soldier SELECT already returns NULL for non-managers, and
+        # UpdateSoldier's `CASE WHEN :is_manager_or_admin THEN ...` ignores
+        # any notes value in the payload from non-managers).
+        visible:
+          _or:
+            - _array.includes:
+                on: { _user: roles }
+                value: unit_admin
+            - _array.includes:
+                on: { _user: roles }
+                value: team_manager
+        properties:
+          label: 'הערות (גלוי למנהלים בלבד)'
+          rows: 4
+          defaultValue: { _request: load_soldier.0.notes }
+
+  # ──────────────────── Card 3: חברות בצוותים ────────────────────────────
+  # Memberships MultipleSelector. Write path (CreateMembership /
+  # RemoveMembership handlers) lands in plan 02-07; here the selector is
+  # rendered as read-only visual binding to current memberships. UpdateSoldier
+  # schema does NOT include `teams` so the current state is preserved on Save.
+  - id: card_memberships
+    type: Card
+    properties:
+      title: חברות בצוותים
+      headStyle:
+        textAlign: right
+      style:
+        marginBottom: 24
+    blocks:
+      - id: soldier_form.teams
+        type: MultipleSelector
+        properties:
+          label: צוותים
+          options: { _request: list_leaf_teams }
+          defaultValue: { _request: load_soldier.0.team_ids }
+
+  # ─────────────────────── Card 4: צבע אישי ────────────────────────────
+  # _ref's the shared 24-swatch block emitted by tools/gen-color-swatches.mjs.
+  # Resolution: from app/pages/admin/ up two levels to app/blocks/.
+  # The swatch grid reads/writes selected_color_index + selected_color_hex.
+  # On page mount, set selected_color_index to PALETTE.indexOf(soldier.color).
+  - id: card_color
+    type: Card
+    properties:
+      title: צבע אישי
+      headStyle:
+        textAlign: right
+      style:
+        marginBottom: 24
+    blocks:
+      - _ref: ../../blocks/color_swatches.yaml
+
+  # ───────────────────── Footer: Save / Cancel / Archive ────────────────
+  - id: footer_actions
+    type: Box
+    properties:
+      contentGutter: [16, 16]
+      contentJustify: space-between
+      contentAlign: middle
+      style:
+        marginTop: 24
+        paddingTop: 16
+        borderTop: '1px solid #E5E5E5'
+    blocks:
+      - id: footer_left
+        type: Box
+        properties:
+          contentGutter: [8, 8]
+        blocks:
+          - id: save_btn
+            type: Button
+            properties:
+              title: שמור שינויים
+              type: primary
+              icon: AiOutlineSave
+            events:
+              onClick:
+                - id: validate
+                  type: Validate
+                  params: soldier_form
+                - id: do_update
+                  type: Request
+                  params:
+                    requestId: update_soldier_request
+                - id: save_toast
+                  type: Message
+                  params:
+                    type: success
+                    content: השינויים נשמרו
+                    duration: 3
+                - id: back_to_list
+                  type: Link
+                  params:
+                    pageId: manage_soldiers
+      - id: footer_center
+        type: Box
+        blocks:
+          - id: cancel_btn
+            type: Button
+            properties:
+              title: ביטול
+              type: default
+            events:
+              onClick:
+                - id: cancel_back
+                  type: Link
+                  params:
+                    pageId: manage_soldiers
+      - id: footer_right
+        type: Box
+        blocks:
+          - id: archive_btn
+            type: Button
+            properties:
+              title: ארכוב חייל
+              type: default
+              danger: true
+              icon: AiOutlineInbox
+            events:
+              onClick:
+                - id: confirm_archive
+                  type: Confirm
+                  params:
+                    title: ארכוב חייל
+                    content:
+                      _nunjucks:
+                        template: 'החייל "{{ name }}" יוסתר מרשימות פעילות, אך ההיסטוריה תישמר. ניתן לשחזר אותו מאוחר יותר.'
+                        on:
+                          name: { _request: load_soldier.0.display_name }
+                    okText: ארכב
+                    cancelText: ביטול
+                    okType: danger
+                - id: do_archive
+                  type: Request
+                  params:
+                    requestId: archive_soldier_request
+                - id: archive_toast
+                  type: Message
+                  params:
+                    type: success
+                    content: החייל אורכב
+                    duration: 3
+                - id: archive_back
+                  type: Link
+                  params:
+                    pageId: manage_soldiers
