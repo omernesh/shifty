@@ -4,14 +4,14 @@ milestone: v1.1
 milestone_name: milestone
 status: executing
 stopped_at: Completed 02-01-PLAN.md (schema deltas applied on hpg5)
-last_updated: "2026-05-13T19:15:19.563Z"
+last_updated: "2026-05-13T19:19:15.174Z"
 last_activity: 2026-05-13
 progress:
   total_phases: 8
   completed_phases: 1
   total_plans: 15
-  completed_plans: 9
-  percent: 60
+  completed_plans: 10
+  percent: 67
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-05-12)
 ## Current Position
 
 Phase: 02 (org-people) — EXECUTING
-Plan: 5 of 10
+Plan: 6 of 10
 Status: Ready to execute
 Last activity: 2026-05-13
 
-Progress: [██████░░░░] 60%
+Progress: [███████░░░] 67%
 
 ## Performance Metrics
 
@@ -60,6 +60,7 @@ Progress: [██████░░░░] 60%
 | Phase 02-org-people P01 | 7 | 3 tasks | 2 files |
 | Phase 02-org-people P03 | 18 | 2 tasks | 1 files |
 | Phase 02-org-people P04 | 8 | 1 tasks | 1 files |
+| Phase 02-org-people PP05 | 7 | - tasks | - files |
 
 ## Accumulated Context
 
@@ -100,6 +101,8 @@ Recent decisions affecting current work:
 - [Phase ?]: Plan 02-04: manage_soldiers page wires CreateSoldier plugin request alongside three KnexRaw reads on the same page — first instance of mixed plugin-typed + KnexRaw requests in the repo; pattern reusable for plan 02-06 soldier_detail UpdateSoldier/ArchiveSoldier wiring
 - [Phase ?]: Plan 02-04: AgGrid color-dot cellRenderer YAML fragment (UI-SPEC Reusable Components section 9, copied byte-equal) is the canonical reuse target — plan 02-07 team_detail members grid + plan 04 calendar weekly view should copy verbatim rather than promote to app/blocks/color_dot_cell.yaml (deferred to plan 02-06 alongside color_swatches.yaml)
 - [Phase ?]: Plan 02-04: TextInput search binding uses state.search_input (input value via state lookup) not _event.value — the Lowdefy 5.3 TextInput.onChange does not emit value on _event; verified against manage_org_units.yaml name_input shape
+- [Phase ?]: Plan 02-05: manage_role_tags page is READ-ONLY in Phase 2 — zero mutation blocks; tags born only via plan 02-06 add-soldier or plan 02-08 CSV import; edit/rename/delete cascade deferred to v1.1
+- [Phase ?]: Plan 02-05: AgGrid enableRtl: true is mandatory across Phase 2 (UI-SPEC Reusable Component 8) — copying pattern from plan 02-04 manage_soldiers.yaml; carries forward to plans 02-06 soldier_detail + 02-07 team_detail member grids
 
 ### Pending Todos
 
@@ -121,6 +124,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-05-13T19:14:40.042Z
+Last session: 2026-05-13T19:19:15.159Z
 Stopped at: Completed 02-01-PLAN.md (schema deltas applied on hpg5)
 Resume file: None
