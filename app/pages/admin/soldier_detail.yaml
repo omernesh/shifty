@@ -382,29 +382,42 @@ blocks:
               icon: AiOutlineInbox
             events:
               onClick:
-                - id: confirm_archive
-                  type: Confirm
+                # Lowdefy 5.3 canonical: open the ConfirmModal block; the
+                # destructive chain runs from the modal's onOk handler below.
+                - id: open_archive_confirm
+                  type: CallMethod
                   params:
-                    title: ארכוב חייל
-                    content:
-                      _nunjucks:
-                        template: 'החייל "{{ name }}" יוסתר מרשימות פעילות, אך ההיסטוריה תישמר. ניתן לשחזר אותו מאוחר יותר.'
-                        on:
-                          name: { _request: load_soldier.0.display_name }
-                    okText: ארכב
-                    cancelText: ביטול
-                    okType: danger
-                - id: do_archive
-                  type: Request
-                  params:
-                    requestId: archive_soldier_request
-                - id: archive_toast
-                  type: DisplayMessage
-                  params:
-                    status: success
-                    content: החייל אורכב
-                    duration: 3
-                - id: archive_back
-                  type: Link
-                  params:
-                    pageId: manage_soldiers
+                    blockId: archive_confirm_modal
+                    method: toggleOpen
+
+  # ───── Archive confirmation modal (Lowdefy 5.3 canonical ConfirmModal) ─────
+  # Replaces the legacy inline `Confirm` action that does not exist in 5.3.
+  # The destructive chain (do_archive → toast → back-link) runs from onOk.
+  - id: archive_confirm_modal
+    type: ConfirmModal
+    properties:
+      title: ארכוב חייל
+      content:
+        _nunjucks:
+          template: 'החייל "{{ name }}" יוסתר מרשימות פעילות, אך ההיסטוריה תישמר. ניתן לשחזר אותו מאוחר יותר.'
+          on:
+            name: { _request: load_soldier.0.display_name }
+      okText: ארכב
+      cancelText: ביטול
+      okType: danger
+    events:
+      onOk:
+        - id: do_archive
+          type: Request
+          params:
+            requestId: archive_soldier_request
+        - id: archive_toast
+          type: DisplayMessage
+          params:
+            status: success
+            content: החייל אורכב
+            duration: 3
+        - id: archive_back
+          type: Link
+          params:
+            pageId: manage_soldiers

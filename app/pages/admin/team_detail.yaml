@@ -370,45 +370,21 @@ blocks:
                     - { _event: column.field }
                     - actions
                 then:
+                  # Capture the clicked row's membership_id + name into state
+                  # so the ConfirmModal can render the name AND the modal's
+                  # onOk DELETE can read remove_target_membership_id (Lowdefy
+                  # 5.3 canonical ConfirmModal block + CallMethod toggleOpen
+                  # replaces the legacy inline `Confirm` action).
                   - id: set_remove_target
                     type: SetState
                     params:
                       remove_target_membership_id: { _event: data.membership_id }
                       remove_target_display_name: { _event: data.display_name }
-                  - id: confirm_remove
-                    type: Confirm
+                  - id: open_remove_confirm
+                    type: CallMethod
                     params:
-                      title: הסרת חבר מצוות
-                      content:
-                        _nunjucks:
-                          template: 'החייל "{{ name }}" יוסר מצוות זה. ניתן להוסיף אותו שוב מאוחר יותר.'
-                          on:
-                            name: { _state: remove_target_display_name }
-                      okText: הסר
-                      cancelText: ביטול
-                      okType: danger
-                  - id: do_remove
-                    type: Request
-                    params:
-                      requestId: remove_membership
-                  - id: do_audit_remove
-                    type: Request
-                    params:
-                      requestId: audit_remove_membership
-                  - id: refresh_members
-                    type: Request
-                    params:
-                      requestId: list_team_members
-                  - id: refresh_addable
-                    type: Request
-                    params:
-                      requestId: list_addable_soldiers
-                  - id: remove_toast
-                    type: DisplayMessage
-                    params:
-                      status: success
-                      content: החייל הוסר מהצוות
-                      duration: 3
+                      blockId: remove_confirm_modal
+                      method: toggleOpen
                 else:
                   - id: open_detail
                     type: Link
@@ -516,3 +492,47 @@ blocks:
               size: large
               options: { _request: list_addable_soldiers }
               allowClear: true
+
+  # ───── Remove-member confirmation modal (Lowdefy 5.3 canonical ConfirmModal) ─────
+  # Replaces the legacy inline `Confirm` action that does not exist in 5.3.
+  # The destructive chain (remove_membership KnexRaw → audit write → refresh
+  # both lists → toast) runs from onOk after the user confirms. Row context
+  # (remove_target_membership_id, remove_target_display_name) is captured into
+  # state by the grid's onCellClicked → set_remove_target action before the
+  # CallMethod toggleOpen fires.
+  - id: remove_confirm_modal
+    type: ConfirmModal
+    properties:
+      title: הסרת חבר מצוות
+      content:
+        _nunjucks:
+          template: 'החייל "{{ name }}" יוסר מצוות זה. ניתן להוסיף אותו שוב מאוחר יותר.'
+          on:
+            name: { _state: remove_target_display_name }
+      okText: הסר
+      cancelText: ביטול
+      okType: danger
+    events:
+      onOk:
+        - id: do_remove
+          type: Request
+          params:
+            requestId: remove_membership
+        - id: do_audit_remove
+          type: Request
+          params:
+            requestId: audit_remove_membership
+        - id: refresh_members
+          type: Request
+          params:
+            requestId: list_team_members
+        - id: refresh_addable
+          type: Request
+          params:
+            requestId: list_addable_soldiers
+        - id: remove_toast
+          type: DisplayMessage
+          params:
+            status: success
+            content: החייל הוסר מהצוות
+            duration: 3

@@ -422,27 +422,14 @@ blocks:
                   callback: { _eq: [{ __args: 0.status }, 'error'] }
             events:
               onClick:
-                - id: confirm_modal
-                  type: Confirm
+                # Lowdefy 5.3 canonical: open the ConfirmModal block; the
+                # commit chain (advance step → CommitRosterImport → navigate)
+                # runs from the modal's onOk handler below.
+                - id: open_commit_confirm
+                  type: CallMethod
                   params:
-                    title: אישור ייבוא
-                    content: 'יווצרו חיילים חדשים ויישלחו הזמנות לכתובות האימייל שסופקו. האם להמשיך?'
-                    okText: 'אשר ושלח'
-                    cancelText: ביטול
-                - id: advance_to_3
-                  type: SetState
-                  params:
-                    wizard_step: 3
-                - id: do_commit
-                  type: Request
-                  params:
-                    requestId: commit_import_request
-                - id: navigate_to_result
-                  type: Link
-                  params:
-                    pageId: roster_import_result
-                    urlQuery:
-                      id: { _request: commit_import_request.import_id }
+                    blockId: commit_confirm_modal
+                    method: toggleOpen
 
   # ═══════════════════════ STEP 3 — Commit progress ═══════════════════════
   # Shown briefly between Confirm click and the navigation to the result page.
@@ -467,3 +454,32 @@ blocks:
         properties:
           tip: 'מבצע ייבוא ושולח הזמנות'
           size: large
+
+  # ───── Commit confirmation modal (Lowdefy 5.3 canonical ConfirmModal) ─────
+  # Replaces the legacy inline `Confirm` action that does not exist in 5.3.
+  # Confirm-button onClick opens this modal via CallMethod toggleOpen; the
+  # commit chain (advance to step 3 → CommitRosterImport → navigate to result)
+  # runs from onOk after the user confirms.
+  - id: commit_confirm_modal
+    type: ConfirmModal
+    properties:
+      title: אישור ייבוא
+      content: 'יווצרו חיילים חדשים ויישלחו הזמנות לכתובות האימייל שסופקו. האם להמשיך?'
+      okText: 'אשר ושלח'
+      cancelText: ביטול
+    events:
+      onOk:
+        - id: advance_to_3
+          type: SetState
+          params:
+            wizard_step: 3
+        - id: do_commit
+          type: Request
+          params:
+            requestId: commit_import_request
+        - id: navigate_to_result
+          type: Link
+          params:
+            pageId: roster_import_result
+            urlQuery:
+              id: { _request: commit_import_request.import_id }
