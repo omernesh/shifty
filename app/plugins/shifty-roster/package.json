@@ -1,0 +1,17 @@
+{
+  "name": "shifty-roster",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": {
+    "./connections": "./src/connections.js",
+    "./types": "./src/types.js",
+    "./helpers/palette": "./src/helpers/palette.js",
+    "./helpers/canonicalize": "./src/helpers/canonicalize.js",
+    "./helpers/role-tag": "./src/helpers/role-tag.js"
+  },
+  "dependencies": {
+    "knex": "*",
+    "papaparse": "^5.5.3",
+    "resend": "*"
+  }
+}
