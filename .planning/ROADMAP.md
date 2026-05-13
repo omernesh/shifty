@@ -59,7 +59,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   - [x] 02-01-PLAN.md — Wave 0 migrations 0011_role_tag + 0012_org_unit_last_color_index (schema + RLS)
   - [x] 02-02-PLAN.md — Wave 0 shifty-roster plugin scaffold (palette, canonicalize, role-tag helpers + 7 request stubs + unit tests)
   - [x] 02-03-PLAN.md — Wave 1 manage_org_units tree-table upgrade (D-01, D-02, D-04 grow-depth)
-  - [ ] 02-04-PLAN.md — Wave 1 manage_soldiers admin tenant-wide soldier roster + Add-soldier Modal
+  - [x] 02-04-PLAN.md — Wave 1 manage_soldiers admin tenant-wide soldier roster + Add-soldier Modal
   - [ ] 02-05-PLAN.md — Wave 1 manage_role_tags read-only autocomplete viewer
   - [ ] 02-06-PLAN.md — Wave 2 soldier_detail + color_swatches block + CreateSoldier/UpdateSoldier/ArchiveSoldier/InviteLater bodies
   - [ ] 02-07-PLAN.md — Wave 2 team_detail (Add/Remove member) + my_profile color override + CreateMembership body

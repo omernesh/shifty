@@ -4,14 +4,14 @@ milestone: v1.1
 milestone_name: milestone
 status: executing
 stopped_at: Completed 02-01-PLAN.md (schema deltas applied on hpg5)
-last_updated: "2026-05-13T19:10:13.502Z"
+last_updated: "2026-05-13T19:15:19.563Z"
 last_activity: 2026-05-13
 progress:
   total_phases: 8
   completed_phases: 1
   total_plans: 15
-  completed_plans: 8
-  percent: 53
+  completed_plans: 9
+  percent: 60
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-05-12)
 ## Current Position
 
 Phase: 02 (org-people) — EXECUTING
-Plan: 4 of 10
+Plan: 5 of 10
 Status: Ready to execute
 Last activity: 2026-05-13
 
-Progress: [█████░░░░░] 53%
+Progress: [██████░░░░] 60%
 
 ## Performance Metrics
 
@@ -59,6 +59,7 @@ Progress: [█████░░░░░] 53%
 | Phase 02-org-people P02 | 35 | 4 tasks | 18 files |
 | Phase 02-org-people P01 | 7 | 3 tasks | 2 files |
 | Phase 02-org-people P03 | 18 | 2 tasks | 1 files |
+| Phase 02-org-people P04 | 8 | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -96,6 +97,9 @@ Recent decisions affecting current work:
 - [Phase ?]: Plan 02-03: Layer-4 admin-gate CTE shape (WITH guard AS SELECT 1 WHERE :is_admin) + EXISTS(SELECT 1 FROM guard) on downstream CTEs — reusable for any role-restricted multi-table mutation
 - [Phase ?]: Plan 02-03: AgGrid Pattern A (RESEARCH P9 canonical answer) — three separate single-affordance action columns dispatched on _event.column.field; zero data-action HTML attribute bridge in codebase
 - [Phase ?]: Plan 02-03: Recursive CTE tree shape with path TEXT[] (anchor parent_id IS NULL + UNION ALL appending tree.path || ou.name) — both arms filter by tenant_id; reusable for team_detail subtree in Plan 06+
+- [Phase ?]: Plan 02-04: manage_soldiers page wires CreateSoldier plugin request alongside three KnexRaw reads on the same page — first instance of mixed plugin-typed + KnexRaw requests in the repo; pattern reusable for plan 02-06 soldier_detail UpdateSoldier/ArchiveSoldier wiring
+- [Phase ?]: Plan 02-04: AgGrid color-dot cellRenderer YAML fragment (UI-SPEC Reusable Components section 9, copied byte-equal) is the canonical reuse target — plan 02-07 team_detail members grid + plan 04 calendar weekly view should copy verbatim rather than promote to app/blocks/color_dot_cell.yaml (deferred to plan 02-06 alongside color_swatches.yaml)
+- [Phase ?]: Plan 02-04: TextInput search binding uses state.search_input (input value via state lookup) not _event.value — the Lowdefy 5.3 TextInput.onChange does not emit value on _event; verified against manage_org_units.yaml name_input shape
 
 ### Pending Todos
 
@@ -117,6 +121,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-05-13T19:10:00.876Z
+Last session: 2026-05-13T19:14:40.042Z
 Stopped at: Completed 02-01-PLAN.md (schema deltas applied on hpg5)
 Resume file: None
