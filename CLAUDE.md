@@ -84,6 +84,24 @@ All project files live at `C:\shifts-manager\` (Windows-native, no WSL involved)
 - `C:\shifts-manager\docker-compose.yml`
 - `C:\shifts-manager\.env` — secrets (NOT committed)
 
+### Deploy sync — `git pull` (Phase 2+ canonical)
+
+As of Phase 2 (Plan 02-09 deploy-bootstrap, 2026-05-14), `C:\shifts-manager\` on hpg5 is a git working tree tracking `origin/main` at `https://github.com/omernesh/shifty.git`. Previously each deploy required `pscp` to copy individual changed files — a fine workflow for Phase 1's narrow file set, but unworkable for Phase 2's 14+ files across `app/pages/`, `app/blocks/`, and `app/plugins/`. To sync the mirror to the latest pushed `main`:
+
+```
+plink -ssh -l claude -pw "Onclaude2103" -batch -hostkey "SHA256:tPg5mYQbJO/9ccGmNGeyJeQQSPXq+C6SL3EHJcbRZMQ" hpg5 "powershell -c \"cd C:\shifts-manager; git fetch origin main; git reset --hard origin/main; git log -1 --oneline\""
+```
+
+`reset --hard origin/main` is safe in this context because `.gitignore` excludes `postgres-data/`, `.env`, and `*.log` — none of those are tracked, so reset won't touch them. The bootstrap preserved `.env` by hashing it pre/post-init; never repeat the bootstrap (it's a one-time operation, already done).
+
+**Workflow for Phase 2+ deploys:**
+1. Edit + commit locally
+2. `git push origin main`
+3. SSH to hpg5 and run the `git fetch + reset --hard` one-liner above
+4. Rebuild Lowdefy (still requires PsExec — see "Why PsExec for SSH-side docker commands"): the existing build command in §"Common ops on hpg5" below is unchanged
+
+`pscp` is no longer needed for routine file updates; use it only for files that legitimately differ between local and hpg5 (e.g., `.env` updates).
+
 ## Repo layout
 
 ```

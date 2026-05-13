@@ -155,24 +155,56 @@ Many blocks expose imperative methods (e.g., `Modal.setOpen`, `Form.submit`, AgG
     args: [true]
 ```
 
-### `Message` / `Notification` — toast / banner
+### `DisplayMessage` — toast (Lowdefy 5.3+; was `Message` in earlier versions)
 
 ```yaml
 - id: ok
-  type: Message
+  type: DisplayMessage
   params:
-    type: success                                # success | error | warning | info | loading
+    status: success                              # success | error | warning | info | loading
     content: Saved
     duration: 2
-
-- id: errored
-  type: Notification
-  params:
-    type: error
-    message: Could not save
-    description: '{{ error.message }}'
-    duration: 4
 ```
+
+**IMPORTANT (verified 2026-05-14 against the running Lowdefy 5.3.0 build, Plan 02-09 Task 3):**
+- The action type is **`DisplayMessage`** in Lowdefy 5.3. The legacy `Message` name (still mentioned in some older Lowdefy docs at `docs.lowdefy.com/events-and-actions`) is REJECTED at build time with `[ConfigError] Action type "Message" was used but is not defined.`
+- The status parameter key is **`status:`**, NOT `type:`. Using `params.type` silently fails because `type` is not a recognised key.
+- For banner-style notifications (with both message + description) the canonical 5.3 pattern is to render an `Alert` block in state, NOT a separate `DisplayNotification` action. Or use the `ConfirmModal` block for blocking dialogs.
+
+### `ConfirmModal` block — confirmation dialogs (NO `Confirm` action exists in Lowdefy 5.3)
+
+There is NO `Confirm` action in Lowdefy 5.3 (verified 2026-05-14: `[ConfigError] Action type "Confirm" was used but is not defined.`). The canonical pattern uses a `ConfirmModal` BLOCK plus a `CallMethod` action to open it:
+
+```yaml
+# In your blocks list:
+- id: delete_confirm_modal
+  type: ConfirmModal
+  properties:
+    title: Confirm deletion
+    content: 'Delete "{{ name }}"? This cannot be undone.'
+    okText: Delete
+    cancelText: Cancel
+  events:
+    onOk:
+      # ← Put the destructive action chain HERE, not inline before the confirm
+      - id: do_delete
+        type: Request
+        params: { requestId: delete_item }
+      - id: refresh
+        type: Request
+        params: { requestId: list_items }
+
+# In your delete-button click handler:
+events:
+  onClick:
+    - id: open_confirm
+      type: CallMethod
+      params:
+        blockId: delete_confirm_modal
+        method: toggleOpen
+```
+
+The key behavioural shift from inline `Confirm`: the destructive action runs from the modal's `onOk`, NOT in the same event chain that opens the modal. Migration of legacy `Confirm` actions to this pattern is tracked as a Phase-2 follow-up (see SUMMARY of Plan 02-09 deferred items).
 
 ### `ScrollTo`
 
@@ -218,7 +250,7 @@ events:
     - { id: validate, type: Validate, params: my_form }
     - { id: save, type: Request, params: insert_record }
     - { id: reset, type: Reset, params: my_form }
-    - { id: notify, type: Message, params: { type: success, content: Saved } }
+    - { id: notify, type: DisplayMessage, params: { status: success, content: Saved } }
     - { id: navigate, type: Link, params: { pageId: list } }
 ```
 
@@ -231,14 +263,13 @@ events:
   onClick:
     try:
       - { id: save, type: Request, params: insert_record }
-      - { id: notify, type: Message, params: { type: success, content: Saved } }
+      - { id: notify, type: DisplayMessage, params: { status: success, content: Saved } }
     catch:
       - id: oops
-        type: Notification
+        type: DisplayMessage
         params:
-          type: error
-          message: Save failed
-          description: '{{ error.message }}'
+          status: error
+          content: '{{ error.message }}'
 ```
 
 ### Conditional actions
@@ -287,15 +318,15 @@ Inside `catch:`, the operator `_event` exposes the error: `_event: error.message
 ```yaml
 catch:
   - id: log
-    type: Notification
+    type: DisplayMessage
     params:
-      type: error
-      message:
+      status: error
+      content:
         _string.concat:
           - 'Action '
           - { _event: error.action.id }
-          - ' failed'
-      description: { _event: error.message }
+          - ' failed: '
+          - { _event: error.message }
 ```
 
 ## See also
