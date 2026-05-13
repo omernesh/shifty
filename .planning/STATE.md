@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02-07-PLAN.md (CreateMembership body + team_detail + my_profile)
-last_updated: "2026-05-13T20:30:00.000Z"
+stopped_at: Completed 02-08-PLAN.md (CSV import wizard + handlers + Wave-3 re-confirmation)
+last_updated: "2026-05-13T19:51:19.570Z"
 last_activity: 2026-05-13
 progress:
   total_phases: 8
   completed_phases: 1
   total_plans: 15
-  completed_plans: 12
-  percent: 80
+  completed_plans: 13
+  percent: 87
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-05-12)
 ## Current Position
 
 Phase: 02 (org-people) — EXECUTING
-Plan: 8 of 10
+Plan: 9 of 10
 Status: Ready to execute
 Last activity: 2026-05-13
 
-Progress: [████████░░] 80%
+Progress: [█████████░] 87%
 
 ## Performance Metrics
 
@@ -63,6 +63,7 @@ Progress: [████████░░] 80%
 | Phase 02-org-people PP05 | 7 | - tasks | - files |
 | Phase 02-org-people P06 | 28 | - tasks | - files |
 | Phase 02-org-people P07 | 30 | 3 tasks | 3 files |
+| Phase 02-org-people P08 | 24 | - tasks | - files |
 
 ## Accumulated Context
 
@@ -117,6 +118,14 @@ Recent decisions affecting current work:
 - [Phase ?]: Plan 02-07: W7 fix locks caller_team_ids binding in remove_membership.payload to LITERAL `{ _user: team_ids }` — verify regex caller_team_ids\s*:\s*\{\s*_user:\s*team_ids\s*\} guards every plan-checker run against future rebind to forgeable _state/_input/_payload sources
 - [Phase ?]: Plan 02-07: my_profile.yaml lives at app/pages/my_profile.yaml (not /admin/) — _ref to color_swatches is `../blocks/color_swatches.yaml` (one level up), while soldier_detail at app/pages/admin/ uses `../../blocks/color_swatches.yaml` (two levels up); same shared block, different relative paths
 - [Phase ?]: Plan 02-07: my_profile.update_my_color WHERE filters BOTH user_id AND tenant_id from _user (session) — T-02-06 mitigation; a forged request body cannot update any soldier but the caller's own
+- [Phase ?]: Plan 02-08: REQUIRED_HEADERS uses display_name (not name) — aligns CSV header with soldier table column
+- [Phase ?]: Plan 02-08: roster_import_log INSERT uses LIVE schema column names from migration 0007 (imported_by, source, rows_created/skipped/errored) — Pitfall P12; source: 'csv' is one canonical SQL token per W4 fix
+- [Phase ?]: Plan 02-08: Wave-3 re-confirmation of Auth.js hash passed without live container grep — zero touching commits on dispatch/resend.js between Plan 06 baseline 78b6f1b and Plan 08 start, drift impossible
+- [Phase ?]: Plan 02-08: Dispatch loop hand-rolled inline (not bulkDispatchWithBackoff) so per-job soldier_id + audit-row interleave works; bulk primitive preserved for v1.1 stateless callers
+- [Phase ?]: Plan 02-08: Stage 2 sendInvite uses knexTx: db (post-transaction), not trx — verification_tokens auto-committed individually so Resend failure cannot roll back soldier rows
+- [Phase ?]: Plan 02-08: ROST-13 SLO interpretation = 'DB commit + result page within 10s; Resend dispatch async with poll'. Strict <10s/50rows impossible at Resend 2 req/s. Plan 10 Test A2 enforces dbCommitWall<2000ms / firstBatchWall<8000ms / totalWall<35000ms
+- [Phase ?]: Plan 02-08: Wizard step indicator uses Box+Tag (not Ant Steps) because blocks-antd Steps exposure unverified at write time; Tag is shipped per plan 04 usage
+- [Phase ?]: Plan 02-08: Two-stage canonicalization (Pitfall P2 belt-and-braces) — canonicalizeText runs in ParseCsvAndValidate (preview) AND in CommitRosterImport (DB write) so edited preview rows that skipped re-validation still canonicalize correctly before INSERT
 
 ### Pending Todos
 
@@ -138,6 +147,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-05-13T20:30:00.000Z
-Stopped at: Completed 02-07-PLAN.md (CreateMembership body + team_detail + my_profile)
+Last session: 2026-05-13T19:51:19.554Z
+Stopped at: Completed 02-08-PLAN.md (CSV import wizard + handlers + Wave-3 re-confirmation)
 Resume file: None

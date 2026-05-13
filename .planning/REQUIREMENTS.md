@@ -35,12 +35,12 @@ Requirements for initial release. Each maps to roadmap phases via Traceability (
 - [x] **ROST-05**: Archived soldiers preserve historical assignments; absent from pickers and rosters
 - [x] **ROST-06**: Color assigned from 24-color preset palette (round-robin, avoiding adjacent-color collisions within team); soldier can override in profile
 - [x] **ROST-07**: Role tags are tenant-defined, lowercase kebab-case (`medic`, `driver`); UI autocompletes from existing tags but allows new ones
-- [ ] **ROST-08**: Admin or team_manager uploads CSV at "Roster import" page with required columns `name, email, role_tags, seniority, team_id`
-- [ ] **ROST-09**: CSV import previews row-by-row with per-row validation status (✓/⚠/✗), allowing inline edits before confirm
-- [ ] **ROST-10**: Duplicate emails within tenant flagged and skipped by default; manager can opt to re-invite (regenerates magic link)
+- [x] **ROST-08**: Admin or team_manager uploads CSV at "Roster import" page with required columns `name, email, role_tags, seniority, team_id`
+- [x] **ROST-09**: CSV import previews row-by-row with per-row validation status (✓/⚠/✗), allowing inline edits before confirm
+- [x] **ROST-10**: Duplicate emails within tenant flagged and skipped by default; manager can opt to re-invite (regenerates magic link)
 - [x] **ROST-11**: Import canonicalizes smart-quote variants in names (strips U+2019, U+200E, U+200F, U+202A-U+202E) before writing `soldier.display_name`
-- [ ] **ROST-12**: Import dispatches magic-link invite emails via Resend; writes summary row to `roster_import_log` with rows_created/skipped/errored + JSON error details
-- [ ] **ROST-13**: A 50-row CSV imports in <10 seconds
+- [x] **ROST-12**: Import dispatches magic-link invite emails via Resend; writes summary row to `roster_import_log` with rows_created/skipped/errored + JSON error details
+- [x] **ROST-13**: A 50-row CSV imports in <10 seconds
 
 ### Teams & Shift Schemas (PRD §7.4)
 
@@ -300,12 +300,12 @@ Each v1 requirement maps to exactly one phase. Phase assignment follows the rule
 | ROST-05 | Phase 2 (Org & People) | Complete |
 | ROST-06 | Phase 2 (Org & People) | Complete |
 | ROST-07 | Phase 2 (Org & People) | Complete |
-| ROST-08 | Phase 2 (Org & People) | Pending |
-| ROST-09 | Phase 2 (Org & People) | Pending |
-| ROST-10 | Phase 2 (Org & People) | Pending |
+| ROST-08 | Phase 2 (Org & People) | Complete |
+| ROST-09 | Phase 2 (Org & People) | Complete |
+| ROST-10 | Phase 2 (Org & People) | Complete |
 | ROST-11 | Phase 2 (Org & People) | Complete |
-| ROST-12 | Phase 2 (Org & People) | Pending |
-| ROST-13 | Phase 2 (Org & People) | Pending |
+| ROST-12 | Phase 2 (Org & People) | Complete |
+| ROST-13 | Phase 2 (Org & People) | Complete |
 | SHFT-01 | Phase 3 (Availability & Rules) | Pending |
 | SHFT-02 | Phase 3 (Availability & Rules) | Pending |
 | SHFT-03 | Phase 3 (Availability & Rules) | Pending |
