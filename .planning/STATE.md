@@ -4,14 +4,14 @@ milestone: v1.1
 milestone_name: milestone
 status: executing
 stopped_at: Phase 2 UI-SPEC approved
-last_updated: "2026-05-12T22:50:49.961Z"
-last_activity: 2026-05-12 -- Phase 02 planning complete
+last_updated: "2026-05-13T02:40:44.157Z"
+last_activity: 2026-05-13
 progress:
   total_phases: 8
   completed_phases: 1
   total_plans: 15
-  completed_plans: 5
-  percent: 33
+  completed_plans: 6
+  percent: 40
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-12)
 
 **Core value:** Manager spends 30 minutes per planning window instead of 4 hours, with zero cross-tenant data leaks, in a Hebrew-first RTL UI.
-**Current focus:** Phase 1 — foundations
+**Current focus:** Phase 02 — org-people
 
 ## Current Position
 
-Phase: 1 (foundations) — CHECKPOINT (Task 6 awaiting human action)
-Plan: 5 of 5
+Phase: 02 (org-people) — EXECUTING
+Plan: 2 of 10
 Status: Ready to execute
-Last activity: 2026-05-12 -- Phase 02 planning complete
+Last activity: 2026-05-13
 
-Progress: [██████████] 100%
+Progress: [████░░░░░░] 40%
 
 ## Performance Metrics
 
@@ -56,6 +56,7 @@ Progress: [██████████] 100%
 | Phase 01-foundations P03 | 480 | 7 tasks | 20 files |
 | Phase 01-foundations P04 | 180 | 4 tasks | 14 files |
 | Phase 01-foundations P05 | 45 | 5 tasks | 10 files |
+| Phase 02-org-people P02 | 35 | 4 tasks | 18 files |
 
 ## Accumulated Context
 
@@ -83,6 +84,8 @@ Recent decisions affecting current work:
 - Phase 4: `infeasibility_report` extended to soldier-level + date-level attribution via `solver.SufficientAssumptionsForInfeasibility()`
 - Phase 6: WAHA needs dedicated SIM separate from user's personal number — OPS prerequisite, not v1.1 nice-to-have
 - Phase 7: ECharts Gantt timeline deferred to v1.1 (no native RTL support); ASCII-bar leaderboard + LTR accessible bar chart pair is acceptable
+- [Phase ?]: Plan 02-02: shifty-roster plugin scaffold + 5 helpers + 7 handler stubs + dual-declaration in package.json/lowdefy.yaml; PALETTE byte-equal to UI-SPEC §Color B locked by deepStrictEqual; 42 unit tests green
+- [Phase ?]: Plan 02-02: Assumption A1 (sha256(rawToken+NEXTAUTH_SECRET) for verification_tokens) documented in dispatch/resend.js — plan 02-08 owns 2h spike to verify against live next-auth source before bulk-invite ships
 
 ### Pending Todos
 
@@ -104,6 +107,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-05-12T21:48:48.047Z
+Last session: 2026-05-13T02:40:26.065Z
 Stopped at: Phase 2 UI-SPEC approved
-Resume file: .planning/phases/02-org-people/02-UI-SPEC.md
+Resume file: None
