@@ -1,0 +1,186 @@
+id: roster_import_result
+type: PageHeaderMenu
+auth:
+  roles:
+    - unit_admin
+    - team_manager
+properties:
+  title: 'סיכום ייבוא | shifty'
+
+# Plan 02-08 Task 3 — result page after CSV import commit.
+#
+# URL: /roster_import_result?id={import_id}. The :id query param is the
+# roster_import_log.id RETURNed by CommitRosterImport in Stage 3.
+#
+# 4-layer tenant isolation:
+#   Layer 1 (session):  tenant_id from `_user: tenant_id` on the SELECT payload.
+#   Layer 2 (query):    WHERE id = :import_id AND tenant_id = :tenant_id.
+#                       A forged import_id from another tenant returns zero rows.
+#   Layer 3 (page):     auth.roles allowlist above.
+#   Layer 4 (plugin):   N/A — read-only KnexRaw block.
+#   Layer 5 (RLS):      0009 policy on roster_import_log catches DB-level breach.
+#
+# Three variants per UI-SPEC §"Page 6":
+#   success — rows_errored == 0 AND error_details empty
+#   warning — rows_created > 0 AND (rows_errored > 0 OR error_details non-empty)
+#   error   — rows_created == 0 (commit transaction failed entirely)
+
+requests:
+  - id: get_import_summary
+    type: KnexRaw
+    connectionId: shifts_db
+    payload:
+      tenant_id:
+        _user: tenant_id
+      import_id:
+        _url_query: id
+    properties:
+      query: |
+        SELECT id, rows_created, rows_skipped, rows_errored, error_details, created_at
+          FROM roster_import_log
+         WHERE id = :import_id
+           AND tenant_id = :tenant_id
+      parameters:
+        tenant_id: { _payload: tenant_id }
+        import_id: { _payload: import_id }
+
+blocks:
+  - id: page_title
+    type: Title
+    properties:
+      content: סיכום ייבוא
+      level: 1
+
+  - id: not_found_result
+    type: Result
+    visible:
+      _eq:
+        - { _request: get_import_summary.length }
+        - 0
+    properties:
+      status: error
+      icon: AiOutlineQuestionCircle
+      title: 'הייבוא לא נמצא'
+      subTitle: 'מזהה הייבוא לא תקף או אינו שייך לארגון שלך.'
+    blocks:
+      - id: not_found_actions
+        type: Box
+        properties:
+          contentGutter: [8, 8]
+          contentJustify: center
+        blocks:
+          - id: not_found_back
+            type: Button
+            properties:
+              title: חזרה לרשימת חיילים
+              type: primary
+            events:
+              onClick:
+                - id: nf_back
+                  type: Link
+                  params:
+                    pageId: manage_soldiers
+
+  # ── Main Result block — three variants by status ─────────────────────────
+  # status is computed inline via nested _if so the Result block configuration
+  # is one node (the alternative — three separate Result blocks each gated by
+  # visible: — would emit the page header three times; not desirable).
+  - id: summary_result
+    type: Result
+    visible:
+      _gt:
+        - { _request: get_import_summary.length }
+        - 0
+    properties:
+      status:
+        _if:
+          test:
+            _and:
+              - _eq: [{ _request: get_import_summary.0.rows_errored }, 0]
+              - _eq:
+                  - _request: get_import_summary.0.rows_created
+                  - { _gt: [{ _request: get_import_summary.0.rows_created }, 0] }
+          then: success
+          else:
+            _if:
+              test:
+                _gt: [{ _request: get_import_summary.0.rows_created }, 0]
+              then: warning
+              else: error
+      title: סיכום ייבוא
+      subTitle:
+        _nunjucks:
+          template: 'יובאו {{ created }} חיילים, {{ skipped }} כפילויות דולגו, {{ errored }} שגיאות.'
+          on:
+            created: { _request: get_import_summary.0.rows_created }
+            skipped: { _request: get_import_summary.0.rows_skipped }
+            errored: { _request: get_import_summary.0.rows_errored }
+    blocks:
+      - id: result_actions
+        type: Box
+        properties:
+          contentGutter: [8, 8]
+          contentJustify: center
+          style:
+            marginTop: 16
+        blocks:
+          - id: back_to_soldiers
+            type: Button
+            properties:
+              title: חזרה לרשימת חיילים
+              type: primary
+              icon: AiOutlineArrowRight
+            events:
+              onClick:
+                - id: go_back
+                  type: Link
+                  params:
+                    pageId: manage_soldiers
+          - id: view_import_log
+            type: Button
+            properties:
+              title: צפה ביומן הייבוא
+              type: default
+              icon: AiOutlineFileText
+              disabled: true
+              tooltip: 'זמין בשלב 7'
+
+  # ── Partial-failure detail card (error_details listing) ──────────────────
+  # Visible when error_details is non-empty (regardless of variant). Renders
+  # an AgGrid of per-row failure entries so the admin can see which rows
+  # need a retry from soldier_detail's "Invite later" button.
+  - id: error_details_card
+    type: Card
+    visible:
+      _and:
+        - _gt: [{ _request: get_import_summary.length }, 0]
+        - _gt: [{ _request: get_import_summary.0.rows_errored }, 0]
+    properties:
+      title: 'שגיאות לפי שורה'
+      headStyle:
+        textAlign: right
+      style:
+        marginTop: 24
+    blocks:
+      - id: error_details_grid
+        type: AgGridAlpine
+        properties:
+          enableRtl: true
+          rowData: { _request: get_import_summary.0.error_details }
+          domLayout: autoHeight
+          defaultColDef:
+            sortable: true
+            resizable: true
+            filter: false
+            flex: 1
+          columnDefs:
+            - field: row_index
+              headerName: 'מס׳ שורה'
+              width: 100
+              type: numericColumn
+            - field: reason
+              headerName: סיבה
+              flex: 1
+            - field: message
+              headerName: הודעת שגיאה
+              flex: 2

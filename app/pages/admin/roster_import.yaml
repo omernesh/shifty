@@ -1,0 +1,469 @@
+id: roster_import
+type: PageHeaderMenu
+auth:
+  roles:
+    - unit_admin
+    - team_manager
+properties:
+  title: 'ייבוא חיילים מקובץ CSV | shifty'
+
+# Plan 02-08 Task 3 — three-step CSV import wizard on ONE page (D-09).
+#
+# Wizard step state machine (gated by `_state.wizard_step`):
+#   1 = upload card visible
+#   2 = preview AgGrid + bulk-fix toolbar visible
+#   3 = commit progress card visible (immediately transitions away after Commit fires)
+#
+# 4-layer tenant isolation (recap):
+#   Layer 1 (session):  every payload sets tenant_id from `_user: tenant_id`.
+#                       ParseCsvAndValidate + CommitRosterImport read it from
+#                       request.user.tenant_id, never from request.properties.
+#   Layer 2 (query):    pre-flight SELECTs inside ParseCsvAndValidate filter on
+#                       tenant_id; per-row INSERTs in CommitRosterImport bind
+#                       tenant_id from the session.
+#   Layer 3 (page):     auth.roles allowlist above.
+#   Layer 4 (plugin):   both handlers reject if tenant_id missing.
+#   Layer 5 (RLS):      0009 policy on soldier/membership/app_user catches any
+#                       cross-tenant breach at the DB layer.
+
+requests:
+  # ── Parse the uploaded base64 CSV + return per-row {status,errors,warnings} ─
+  # Triggered by the Step 1 "נתח קובץ" button. Server-side parse via papaparse;
+  # tenant-scoped pre-flight on app_user emails (T-02-02 — duplicate detection
+  # is intra-tenant only), org_unit ids, and role_tag keys.
+  - id: parse_csv_request
+    type: ParseCsvAndValidate
+    connectionId: shifts_db
+    payload:
+      file_b64: { _state: csv_upload_input }
+
+  # ── Commit the parsed (and admin-edited) preview to the database ─────────
+  # Stage 1: one DB transaction (soldier + app_user + membership + role_tag).
+  # Stage 2: sync Resend dispatch with [1s,4s,16s] backoff and 500ms inter-call
+  # gap. Stage 3: roster_import_log summary INSERT (live schema column names
+  # per migration 0007 — `imported_by`, `source`, etc.).
+  - id: commit_import_request
+    type: CommitRosterImport
+    connectionId: shifts_db
+    payload:
+      rows: { _state: parsed_rows }
+
+  # ── role_tag autocomplete options for inline-edit in the preview cells ───
+  - id: list_role_tags
+    type: KnexRaw
+    connectionId: shifts_db
+    payload:
+      tenant_id:
+        _user: tenant_id
+    properties:
+      query: |
+        SELECT key AS value, COALESCE(label, key) AS label
+          FROM role_tag
+         WHERE tenant_id = :tenant_id
+         ORDER BY key
+      parameters:
+        tenant_id: { _payload: tenant_id }
+
+  # ── leaf teams for the team_id Selector in the preview ───────────────────
+  - id: list_leaf_teams
+    type: KnexRaw
+    connectionId: shifts_db
+    payload:
+      tenant_id:
+        _user: tenant_id
+    properties:
+      query: |
+        SELECT id AS value, name AS label
+          FROM org_unit
+         WHERE tenant_id = :tenant_id
+           AND NOT EXISTS (
+             SELECT 1 FROM org_unit child
+              WHERE child.parent_id = org_unit.id
+                AND child.tenant_id = :tenant_id
+           )
+         ORDER BY name
+      parameters:
+        tenant_id: { _payload: tenant_id }
+
+blocks:
+  - id: page_title
+    type: Title
+    properties:
+      content: ייבוא חיילים מקובץ CSV
+      level: 1
+
+  # ─────────────────────── Step indicator (always visible) ────────────────
+  # Three numbered Tags with the active step in #1677FF, completed in #52C41A,
+  # pending in #D9D9D9. We use Box+Tag rather than Ant Steps so the YAML stays
+  # plugin-agnostic (the @lowdefy/blocks-antd Steps block exposure is unverified
+  # at write time; Tags ship with @lowdefy/blocks-antd@5.3.0 confirmed in plan 04).
+  - id: step_indicator
+    type: Box
+    properties:
+      contentGutter: [16, 16]
+      contentJustify: center
+      contentAlign: middle
+      style:
+        marginTop: 24
+        marginBottom: 24
+    blocks:
+      - id: step_1_tag
+        type: Tag
+        properties:
+          color:
+            _if:
+              test: { _gte: [{ _state: wizard_step }, 1] }
+              then: '#1677FF'
+              else: '#D9D9D9'
+          children: '① טען קובץ'
+      - id: step_2_tag
+        type: Tag
+        properties:
+          color:
+            _if:
+              test: { _gte: [{ _state: wizard_step }, 2] }
+              then: '#1677FF'
+              else: '#D9D9D9'
+          children: '② סקור ושפר'
+      - id: step_3_tag
+        type: Tag
+        properties:
+          color:
+            _if:
+              test: { _gte: [{ _state: wizard_step }, 3] }
+              then: '#52C41A'
+              else: '#D9D9D9'
+          children: '③ אשר ושלח'
+
+  # ═══════════════════════ STEP 1 — Upload Card ═══════════════════════════
+  - id: step_1_card
+    type: Card
+    visible:
+      _or:
+        - _eq: [{ _state: wizard_step }, 1]
+        - _eq: [{ _state: wizard_step }, null]
+    properties:
+      title: 'שלב 1 — טען קובץ'
+      headStyle:
+        textAlign: right
+      style:
+        marginBottom: 24
+    blocks:
+      - id: step_1_intro
+        type: Paragraph
+        properties:
+          content: |
+            בחר קובץ CSV עם העמודות הבאות: display_name, email, role_tags (separator |), seniority, team_id (UUID).
+            הקובץ חייב להיות בקידוד UTF-8. תאים ריקים מותרים בשדות לא חובה.
+
+      # Upload block — Lowdefy 5.3 Upload emits base64 file content in its state
+      # (RESEARCH §"Step 1: File upload" / Assumption A3; pinned in skill ref 04).
+      # If the block doesn't emit base64 as expected at runtime, fallback per
+      # RESEARCH Open Q (A3 mitigation) is a TextArea paste; not wired in v1.
+      - id: csv_upload_input
+        type: Upload
+        properties:
+          label: 'טען קובץ CSV (UTF-8)'
+          accept: '.csv,text/csv'
+          multiple: false
+
+      - id: step_1_actions
+        type: Box
+        properties:
+          contentGutter: [8, 8]
+          contentJustify: flex-start
+        blocks:
+          - id: parse_btn
+            type: Button
+            properties:
+              title: נתח קובץ
+              type: primary
+              icon: AiOutlineFileSearch
+              disabled:
+                _not: { _state: csv_upload_input }
+            events:
+              onClick:
+                - id: do_parse
+                  type: Request
+                  params:
+                    requestId: parse_csv_request
+                - id: stash_rows
+                  type: SetState
+                  params:
+                    parsed_rows: { _request: parse_csv_request.rows }
+                    parsed_total: { _request: parse_csv_request.total }
+                    wizard_step: 2
+
+          - id: download_template_btn
+            type: Button
+            properties:
+              title: הורד תבנית CSV
+              type: default
+              icon: AiOutlineDownload
+              disabled: true
+              tooltip: 'זמין בשלב 7'
+
+  # ═══════════════════════ STEP 2 — Preview Card ══════════════════════════
+  - id: step_2_card
+    type: Card
+    visible:
+      _eq: [{ _state: wizard_step }, 2]
+    properties:
+      title: 'שלב 2 — סקור ושפר'
+      headStyle:
+        textAlign: right
+      style:
+        marginBottom: 24
+    blocks:
+      # ── Bulk-fix toolbar (D-09 + D-11) ─────────────────────────────────
+      # Four buttons. Each mutates _state.parsed_rows via a JS expression that
+      # remaps the rows array. The re-invite toggle sets re_invite: true on
+      # every row with is_duplicate (D-11). The "trim whitespace" button
+      # re-canonicalizes display_name and email (defense-in-depth though the
+      # parse step already does this).
+      - id: bulk_fix_toolbar
+        type: Box
+        properties:
+          contentGutter: [8, 8]
+          contentJustify: flex-start
+          style:
+            marginBottom: 16
+        blocks:
+          - id: bulk_lowercase_tags
+            type: Button
+            properties:
+              title: הפוך תגיות לאותיות קטנות
+              size: middle
+              icon: AiOutlineFontSize
+            events:
+              onClick:
+                - id: do_lowercase
+                  type: SetState
+                  params:
+                    parsed_rows:
+                      _array.map:
+                        on: { _state: parsed_rows }
+                        callback:
+                          row:
+                            _spread:
+                              - { __args: 0 }
+                              - role_tags:
+                                  _array.map:
+                                    on: { __args: 0.role_tags }
+                                    callback:
+                                      tag: { _string.toLowerCase: { __args: 0 } }
+
+          - id: bulk_assign_team
+            type: Button
+            properties:
+              title: 'הקצה צוות לריקות...'
+              size: middle
+              icon: AiOutlineTeam
+              disabled: true
+              tooltip: 'זמין בשלב 7'
+
+          - id: bulk_reinvite_dups
+            type: Button
+            properties:
+              title: השב הזמנות לכל הכפילויות
+              size: middle
+              icon: AiOutlineReload
+            events:
+              onClick:
+                - id: do_reinvite
+                  type: SetState
+                  params:
+                    parsed_rows:
+                      _array.map:
+                        on: { _state: parsed_rows }
+                        callback:
+                          row:
+                            _spread:
+                              - { __args: 0 }
+                              - re_invite: { __args: 0.is_duplicate }
+
+      # ── Preview AgGrid ─────────────────────────────────────────────────
+      # enableRtl mandatory per UI-SPEC §"Reusable Components — 8".
+      # Status pill cellRenderer recipe copied byte-equal from UI-SPEC
+      # §"Reusable Components — 3" (D-09 + Pitfall P9 Pattern A — no
+      # data-action HTML, click handling is via field-typed columns).
+      - id: preview_grid
+        type: AgGridAlpine
+        properties:
+          enableRtl: true
+          rowData: { _state: parsed_rows }
+          animateRows: true
+          defaultColDef:
+            sortable: true
+            resizable: true
+            filter: false
+            editable: true
+            flex: 1
+          getRowStyle:
+            _function:
+              __args: 0
+              __return:
+                _if:
+                  test: { _eq: [{ __args: 0.data.status }, 'error'] }
+                  then: { background: '#FFE5E5' }
+                  else:
+                    _if:
+                      test: { _eq: [{ __args: 0.data.status }, 'warn'] }
+                      then: { background: '#FFFBE6' }
+                      else: null
+          columnDefs:
+            - field: status
+              headerName: מצב
+              width: 70
+              editable: false
+              sortable: false
+              cellRenderer:
+                _function:
+                  __args: 0
+                  __return:
+                    _nunjucks:
+                      template: |
+                        {% if value == 'ok' %}<span style="display:inline-block;padding:2px 8px;border-radius:12px;background:#52C41A;color:#fff;font-weight:600">✓</span>{% elif value == 'warn' %}<span style="display:inline-block;padding:2px 8px;border-radius:12px;background:#FAAD14;color:#000;font-weight:600">⚠</span>{% else %}<span style="display:inline-block;padding:2px 8px;border-radius:12px;background:#FF4D4F;color:#fff;font-weight:600">✗</span>{% endif %}
+                      on:
+                        value: { __args: 0.value }
+            - field: display_name
+              headerName: שם
+              flex: 2
+            - field: email
+              headerName: אימייל
+              flex: 2
+            - field: role_tags
+              headerName: תגיות
+              flex: 2
+              valueFormatter:
+                _function:
+                  __args: 0
+                  __return:
+                    _nunjucks:
+                      template: '{{ value | join(", ") }}'
+                      on:
+                        value: { __args: 0.value }
+            - field: seniority
+              headerName: ותק
+              width: 80
+              type: numericColumn
+            - field: team_id
+              headerName: צוות
+              flex: 1
+            - field: re_invite
+              headerName: שלח שוב
+              width: 100
+              cellRenderer: agCheckboxCellRenderer
+              cellEditor: agCheckboxCellEditor
+              hide:
+                _not:
+                  _array.some:
+                    on: { _state: parsed_rows }
+                    callback: { __args: 0.is_duplicate }
+
+      # ── Summary line ────────────────────────────────────────────────────
+      - id: preview_summary
+        type: Paragraph
+        properties:
+          style:
+            marginTop: 16
+            fontWeight: 600
+          content:
+            _nunjucks:
+              template: '✓ {{ ok }} | ⚠ {{ warn }} | ✗ {{ err }}'
+              on:
+                ok:
+                  _array.length:
+                    _array.filter:
+                      on: { _state: parsed_rows }
+                      callback: { _eq: [{ __args: 0.status }, 'ok'] }
+                warn:
+                  _array.length:
+                    _array.filter:
+                      on: { _state: parsed_rows }
+                      callback: { _eq: [{ __args: 0.status }, 'warn'] }
+                err:
+                  _array.length:
+                    _array.filter:
+                      on: { _state: parsed_rows }
+                      callback: { _eq: [{ __args: 0.status }, 'error'] }
+
+      # ── Step 2 footer: Back + Confirm ──────────────────────────────────
+      - id: step_2_footer
+        type: Box
+        properties:
+          contentGutter: [16, 16]
+          contentJustify: space-between
+          style:
+            marginTop: 24
+        blocks:
+          - id: back_btn
+            type: Button
+            properties:
+              title: ← חזור
+              type: default
+              icon: AiOutlineArrowRight
+            events:
+              onClick:
+                - id: back_to_upload
+                  type: SetState
+                  params:
+                    wizard_step: 1
+
+          - id: confirm_btn
+            type: Button
+            properties:
+              title: 'אשר ייבוא →'
+              type: primary
+              icon: AiOutlineCheck
+              disabled:
+                _array.some:
+                  on: { _state: parsed_rows }
+                  callback: { _eq: [{ __args: 0.status }, 'error'] }
+            events:
+              onClick:
+                - id: confirm_modal
+                  type: Confirm
+                  params:
+                    title: אישור ייבוא
+                    content: 'יווצרו חיילים חדשים ויישלחו הזמנות לכתובות האימייל שסופקו. האם להמשיך?'
+                    okText: 'אשר ושלח'
+                    cancelText: ביטול
+                - id: advance_to_3
+                  type: SetState
+                  params:
+                    wizard_step: 3
+                - id: do_commit
+                  type: Request
+                  params:
+                    requestId: commit_import_request
+                - id: navigate_to_result
+                  type: Link
+                  params:
+                    pageId: roster_import_result
+                    urlQuery:
+                      id: { _request: commit_import_request.import_id }
+
+  # ═══════════════════════ STEP 3 — Commit progress ═══════════════════════
+  # Shown briefly between Confirm click and the navigation to the result page.
+  # The Resend dispatch loop runs inside the handler; there is no first-class
+  # SSE in Lowdefy 5.3 so we keep an indeterminate spinner here and let the
+  # result page poll the roster_import_log row (RESEARCH Open Q5).
+  - id: step_3_card
+    type: Card
+    visible:
+      _eq: [{ _state: wizard_step }, 3]
+    properties:
+      title: 'שלב 3 — אשר ושלח'
+      headStyle:
+        textAlign: right
+    blocks:
+      - id: commit_progress_intro
+        type: Paragraph
+        properties:
+          content: 'הייבוא בעיצומו... זמן משוער מתחת ל-35 שניות עבור 50 שורות.'
+      - id: commit_spinner
+        type: Spin
+        properties:
+          tip: 'מבצע ייבוא ושולח הזמנות'
+          size: large
