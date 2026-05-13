@@ -35,14 +35,30 @@ auth:
         - admin_test_audit
         - manage_invites
         - manage_org_units
+        - manage_soldiers
+        - manage_role_tags
+        - soldier_detail
+        - team_detail
+        - roster_import
+        - roster_import_result
+        - my_profile
         - manager_dashboard
         - my_dashboard
       team_manager:
+        - manage_org_units
+        - manage_soldiers
+        - soldier_detail
+        - team_detail
+        - roster_import
+        - roster_import_result
+        - my_profile
         - manager_dashboard
         - my_dashboard
       member:
+        - my_profile
         - my_dashboard
       viewer:
+        - my_profile
         - my_dashboard
   authPages:
     signIn: /login
@@ -80,11 +96,6 @@ menus:
         pageId: home
         properties:
           title: Home
-      - id: employees_link
-        type: MenuLink
-        pageId: employees
-        properties:
-          title: Employees
       - id: admin_dashboard_link
         type: MenuLink
         pageId: admin_dashboard
@@ -104,6 +115,34 @@ menus:
         pageId: manage_org_units
         properties:
           title: יחידות ארגוניות
+        visible:
+          _user: tenant_id
+      - id: manage_soldiers_link
+        type: MenuLink
+        pageId: manage_soldiers
+        properties:
+          title: חיילים
+        visible:
+          _user: tenant_id
+      - id: roster_import_link
+        type: MenuLink
+        pageId: roster_import
+        properties:
+          title: ייבוא חיילים
+        visible:
+          _user: tenant_id
+      - id: manage_role_tags_link
+        type: MenuLink
+        pageId: manage_role_tags
+        properties:
+          title: תגיות תפקיד
+        visible:
+          _user: tenant_id
+      - id: my_profile_link
+        type: MenuLink
+        pageId: my_profile
+        properties:
+          title: הפרופיל שלי
         visible:
           _user: tenant_id
       - id: my_dashboard_link
@@ -130,59 +169,6 @@ pages:
         properties:
           content: Shifts management. Schema is deployed; the app is being built.
 
-  - id: employees
-    type: PageHeaderMenu
-    properties:
-      title: Employees | shifty
-    requests:
-      - id: list_employees
-        type: KnexRaw
-        connectionId: shifts_db
-        properties:
-          query: |
-            -- @gsd-allow-untenanted: bootstrap smoke-test surface; legacy 0001 table; superseded in Phase 2
-            SELECT id, name, email, role, employment_type, hourly_rate, max_weekly_hrs, active
-            FROM employees
-            ORDER BY name;
-    blocks:
-      - id: header
-        type: Title
-        properties:
-          content: Employees
-          level: 1
-      - id: count
-        type: Paragraph
-        properties:
-          content:
-            _nunjucks:
-              template: '{{ rows | length }} employee(s)'
-              on:
-                rows:
-                  _request: list_employees
-      - id: employee_table
-        type: AgGridAlpine
-        properties:
-          rowData:
-            _request: list_employees
-          defaultColDef:
-            sortable: true
-            resizable: true
-          columnDefs:
-            - field: name
-              headerName: Name
-            - field: email
-              headerName: Email
-            - field: role
-              headerName: Role
-            - field: employment_type
-              headerName: Type
-            - field: hourly_rate
-              headerName: Hourly Rate
-            - field: max_weekly_hrs
-              headerName: Max Hrs/Week
-            - field: active
-              headerName: Active
-
   - _ref: pages/auth/login.yaml
   - _ref: pages/auth/signup.yaml
   - _ref: pages/auth/signup_with_invite.yaml
@@ -190,5 +176,12 @@ pages:
   - _ref: pages/admin/manage_invites.yaml
   - _ref: pages/admin/admin_test_audit.yaml
   - _ref: pages/admin/manage_org_units.yaml
+  - _ref: pages/admin/manage_soldiers.yaml
+  - _ref: pages/admin/soldier_detail.yaml
+  - _ref: pages/admin/team_detail.yaml
+  - _ref: pages/admin/roster_import.yaml
+  - _ref: pages/admin/roster_import_result.yaml
+  - _ref: pages/admin/manage_role_tags.yaml
+  - _ref: pages/my_profile.yaml
   - _ref: pages/dashboards/my_dashboard.yaml
   - _ref: pages/dashboards/manager_dashboard.yaml
