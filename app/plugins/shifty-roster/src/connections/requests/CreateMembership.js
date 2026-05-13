@@ -6,15 +6,27 @@
 // this module without requiring 'knex' to be installed in the test environment.
 // In the Lowdefy Docker image, knex is available via @lowdefy/connection-knex.
 //
-// SCAFFOLD-ONLY: the actual INSERT INTO membership + UPDATE org_unit.last_color_index
-// (atomic, per D-15) + schedule_audit emission lands in plan 02-07.
+// Implementation (Plan 02-07 Task 1, replaces plan 02-02 stub):
+// 1. Layer-4 caller-scope check: caller_team_ids must include team_id unless unit_admin.
+// 2. SELECT-driven INSERT (RESEARCH §"Membership — Constraints" safe form): the row is
+//    emitted ONLY when BOTH the soldier and the org_unit live in the same tenant.
+//    `s.tenant_id` is taken from the database row (not from payload) for the INSERT,
+//    so a forged caller_team_ids array still cannot land a cross-tenant membership.
+// 3. ON CONFLICT (soldier_id, org_unit_id) DO NOTHING → idempotent on retry; the
+//    distinguishing `already_member` post-check tells the UI whether the no-op was
+//    "already there" (success) or "soldier/team not in tenant" (error).
+// 4. No round-robin color bump on membership-add (D-15 line 3: "soldier keeps their
+//    current color (no recolor on team-add)"). CreateSoldier (plan 02-06) is the only
+//    write path that touches org_unit.last_color_index — Phase 2 scope.
+// 5. schedule_audit row to_state='membership_added'.
 
-import { pickNextColor, PALETTE } from '../../helpers/palette.js';
+import { canonicalizeRoleTag } from '../../helpers/role-tag.js'; // eslint-disable-line no-unused-vars
+import { pickNextColor, PALETTE } from '../../helpers/palette.js'; // eslint-disable-line no-unused-vars
 
 async function CreateMembership({ request, connection }) {
   const { soldier_id, team_id, role } = request.properties || {};
 
-  // Layer-4 tenant / actor guards.
+  // Layer-4 tenant / actor guards (run BEFORE any DB interaction).
   const tenant_id = request.user?.tenant_id;
   if (!tenant_id) {
     throw new Error('CreateMembership: tenant_id missing from session');
@@ -23,11 +35,8 @@ async function CreateMembership({ request, connection }) {
   if (!actor_user_id) {
     throw new Error('CreateMembership: actor_user_id missing from session — unauthenticated request');
   }
-  // eslint-disable-next-line no-unused-vars
   const caller_team_ids = request.user?.team_ids || [];
-  // eslint-disable-next-line no-unused-vars
   const roles = request.user?.roles || [];
-  // eslint-disable-next-line no-unused-vars
   const is_admin = roles.includes('unit_admin');
 
   if (!soldier_id) {
@@ -37,21 +46,91 @@ async function CreateMembership({ request, connection }) {
     throw new Error('CreateMembership: team_id is required');
   }
 
-  // Touch palette helpers — proves the import chain is wired.
-  // eslint-disable-next-line no-unused-vars
-  const _palette_size = PALETTE.length;
-  // eslint-disable-next-line no-unused-vars
-  const _next_color_preview = pickNextColor(-1);
+  // Schema default 'member' covers any optional/null role passed from the page.
+  const effectiveRole = role || 'member';
+  const ALLOWED_ROLES = new Set(['unit_admin', 'team_manager', 'member', 'viewer']);
+  if (!ALLOWED_ROLES.has(effectiveRole)) {
+    throw new Error(`CreateMembership: invalid role '${effectiveRole}'`);
+  }
+
+  // Layer-4 scope: only admins or managers whose caller_team_ids includes this team
+  // may add a member to it. T-02-06 mitigation — the SQL gate `(:is_admin OR
+  // :team_id = ANY(:caller_team_ids))` lives only in YAML KnexRaw flows; here we
+  // mirror it in JS so the plugin handler is independently safe.
+  const canWrite = is_admin || caller_team_ids.includes(team_id);
+  if (!canWrite) {
+    throw new Error('CreateMembership: access denied — team not in caller scope');
+  }
 
   const { default: knex } = await import('knex');
   const db = knex(connection);
   try {
-    // Placeholder: full SQL implementation lands in plan 02-07.
-    return {
-      success: true,
-      todo: 'plan-02-07',
-      _stub_inputs: { soldier_id, team_id, role: role || 'member' },
-    };
+    const result = await db.transaction(async (trx) => {
+      // Step 1: SELECT-driven safe INSERT. Emits a row only when soldier AND org_unit
+      // both live in `tenant_id`. ON CONFLICT keeps the call idempotent on retry.
+      // `s.status = 'active'` blocks adding archived soldiers (ROST-05).
+      const insertRes = await trx.raw(
+        `INSERT INTO membership (tenant_id, soldier_id, org_unit_id, role)
+         SELECT s.tenant_id, s.id, ou.id, :role
+           FROM soldier s, org_unit ou
+          WHERE s.id = :soldier_id
+            AND ou.id = :team_id
+            AND s.tenant_id = :tenant_id
+            AND ou.tenant_id = :tenant_id
+            AND s.status = 'active'
+         ON CONFLICT (soldier_id, org_unit_id) DO NOTHING
+         RETURNING id, tenant_id, soldier_id, org_unit_id`,
+        { role: effectiveRole, soldier_id, team_id, tenant_id }
+      );
+
+      const rows = insertRes?.rows || [];
+
+      if (rows.length === 0) {
+        // Distinguish "already a member" (idempotent success) from "soldier or team
+        // not found in tenant scope" (real error). One extra round-trip; cheap.
+        const existsRes = await trx.raw(
+          `SELECT EXISTS (
+             SELECT 1 FROM membership
+              WHERE soldier_id = :soldier_id
+                AND org_unit_id = :team_id
+                AND tenant_id = :tenant_id
+           ) AS already_member`,
+          { soldier_id, team_id, tenant_id }
+        );
+        const already_member = existsRes?.rows?.[0]?.already_member === true;
+        if (already_member) {
+          // Idempotent no-op: do NOT write an audit row for a no-op retry.
+          return { success: true, already_member: true, membership_id: null };
+        }
+        throw new Error('CreateMembership: soldier or team not found in tenant scope');
+      }
+
+      const newRow = rows[0];
+
+      // Step 2: schedule_audit row (matches shifty-audit-writer payload shape).
+      await trx('schedule_audit').insert({
+        tenant_id,
+        planning_window_id: null,
+        from_state: null,
+        to_state: 'membership_added',
+        actor_user_id,
+        actor_kind: 'user',
+        payload: JSON.stringify({
+          membership_id: newRow.id,
+          soldier_id: newRow.soldier_id,
+          team_id: newRow.org_unit_id,
+          role: effectiveRole,
+        }),
+      });
+
+      return {
+        success: true,
+        already_member: false,
+        membership_id: newRow.id,
+      };
+    });
+
+    return result;
   } finally {
     await db.destroy();
   }
@@ -63,7 +142,11 @@ CreateMembership.schema = {
   properties: {
     soldier_id: { type: 'string', format: 'uuid' },
     team_id: { type: 'string', format: 'uuid' },
-    role: { enum: ['member', 'team_manager', 'unit_admin', 'viewer'] },
+    role: {
+      type: 'string',
+      enum: ['unit_admin', 'team_manager', 'member', 'viewer'],
+      default: 'member',
+    },
   },
 };
 CreateMembership.connectionType = 'Knex';
