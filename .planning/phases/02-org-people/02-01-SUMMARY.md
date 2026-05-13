@@ -2,8 +2,8 @@
 phase: 02-org-people
 plan: 01
 subsystem: db-schema
-tags: [migration, rls, schema-delta, role-tag, palette, blocking-checkpoint]
-status: awaiting-checkpoint-approval
+tags: [migration, rls, schema-delta, role-tag, palette]
+status: complete
 requires:
   - db/migrations/0002_tenancy_and_org.up.sql (tenant, org_unit tables)
   - db/migrations/0009_rls_policies.up.sql (sealed RLS policy literal — reference only, not modified)
@@ -34,10 +34,10 @@ decisions:
   - "No GRANT/REVOKE on role_tag: not append-only (admins will eventually edit/delete in v1.1)"
   - "Migration 0008_legacy_drop NOT in this plan — ships in plan 02-09 after UI surfaces stop referencing /employees"
 metrics:
-  duration: ~2min (authoring); apply duration TBD after checkpoint approval
-  tasks-completed: 2 of 3
+  duration: ~2min (authoring) + ~5min (apply on hpg5)
+  tasks-completed: 3 of 3
   files-created: 2
-  completed-date: 2026-05-13 (authoring); apply-date TBD
+  completed-date: 2026-05-13
 ---
 
 # Phase 02 Plan 01: Schema Deltas (role_tag + org_unit.last_color_index) Summary
@@ -79,13 +79,140 @@ ALTER TABLE org_unit ADD COLUMN last_color_index SMALLINT NOT NULL DEFAULT -1 CH
 
 The `-1` sentinel encodes "no soldier color-assigned yet" so `pickNextColor(lastIndex)` in `app/plugins/shifty-roster/src/lib/palette.js` returns `palette[0]` for the first soldier in a fresh team. RLS is inherited from org_unit's existing `tenant_isolation` policy (set by 0009's DO-block loop) — no new policy needed.
 
-## Checkpoint State
+## Task 3 — Applied on hpg5
 
-**Task 3 status:** BLOCKING — `## CHECKPOINT REACHED` returned to orchestrator; awaiting user approval for live-Postgres mutation on hpg5.
+User approved the apply via checkpoint resume signal `applied`. Continuation agent executed Task 3 in full.
 
-**Apply log lines from hpg5:** _Pending checkpoint approval. Will be filled in by continuation agent after `applied` resume signal._
+### Step 1: Upload to hpg5 (pscp)
 
-**`schema_migrations.version` after apply:** _Pending. Expected `12` with `dirty=false` after successful apply (currently `10` per Phase 1 STATE)._
+Both migration files uploaded to `C:/shifts-manager/db/migrations/` on hpg5:
+
+```
+0011_role_tag.up.sql      | 1 kB |   1.7 kB/s | ETA: 00:00:00 | 100%
+0012_org_unit_last_color_ | 1 kB |   1.1 kB/s | ETA: 00:00:00 | 100%
+```
+
+### Step 2: Apply via PsExec-wrapped golang-migrate
+
+```
+ Container shifts-postgres Running
+ Container shifts-postgres Waiting
+ Container shifts-postgres Healthy
+ Container shifts-manager-migrate-run-6d95630972ec Creating
+ Container shifts-manager-migrate-run-6d95630972ec Created
+11/u role_tag (105.458309ms)
+12/u org_unit_last_color_index (143.062044ms)
+```
+
+Both migrations applied cleanly; `PsExec` wrap ensured the credential helper succeeded (cmd exit code 0).
+
+### Step 3: Four verification queries
+
+**3a. `SELECT version, dirty FROM schema_migrations ORDER BY version DESC LIMIT 3;`**
+
+```
+ version | dirty
+---------+-------
+      12 | f
+(1 row)
+```
+
+Note: golang-migrate stores only the current version in `schema_migrations` (single row, not a history table) — the `LIMIT 3` returns one row by design. Expected outcome confirmed: `version=12, dirty=f`.
+
+**3b. `\d role_tag`**
+
+```
+                             Table "public.role_tag"
+   Column   |           Type           | Collation | Nullable |      Default
+------------+--------------------------+-----------+----------+-------------------
+ id         | uuid                     |           | not null | gen_random_uuid()
+ tenant_id  | uuid                     |           | not null |
+ key        | text                     |           | not null |
+ label      | text                     | he-x-icu  |          |
+ created_at | timestamp with time zone |           | not null | now()
+Indexes:
+    "role_tag_pkey" PRIMARY KEY, btree (id)
+    "idx_role_tag_tenant" btree (tenant_id)
+    "role_tag_tenant_id_key_key" UNIQUE CONSTRAINT, btree (tenant_id, key)
+Check constraints:
+    "role_tag_key_check" CHECK (key ~ '^[a-z][a-z0-9-]*$'::text)
+Foreign-key constraints:
+    "role_tag_tenant_id_fkey" FOREIGN KEY (tenant_id) REFERENCES tenant(id) ON DELETE CASCADE
+Policies:
+    POLICY "tenant_isolation"
+      USING ((tenant_id = (current_setting('app.current_tenant'::text, true))::uuid))
+      WITH CHECK ((tenant_id = (current_setting('app.current_tenant'::text, true))::uuid))
+```
+
+All required elements present: 5 columns (id, tenant_id, key, label, created_at), PK on id, idx_role_tag_tenant, UNIQUE on (tenant_id, key), FK to tenant ON DELETE CASCADE, CHECK regex byte-equal to plan spec, RLS policy attached with canonical 0009 literal.
+
+**3c. `\d org_unit`**
+
+```
+                                Table "public.org_unit"
+      Column      |           Type           | Collation | Nullable |      Default
+------------------+--------------------------+-----------+----------+-------------------
+ id               | uuid                     |           | not null | gen_random_uuid()
+ tenant_id        | uuid                     |           | not null |
+ parent_id        | uuid                     |           |          |
+ level            | smallint                 |           | not null |
+ name             | text                     | he-x-icu  | not null |
+ created_at       | timestamp with time zone |           | not null | now()
+ updated_at       | timestamp with time zone |           | not null | now()
+ last_color_index | smallint                 |           | not null | '-1'::integer
+Indexes:
+    "org_unit_pkey" PRIMARY KEY, btree (id)
+    "idx_org_unit_tenant" btree (tenant_id)
+    "idx_org_unit_tenant_parent" btree (tenant_id, parent_id)
+    "org_unit_tenant_id_parent_id_name_key" UNIQUE CONSTRAINT, btree (tenant_id, parent_id, name)
+Check constraints:
+    "org_unit_last_color_index_check" CHECK (last_color_index >= '-1'::integer AND last_color_index <= 23)
+Foreign-key constraints:
+    "org_unit_parent_id_fkey" FOREIGN KEY (parent_id) REFERENCES org_unit(id) ON DELETE CASCADE
+    "org_unit_tenant_id_fkey" FOREIGN KEY (tenant_id) REFERENCES tenant(id) ON DELETE CASCADE
+[... referenced-by edges omitted for brevity — invite_code, membership, org_unit self-ref, planning_window, rule, shift_slot all unchanged from 0002 ...]
+Policies:
+    POLICY "tenant_isolation"
+      USING ((tenant_id = (current_setting('app.current_tenant'::text, true))::uuid))
+      WITH CHECK ((tenant_id = (current_setting('app.current_tenant'::text, true))::uuid))
+Triggers:
+    trg_org_unit_updated_at BEFORE UPDATE ON org_unit FOR EACH ROW EXECUTE FUNCTION set_updated_at()
+```
+
+`last_color_index smallint NOT NULL DEFAULT '-1'::integer` present with CHECK `>= -1 AND <= 23` (Postgres expanded the BETWEEN clause into the explicit pair). Existing tenant_isolation policy from 0009 still attached — column add inherited the table-level RLS as planned.
+
+**3d. RLS policy on role_tag**
+
+```
+     polname      | polcmd
+------------------+--------
+ tenant_isolation | *
+(1 row)
+```
+
+`polcmd='*'` confirms the policy applies to ALL command types (SELECT, INSERT, UPDATE, DELETE) — matches the 0009 canonical pattern.
+
+### Step 4: Idempotency re-run
+
+Second invocation of `docker compose run --rm migrate` (PsExec-wrapped):
+
+```
+ Container shifts-postgres Running
+ Container shifts-postgres Waiting
+ Container shifts-postgres Healthy
+ Container shifts-manager-migrate-run-30635e4faecb Creating
+ Container shifts-manager-migrate-run-30635e4faecb Created
+no change
+```
+
+Idempotency confirmed: golang-migrate logs `no change` and exits 0 when schema_migrations is already at the latest version.
+
+### Apply summary
+
+- **schema_migrations advanced:** 10 → 12 cleanly (dirty=false at every checkpoint)
+- **Total apply duration:** 248ms wall-clock (105ms + 143ms inside golang-migrate)
+- **PsExec session:** session 1 (interactive claude) — credential helper succeeded
+- **Re-run:** `no change` (idempotent contract honored)
 
 ## Deviations from Plan
 
@@ -121,12 +248,22 @@ None. Both migrations are complete, syntactically self-contained `.up.sql` files
 
 None. The Phase 2 STRIDE register (plan §<threat_model>) covers all surface introduced — T-02-01 (spoofing via tenant_id forgery), T-02-02 (cross-tenant read), T-02-06 (RBAC confusion via role_tag.key) all dispositioned `mitigate` with mitigations applied in the migrations themselves (RLS policy + tight CHECK regex). No new untracked surface introduced.
 
-## Self-Check: PASSED (authoring phase)
+## Self-Check: PASSED (full plan)
 
+**Files:**
 - FOUND: `db/migrations/0011_role_tag.up.sql`
 - FOUND: `db/migrations/0012_org_unit_last_color_index.up.sql`
 - FOUND: `.planning/phases/02-org-people/02-01-SUMMARY.md`
-- FOUND: commit `167285d` (Task 1)
-- FOUND: commit `d94cdfa` (Task 2)
 
-A second self-check pass will run after the Task 3 checkpoint is approved and the migrations apply cleanly to hpg5 (the continuation agent will append schema_migrations rows + psql output here).
+**Commits:**
+- FOUND: commit `167285d` (Task 1: 0011_role_tag migration)
+- FOUND: commit `d94cdfa` (Task 2: 0012_org_unit_last_color_index migration)
+- FOUND: commit `cff310f` (SUMMARY draft pre-checkpoint)
+
+**Apply state on hpg5:**
+- VERIFIED: `schema_migrations.version=12, dirty=false`
+- VERIFIED: `role_tag` table exists with FK + UNIQUE + CHECK + RLS policy
+- VERIFIED: `org_unit.last_color_index` column exists with default `-1` and CHECK `>= -1 AND <= 23`
+- VERIFIED: idempotent re-run reports `no change`
+
+All success criteria from plan satisfied. Phase 02-org-people Wave 0 complete (both 02-01 schema deltas and 02-02 plugin scaffold are now landed and applied).

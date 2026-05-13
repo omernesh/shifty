@@ -56,7 +56,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. Each soldier gets a calendar color from the 24-color preset palette (round-robin, no adjacent-color collisions within a team); the soldier can override in profile.
   5. Soldier can be a member of multiple teams within the same tenant via `membership` rows; role tags autocomplete from existing tenant tags but allow new ones (lowercase kebab-case).
 **Plans**: 10 plans
-  - [ ] 02-01-PLAN.md — Wave 0 migrations 0011_role_tag + 0012_org_unit_last_color_index (schema + RLS)
+  - [x] 02-01-PLAN.md — Wave 0 migrations 0011_role_tag + 0012_org_unit_last_color_index (schema + RLS)
   - [x] 02-02-PLAN.md — Wave 0 shifty-roster plugin scaffold (palette, canonicalize, role-tag helpers + 7 request stubs + unit tests)
   - [ ] 02-03-PLAN.md — Wave 1 manage_org_units tree-table upgrade (D-01, D-02, D-04 grow-depth)
   - [ ] 02-04-PLAN.md — Wave 1 manage_soldiers admin tenant-wide soldier roster + Add-soldier Modal
@@ -167,7 +167,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7. Phase M 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundations | 5/5 | Complete   | 2026-05-12 |
-| 2. Org & People | 0/TBD | Not started | - |
+| 2. Org & People | 2/10 | In progress | - |
 | 3. Availability & Rules | 0/TBD | Not started | - |
 | 4. Solver & Schedule | 0/TBD | Not started | - |
 | 5. Lifecycle Features | 0/TBD | Not started | - |

@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: milestone
 status: executing
-stopped_at: Phase 2 UI-SPEC approved
-last_updated: "2026-05-13T02:40:44.157Z"
+stopped_at: Phase 2 Plan 01 applied on hpg5
+last_updated: "2026-05-13T03:30:00.000Z"
 last_activity: 2026-05-13
 progress:
   total_phases: 8
   completed_phases: 1
   total_plans: 15
-  completed_plans: 6
-  percent: 40
+  completed_plans: 7
+  percent: 47
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-05-12)
 ## Current Position
 
 Phase: 02 (org-people) — EXECUTING
-Plan: 2 of 10
+Plan: 3 of 10
 Status: Ready to execute
 Last activity: 2026-05-13
 
-Progress: [████░░░░░░] 40%
+Progress: [█████░░░░░] 47%
 
 ## Performance Metrics
 
@@ -57,6 +57,7 @@ Progress: [████░░░░░░] 40%
 | Phase 01-foundations P04 | 180 | 4 tasks | 14 files |
 | Phase 01-foundations P05 | 45 | 5 tasks | 10 files |
 | Phase 02-org-people P02 | 35 | 4 tasks | 18 files |
+| Phase 02-org-people P01 | 7 | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -86,6 +87,10 @@ Recent decisions affecting current work:
 - Phase 7: ECharts Gantt timeline deferred to v1.1 (no native RTL support); ASCII-bar leaderboard + LTR accessible bar chart pair is acceptable
 - [Phase ?]: Plan 02-02: shifty-roster plugin scaffold + 5 helpers + 7 handler stubs + dual-declaration in package.json/lowdefy.yaml; PALETTE byte-equal to UI-SPEC §Color B locked by deepStrictEqual; 42 unit tests green
 - [Phase ?]: Plan 02-02: Assumption A1 (sha256(rawToken+NEXTAUTH_SECRET) for verification_tokens) documented in dispatch/resend.js — plan 02-08 owns 2h spike to verify against live next-auth source before bulk-invite ships
+- Plan 02-01: role_tag and org_unit.last_color_index migrations applied on hpg5; schema_migrations advanced 10→12 via PsExec-wrapped golang-migrate (PsExec required because docker compose run pulls/builds may invoke credential helper); idempotent re-run confirmed "no change"
+- Plan 02-01: role_tag.key CHECK regex `^[a-z][a-z0-9-]*$` is byte-equal to canonicalizeRoleTag output in plugin (single-contract enforcement — plan 02-08 CSV preview validation will use the same regex for the validRoleTagKeys pre-flight)
+- Plan 02-01: org_unit.last_color_index defaults to -1 sentinel (not 0) so pickNextColor(lastIndex<0) returns palette[0] for the first soldier in a fresh team; CHECK `BETWEEN -1 AND 23` enforces palette range at the DB layer
+- Plan 02-01: Inline RLS pattern (ENABLE ROW LEVEL SECURITY + CREATE POLICY tenant_isolation in the same .up.sql as CREATE TABLE) is the canonical shape for post-0009 tenant-scoped tables — 0009 is sealed at version=10 per Phase 1 P01 sequencing rule
 
 ### Pending Todos
 
@@ -107,6 +112,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-05-13T02:40:26.065Z
-Stopped at: Phase 2 UI-SPEC approved
+Last session: 2026-05-13T03:30:00.000Z
+Stopped at: Completed 02-01-PLAN.md (schema deltas applied on hpg5)
 Resume file: None
