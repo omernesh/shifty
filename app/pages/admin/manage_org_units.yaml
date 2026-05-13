@@ -3,21 +3,63 @@ type: PageHeaderMenu
 auth:
   roles:
     - unit_admin
+    - team_manager
 properties:
   title: 'ניהול יחידות ארגוניות | shifty'
 requests:
   - id: list_units
     type: KnexRaw
     connectionId: shifts_db
+    # Recursive CTE emits a `path TEXT[]` so AgGrid `treeData: true` can rebuild the
+    # tree via `getDataPath: data => data.path` (Task 2). The `counts` CTE adds
+    # `child_count` used by the leaf-only delete affordance gate (col_delete cellRenderer).
+    # Both arms of the UNION ALL filter by tenant_id (Layer 2 tenant isolation).
     payload:
       tenant_id:
         _user: tenant_id
     properties:
       query: |
-        SELECT id, parent_id, level, name
-        FROM org_unit
-        WHERE tenant_id = :tenant_id
-        ORDER BY level, name
+        WITH RECURSIVE tree AS (
+          SELECT id, parent_id, level, name,
+                 ARRAY[name]::text[] AS path
+          FROM org_unit
+          WHERE tenant_id = :tenant_id AND parent_id IS NULL
+          UNION ALL
+          SELECT ou.id, ou.parent_id, ou.level, ou.name,
+                 tree.path || ou.name
+          FROM org_unit ou
+          JOIN tree ON ou.parent_id = tree.id
+          WHERE ou.tenant_id = :tenant_id
+        ),
+        counts AS (
+          SELECT parent_id, COUNT(*)::int AS child_count
+          FROM org_unit
+          WHERE tenant_id = :tenant_id
+            AND parent_id IS NOT NULL
+          GROUP BY parent_id
+        )
+        SELECT t.id, t.parent_id, t.level, t.name, t.path,
+               COALESCE(c.child_count, 0) AS child_count
+        FROM tree t
+        LEFT JOIN counts c ON c.parent_id = t.id
+        ORDER BY t.path
+      parameters:
+        tenant_id: { _payload: tenant_id }
+
+  - id: get_tenant_depth
+    type: KnexRaw
+    connectionId: shifts_db
+    # Reads the tenant's current org_depth ceiling so the UI can detect when an
+    # Add-child action at level == org_depth requires the D-04 grow-depth modal.
+    # tenant_id from _user:tenant_id (server-side session) — cannot be spoofed.
+    payload:
+      tenant_id:
+        _user: tenant_id
+    properties:
+      query: |
+        SELECT org_depth
+        FROM tenant
+        WHERE id = :tenant_id
       parameters:
         tenant_id: { _payload: tenant_id }
 
@@ -80,6 +122,72 @@ requests:
       parameters:
         tenant_id: { _payload: tenant_id }
         id: { _payload: id }
+
+  - id: grow_org_depth_and_add_child
+    type: KnexRaw
+    connectionId: shifts_db
+    # D-04 transactional grow-depth + insert-child in one statement.
+    #
+    # B4 (revision iter 1) — Layer-4 admin gate at the SQL layer.
+    # UI hiding of "Add child" from team_manager (D-02) is Layer 3 — easily forged
+    # by a direct POST to /api/request/manage_org_units/grow_org_depth_and_add_child.
+    # The leading `guard` CTE produces one row iff :is_admin is true; downstream
+    # CTEs gate on `EXISTS (SELECT 1 FROM guard)` so a non-admin POST short-circuits
+    # to zero rows and tenant.org_depth is UNCHANGED.
+    #
+    # is_admin is sourced from _user:roles (session, server-side) via _array.includes
+    # — NEVER from _payload directly. The session callback (shifty-auth) populates
+    # _user.roles from membership.role joins; clients cannot spoof it.
+    #
+    # Acceptance test (Plan 10): POST with session.is_admin=false returns zero rows
+    # AND psql SELECT org_depth FROM tenant WHERE id=$1 returns the pre-call value.
+    #
+    # Depth ceiling: the migration-0002 CHECK constraint
+    #   tenant.org_depth SMALLINT NOT NULL CHECK (org_depth BETWEEN 1 AND 3)
+    # is a DB invariant that hard-caps any UPDATE here at 3 — see also the
+    # `:new_depth <= 3` guard in the depth_update CTE.
+    payload:
+      tenant_id: { _user: tenant_id }
+      parent_id: { _state: add_child_target_id }
+      new_name: { _state: add_child_name_input }
+      new_depth: { _state: confirmed_new_depth }
+      is_admin:
+        _array.includes:
+          on: { _user: roles }
+          value: unit_admin
+    properties:
+      query: |
+        WITH guard AS (
+          SELECT 1 WHERE :is_admin
+        ),
+        depth_update AS (
+          UPDATE tenant SET org_depth = :new_depth
+          WHERE id = :tenant_id
+            AND :new_depth > org_depth
+            AND :new_depth <= 3
+            AND EXISTS (SELECT 1 FROM guard)
+          RETURNING id
+        ),
+        new_unit AS (
+          INSERT INTO org_unit (tenant_id, parent_id, level, name)
+          SELECT :tenant_id, :parent_id,
+                 (SELECT level + 1 FROM org_unit WHERE id = :parent_id AND tenant_id = :tenant_id),
+                 :new_name
+          WHERE EXISTS (SELECT 1 FROM guard)
+            AND (
+              EXISTS (SELECT 1 FROM depth_update)
+              OR (SELECT level + 1 FROM org_unit WHERE id = :parent_id AND tenant_id = :tenant_id)
+                 <= (SELECT org_depth FROM tenant WHERE id = :tenant_id)
+            )
+          RETURNING id, level
+        )
+        SELECT id, level FROM new_unit
+      parameters:
+        tenant_id: { _payload: tenant_id }
+        parent_id: { _payload: parent_id }
+        new_name: { _payload: new_name }
+        new_depth: { _payload: new_depth }
+        is_admin: { _payload: is_admin }
 
 blocks:
   - id: title
