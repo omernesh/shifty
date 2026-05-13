@@ -23,7 +23,13 @@
 // to our pre-computed hash below. Magic-link URL carries the RAW token (next-auth's
 // core/lib/email/signin.js builds `${url}/callback/${provider.id}?token=${token}`);
 // callback verifies by re-hashing and matching against verification_tokens.token.
-// Plan 02-08 Task 1 is now a Wave-3 re-confirmation step, not the first verification.
+//
+// RECONFIRMED — Plan 02-08 Task 1 (Wave-3 re-confirmation, 2026-05-13):
+// This file is byte-identical to the Plan 02-06 Task 0 baseline (commit 78b6f1b);
+// `git log` shows zero touching commits between that spike and the start of Plan 02-08.
+// Wave-2 cumulative single-soldier invite traffic via InviteLater has not surfaced
+// any drift. Bulk fanout in CommitRosterImport (Task 2 below) is safe to ship —
+// it is N invocations of a primitive whose hash algorithm is now twice-verified.
 // ====================================================================================
 
 import { createRequire } from 'module';
