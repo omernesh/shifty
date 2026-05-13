@@ -404,9 +404,9 @@ blocks:
                     params:
                       requestId: list_addable_soldiers
                   - id: remove_toast
-                    type: Message
+                    type: DisplayMessage
                     params:
-                      type: success
+                      status: success
                       content: החייל הוסר מהצוות
                       duration: 3
                 else:
@@ -493,9 +493,9 @@ blocks:
           type: Reset
           params: add_member_form
         - id: add_success_toast
-          type: Message
+          type: DisplayMessage
           params:
-            type: success
+            status: success
             content: החייל נוסף לצוות
             duration: 3
       onCancel:

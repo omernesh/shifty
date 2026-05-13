@@ -225,9 +225,9 @@ blocks:
               params:
                 requestId: invite_later_request
             - id: invite_toast
-              type: Message
+              type: DisplayMessage
               params:
-                type: success
+                status: success
                 content:
                   _nunjucks:
                     template: 'קישור הזמנה נשלח ל-{{ email }}'
@@ -347,9 +347,9 @@ blocks:
                   params:
                     requestId: update_soldier_request
                 - id: save_toast
-                  type: Message
+                  type: DisplayMessage
                   params:
-                    type: success
+                    status: success
                     content: השינויים נשמרו
                     duration: 3
                 - id: back_to_list
@@ -399,9 +399,9 @@ blocks:
                   params:
                     requestId: archive_soldier_request
                 - id: archive_toast
-                  type: Message
+                  type: DisplayMessage
                   params:
-                    type: success
+                    status: success
                     content: החייל אורכב
                     duration: 3
                 - id: archive_back

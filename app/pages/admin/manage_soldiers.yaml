@@ -332,9 +332,9 @@ blocks:
           type: Reset
           params: new_soldier_form
         - id: success_toast
-          type: Message
+          type: DisplayMessage
           params:
-            type: success
+            status: success
             content:
               _nunjucks:
                 template: 'החייל "{{ name }}" נוצר'

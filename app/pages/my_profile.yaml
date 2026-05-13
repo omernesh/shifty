@@ -135,9 +135,9 @@ blocks:
               params:
                 requestId: load_my_soldier
             - id: color_saved_toast
-              type: Message
+              type: DisplayMessage
               params:
-                type: success
+                status: success
                 content: הצבע עודכן
                 duration: 3
 
