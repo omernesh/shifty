@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: milestone
 status: executing
-stopped_at: Phase 2 Plan 01 applied on hpg5
-last_updated: "2026-05-13T03:30:00.000Z"
+stopped_at: Completed 02-01-PLAN.md (schema deltas applied on hpg5)
+last_updated: "2026-05-13T19:10:13.502Z"
 last_activity: 2026-05-13
 progress:
   total_phases: 8
   completed_phases: 1
   total_plans: 15
-  completed_plans: 7
-  percent: 47
+  completed_plans: 8
+  percent: 53
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-05-12)
 ## Current Position
 
 Phase: 02 (org-people) — EXECUTING
-Plan: 3 of 10
+Plan: 4 of 10
 Status: Ready to execute
 Last activity: 2026-05-13
 
-Progress: [█████░░░░░] 47%
+Progress: [█████░░░░░] 53%
 
 ## Performance Metrics
 
@@ -58,6 +58,7 @@ Progress: [█████░░░░░] 47%
 | Phase 01-foundations P05 | 45 | 5 tasks | 10 files |
 | Phase 02-org-people P02 | 35 | 4 tasks | 18 files |
 | Phase 02-org-people P01 | 7 | 3 tasks | 2 files |
+| Phase 02-org-people P03 | 18 | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -91,6 +92,10 @@ Recent decisions affecting current work:
 - Plan 02-01: role_tag.key CHECK regex `^[a-z][a-z0-9-]*$` is byte-equal to canonicalizeRoleTag output in plugin (single-contract enforcement — plan 02-08 CSV preview validation will use the same regex for the validRoleTagKeys pre-flight)
 - Plan 02-01: org_unit.last_color_index defaults to -1 sentinel (not 0) so pickNextColor(lastIndex<0) returns palette[0] for the first soldier in a fresh team; CHECK `BETWEEN -1 AND 23` enforces palette range at the DB layer
 - Plan 02-01: Inline RLS pattern (ENABLE ROW LEVEL SECURITY + CREATE POLICY tenant_isolation in the same .up.sql as CREATE TABLE) is the canonical shape for post-0009 tenant-scoped tables — 0009 is sealed at version=10 per Phase 1 P01 sequencing rule
+- [Phase ?]: Plan 02-03: is_admin sourced via _array.includes on _user.roles (shifty-auth session exposes roles[] not is_admin)
+- [Phase ?]: Plan 02-03: Layer-4 admin-gate CTE shape (WITH guard AS SELECT 1 WHERE :is_admin) + EXISTS(SELECT 1 FROM guard) on downstream CTEs — reusable for any role-restricted multi-table mutation
+- [Phase ?]: Plan 02-03: AgGrid Pattern A (RESEARCH P9 canonical answer) — three separate single-affordance action columns dispatched on _event.column.field; zero data-action HTML attribute bridge in codebase
+- [Phase ?]: Plan 02-03: Recursive CTE tree shape with path TEXT[] (anchor parent_id IS NULL + UNION ALL appending tree.path || ou.name) — both arms filter by tenant_id; reusable for team_detail subtree in Plan 06+
 
 ### Pending Todos
 
@@ -112,6 +117,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-05-13T03:30:00.000Z
+Last session: 2026-05-13T19:10:00.876Z
 Stopped at: Completed 02-01-PLAN.md (schema deltas applied on hpg5)
 Resume file: None
