@@ -6,9 +6,12 @@
 // this module without requiring 'knex' to be installed in the test environment.
 // In the Lowdefy Docker image, knex is available via @lowdefy/connection-knex.
 //
-// SCAFFOLD-ONLY: the actual UPDATE soldier SET status='archived' (with the
-// historical-membership-preservation rule per D-08 + schedule_audit emission)
-// lands in plan 02-06.
+// Implementation (Plan 02-06 Task 1, replaces plan 02-02 stub):
+// - UPDATE soldier SET status = 'archived' (NEVER DELETE — D-08, ROST-05, Pitfall P11)
+// - Layer-4 scope SQL: admin can archive any soldier in the tenant; team_manager
+//   can archive only soldiers in their _user.team_ids
+// - Preserves all membership rows, app_user row, audit history (D-08)
+// - schedule_audit row (to_state='soldier_archived')
 
 async function ArchiveSoldier({ request, connection }) {
   const { soldier_id } = request.properties || {};
@@ -22,11 +25,8 @@ async function ArchiveSoldier({ request, connection }) {
   if (!actor_user_id) {
     throw new Error('ArchiveSoldier: actor_user_id missing from session — unauthenticated request');
   }
-  // eslint-disable-next-line no-unused-vars
   const caller_team_ids = request.user?.team_ids || [];
-  // eslint-disable-next-line no-unused-vars
   const roles = request.user?.roles || [];
-  // eslint-disable-next-line no-unused-vars
   const is_admin = roles.includes('unit_admin');
 
   if (!soldier_id) {
@@ -36,12 +36,48 @@ async function ArchiveSoldier({ request, connection }) {
   const { default: knex } = await import('knex');
   const db = knex(connection);
   try {
-    // Placeholder: full SQL implementation lands in plan 02-06.
-    return {
-      success: true,
-      todo: 'plan-02-06',
-      _stub_inputs: { soldier_id },
-    };
+    const result = await db.transaction(async (trx) => {
+      // Soft-delete UPDATE with Layer-4 scope check.
+      // D-08 + Pitfall P11: this MUST be an UPDATE (never DELETE) so memberships,
+      // schedule_audit history, and app_user remain intact. The literal SQL fragment
+      // `status = 'archived'` is one contiguous token (W4 fix from PLAN revision).
+      const updateRows = await trx.raw(
+        `UPDATE soldier
+            SET status = 'archived',
+                updated_at = now()
+          WHERE id = :soldier_id
+            AND tenant_id = :tenant_id
+            AND (
+              :is_admin
+              OR EXISTS (
+                SELECT 1 FROM membership m
+                 WHERE m.soldier_id = :soldier_id
+                   AND m.org_unit_id = ANY(:caller_team_ids)
+              )
+            )
+        RETURNING id`,
+        { soldier_id, tenant_id, is_admin, caller_team_ids }
+      );
+      const rows = updateRows?.rows ?? updateRows;
+      if (!rows || rows.length === 0) {
+        throw new Error('ArchiveSoldier: soldier not found or access denied');
+      }
+
+      // Audit row.
+      await trx('schedule_audit').insert({
+        tenant_id,
+        planning_window_id: null,
+        from_state: 'soldier_pre_archive',
+        to_state: 'soldier_archived',
+        actor_user_id,
+        actor_kind: 'user',
+        payload: JSON.stringify({ soldier_id }),
+      });
+
+      return { soldier_id };
+    });
+
+    return { success: true, soldier_id: result.soldier_id };
   } finally {
     await db.destroy();
   }
