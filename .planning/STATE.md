@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02-01-PLAN.md (schema deltas applied on hpg5)
-last_updated: "2026-05-13T19:32:55.776Z"
+stopped_at: Completed 02-07-PLAN.md (CreateMembership body + team_detail + my_profile)
+last_updated: "2026-05-13T20:30:00.000Z"
 last_activity: 2026-05-13
 progress:
   total_phases: 8
   completed_phases: 1
   total_plans: 15
-  completed_plans: 11
-  percent: 73
+  completed_plans: 12
+  percent: 80
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-05-12)
 ## Current Position
 
 Phase: 02 (org-people) — EXECUTING
-Plan: 7 of 10
+Plan: 8 of 10
 Status: Ready to execute
 Last activity: 2026-05-13
 
-Progress: [███████░░░] 73%
+Progress: [████████░░] 80%
 
 ## Performance Metrics
 
@@ -62,6 +62,7 @@ Progress: [███████░░░] 73%
 | Phase 02-org-people P04 | 8 | 1 tasks | 1 files |
 | Phase 02-org-people PP05 | 7 | - tasks | - files |
 | Phase 02-org-people P06 | 28 | - tasks | - files |
+| Phase 02-org-people P07 | 30 | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -109,6 +110,13 @@ Recent decisions affecting current work:
 - [Phase ?]: Plan 02-06: Layer-4 UpdateSoldier/ArchiveSoldier scope SQL is a single parameterized UPDATE with WHERE (...AND (:is_admin OR EXISTS membership-check)); RETURNING zero rows is the access-denied signal
 - [Phase ?]: Plan 02-06: notes column defended at three layers (load_soldier SELECT CASE WHEN, UpdateSoldier CASE WHEN, soldier_detail TextArea visible:) — Pitfall P10 belt-and-braces
 - [Phase ?]: Plan 02-06: color_swatches.yaml generated deterministically from PALETTE via tools/gen-color-swatches.mjs; block writes both selected_color_index and selected_color_hex so UpdateSoldier.color binds directly to the hex slot
+- [Phase ?]: Plan 02-07: CreateMembership uses SELECT-driven safe INSERT (FROM soldier s, org_unit ou) with BOTH s.tenant_id = :tenant_id AND ou.tenant_id = :tenant_id cross-checks — bare INSERT…VALUES is forbidden for membership in Phase 2 (RESEARCH §Membership)
+- [Phase ?]: Plan 02-07: ON CONFLICT (soldier_id, org_unit_id) DO NOTHING + follow-up SELECT EXISTS(...) AS already_member distinguishes idempotent retry (no audit row) from soldier/team-not-found (real error) — the idempotency contract for membership-add
+- [Phase ?]: Plan 02-07: No round-robin color bump on membership-add — D-15 line 3 mandates "soldier keeps current color on team-add"; only CreateSoldier mutates org_unit.last_color_index in Phase 2
+- [Phase ?]: Plan 02-07: remove_membership uses hard DELETE (no archive concept on membership table); historical correctness preserved by assignment-table snapshot pattern from Phase 3+, NOT by retaining membership rows (D-08)
+- [Phase ?]: Plan 02-07: W7 fix locks caller_team_ids binding in remove_membership.payload to LITERAL `{ _user: team_ids }` — verify regex caller_team_ids\s*:\s*\{\s*_user:\s*team_ids\s*\} guards every plan-checker run against future rebind to forgeable _state/_input/_payload sources
+- [Phase ?]: Plan 02-07: my_profile.yaml lives at app/pages/my_profile.yaml (not /admin/) — _ref to color_swatches is `../blocks/color_swatches.yaml` (one level up), while soldier_detail at app/pages/admin/ uses `../../blocks/color_swatches.yaml` (two levels up); same shared block, different relative paths
+- [Phase ?]: Plan 02-07: my_profile.update_my_color WHERE filters BOTH user_id AND tenant_id from _user (session) — T-02-06 mitigation; a forged request body cannot update any soldier but the caller's own
 
 ### Pending Todos
 
@@ -130,6 +138,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-05-13T19:32:22.592Z
-Stopped at: Completed 02-01-PLAN.md (schema deltas applied on hpg5)
+Last session: 2026-05-13T20:30:00.000Z
+Stopped at: Completed 02-07-PLAN.md (CreateMembership body + team_detail + my_profile)
 Resume file: None

@@ -31,7 +31,7 @@ Requirements for initial release. Each maps to roadmap phases via Traceability (
 - [x] **ROST-01**: Soldier entity has `id` (UUID PK), `tenant_id`, `display_name`, `color` (hex), `seniority` (0-10), `role_tags` (TEXT[]), `phone_e164` (nullable), `status` (`active`/`archived`), `notes` (manager-visible only)
 - [x] **ROST-02**: All joins use UUID; display names are mutable and NEVER used as join keys (smart-quote bug defense)
 - [x] **ROST-03**: Admin can CRUD soldiers at unit level; team manager can edit seniority/role_tags/notes within their team scope
-- [ ] **ROST-04**: Soldier can be a member of multiple teams within the same tenant via `membership` rows
+- [x] **ROST-04**: Soldier can be a member of multiple teams within the same tenant via `membership` rows
 - [x] **ROST-05**: Archived soldiers preserve historical assignments; absent from pickers and rosters
 - [x] **ROST-06**: Color assigned from 24-color preset palette (round-robin, avoiding adjacent-color collisions within team); soldier can override in profile
 - [x] **ROST-07**: Role tags are tenant-defined, lowercase kebab-case (`medic`, `driver`); UI autocompletes from existing tags but allows new ones
@@ -296,7 +296,7 @@ Each v1 requirement maps to exactly one phase. Phase assignment follows the rule
 | ROST-01 | Phase 2 (Org & People) | Complete |
 | ROST-02 | Phase 2 (Org & People) | Complete |
 | ROST-03 | Phase 2 (Org & People) | Complete |
-| ROST-04 | Phase 2 (Org & People) | Pending |
+| ROST-04 | Phase 2 (Org & People) | Complete |
 | ROST-05 | Phase 2 (Org & People) | Complete |
 | ROST-06 | Phase 2 (Org & People) | Complete |
 | ROST-07 | Phase 2 (Org & People) | Complete |
