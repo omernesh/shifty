@@ -314,21 +314,23 @@ blocks:
       - _ref: blocks/color_swatches.yaml
 
   # ───────────────────── Footer: Save / Cancel / Archive ────────────────
+  # D-1/D-2/D-4 (round 2): Box with content* layout props → Flex with properties.
   - id: footer_actions
-    type: Box
+    type: Flex
     properties:
-      contentGutter: [16, 16]
-      contentJustify: space-between
-      contentAlign: middle
+      gap: middle
+      justify: space-between
+      align: center
       style:
         marginTop: 24
         paddingTop: 16
         borderTop: '1px solid #E5E5E5'
     blocks:
+      # D-1 (round 2): contentGutter renamed to gap for Lowdefy 5.3.
       - id: footer_left
-        type: Box
+        type: Flex
         properties:
-          contentGutter: [8, 8]
+          gap: small
         blocks:
           - id: save_btn
             type: Button

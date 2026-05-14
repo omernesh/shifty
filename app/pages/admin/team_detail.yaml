@@ -256,12 +256,13 @@ blocks:
         marginBottom: 24
     blocks:
       # Toolbar — primary "+ Add member" button.
+      # D-1/D-2/D-4 (round 2): Box with content* layout props → Flex with properties.
       - id: members_toolbar
-        type: Box
+        type: Flex
         properties:
-          contentGutter: [8, 8]
-          contentJustify: flex-start
-          contentAlign: middle
+          gap: small
+          justify: flex-start
+          align: center
           style:
             marginBottom: 12
         blocks:
