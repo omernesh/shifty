@@ -13,6 +13,7 @@
     "@lowdefy/connection-knex": "5.3.0",
     "@lowdefy/blocks-aggrid": "5.3.0",
     "@lowdefy/blocks-antd": "5.3.0",
+    "@lowdefy/blocks-loaders": "5.3.0",
     "@lowdefy/plugin-next-auth": "5.3.0",
     "resend": "6.12.3",
     "shifty-auth": "file:./plugins/shifty-auth",

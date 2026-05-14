@@ -455,10 +455,15 @@ blocks:
         type: Paragraph
         properties:
           content: 'הייבוא בעיצומו... זמן משוער מתחת ל-35 שניות עבור 50 שורות.'
-      - id: commit_spinner
-        type: Spin
+      # I-2 (round 2): Spin block replaced with Spinner from @lowdefy/blocks-loaders.
+      # Spin.tip is not a Spinner property — split into Paragraph label + Spinner.
+      - id: commit_spinner_label
+        type: Paragraph
         properties:
-          tip: 'מבצע ייבוא ושולח הזמנות'
+          content: 'מבצע ייבוא ושולח הזמנות'
+      - id: commit_spinner
+        type: Spinner
+        properties:
           size: large
 
   # ───── Commit confirmation modal (Lowdefy 5.3 canonical ConfirmModal) ─────
