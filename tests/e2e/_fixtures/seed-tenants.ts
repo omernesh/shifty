@@ -12,12 +12,16 @@ const PG_URL = process.env.PG_TEST_URL ?? 'postgres://shifts:changeme@localhost:
 export interface TenantFixture {
   tenantId: string;
   orgUnitId: string;
+  teamId: string;         // leaf org_unit for roster/soldier tests (Phase 2)
   adminEmail: string;
   adminUserId: string;    // app_user.id
   adminAuthUserId: string; // users.id (Auth.js)
   adminSoldierId: string;
   inviteCode: string;     // 8-char Crockford base32
   inviteCodeId: string;
+  roleTagDriving: string; // role_tag.key = 'driving'
+  roleTagComms: string;   // role_tag.key = 'comms'
+  roleTagMedic: string;   // role_tag.key = 'medic'
 }
 
 /** Generates a random 8-character Crockford base32 string (AUTH-04 format). */
@@ -32,6 +36,7 @@ function crockford8(): string {
 async function seedOne(client: Client, label: 'A' | 'B'): Promise<TenantFixture> {
   const tenantId = randomUUID();
   const orgUnitId = randomUUID();
+  const teamId = randomUUID();          // leaf team for Phase 2 roster tests
   const adminEmail = `admin-${label.toLowerCase()}@example.test`;
   const adminAuthUserId = randomUUID(); // users.id (Auth.js)
   const adminUserId = randomUUID();     // app_user.id
@@ -78,7 +83,27 @@ async function seedOne(client: Client, label: 'A' | 'B'): Promise<TenantFixture>
     [inviteCodeId, tenantId, inviteCode, orgUnitId, adminUserId]
   );
 
-  return { tenantId, orgUnitId, adminEmail, adminUserId, adminAuthUserId, adminSoldierId, inviteCode, inviteCodeId };
+  // Phase 2: Insert a leaf org_unit (team) for roster/soldier tests.
+  // The leaf team is a child of the root org_unit and is used as team_id in CSV fixtures.
+  await client.query(
+    `INSERT INTO org_unit (id, tenant_id, parent_id, level, name) VALUES ($1, $2, $3, 2, $4) ON CONFLICT (id) DO NOTHING`,
+    [teamId, tenantId, orgUnitId, `Test Team ${label}`]
+  );
+
+  // Phase 2: Insert 3 role_tag rows per tenant (driving, comms, medic).
+  // These tags are referenced by CSV fixtures and soldier-crud tests.
+  for (const key of ['driving', 'comms', 'medic']) {
+    await client.query(
+      `INSERT INTO role_tag (id, tenant_id, key, label) VALUES ($1, $2, $3, $4) ON CONFLICT (tenant_id, key) DO NOTHING`,
+      [randomUUID(), tenantId, key, key]
+    );
+  }
+
+  return {
+    tenantId, orgUnitId, teamId, adminEmail, adminUserId, adminAuthUserId,
+    adminSoldierId, inviteCode, inviteCodeId,
+    roleTagDriving: 'driving', roleTagComms: 'comms', roleTagMedic: 'medic',
+  };
 }
 
 export async function seedTwoTenants(): Promise<{ tenantA: TenantFixture; tenantB: TenantFixture }> {
@@ -143,7 +168,7 @@ export function getTenantBIds(tenantB: TenantFixture): {
     soldiers: [tenantB.adminSoldierId],
     windows: [],
     assignments: [],
-    orgUnits: [tenantB.orgUnitId],
+    orgUnits: [tenantB.orgUnitId, tenantB.teamId],
     invites: [tenantB.inviteCodeId],
     tenantId: tenantB.tenantId,
   };

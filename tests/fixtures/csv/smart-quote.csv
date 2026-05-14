@@ -1,0 +1,4 @@
+# smart-quote.csv — D-12 + ROST-11 canary; display_name has U+2019 (right single quotation mark)
+# After canonicalization the persisted display_name should equal נועם גלאל (no apostrophe).
+display_name,email,role_tags,seniority,team_id
+נועם ג’לאל,noam@example.test,comms,7,{TENANT_A_TEAM_UUID}

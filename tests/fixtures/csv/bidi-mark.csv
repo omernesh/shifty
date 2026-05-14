@@ -1,0 +1,7 @@
+# bidi-mark.csv — D-12; rows contain U+200E (LRM), U+200F (RLM), U+202E (RLO)
+# All stripped at write time per canonicalizeText.
+# Byte prefixes: E2 80 8E (U+200E), E2 80 8F (U+200F), E2 80 AE (U+202E)
+display_name,email,role_tags,seniority,team_id
+‎יוסי,a@example.test,driving,5,{TENANT_A_TEAM_UUID}
+‏דנה,b@example.test,driving,5,{TENANT_A_TEAM_UUID}
+‮אבי,c@example.test,driving,5,{TENANT_A_TEAM_UUID}

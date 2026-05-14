@@ -5,6 +5,7 @@
   "description": "Repo-root dev tooling (Playwright, pg). Application code lives in app/.",
   "scripts": {
     "test:e2e": "playwright test",
+    "test:unit": "node --test --experimental-strip-types app/plugins/shifty-roster/tests/*.test.mjs app/plugins/shifty-audit-writer/tests/*.test.mjs tests/unit/*.spec.ts",
     "test:check-queries": "node tools/check-queries.mjs",
     "test:invite-code": "node --test tools/test/invite-code.test.mjs"
   },
