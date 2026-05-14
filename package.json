@@ -2,6 +2,7 @@
   "name": "shifts-manager-dev",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "description": "Repo-root dev tooling (Playwright, pg). Application code lives in app/.",
   "scripts": {
     "test:e2e": "playwright test",
