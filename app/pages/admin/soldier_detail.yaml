@@ -249,11 +249,14 @@ blocks:
           max: 10
           defaultValue: { _request: load_soldier.0.seniority }
       - id: soldier_form.role_tags
-        type: TagSelector
+        type: MultipleSelector
         properties:
           label: תגיות תפקיד
+          placeholder: בחר תגיות מהקטלוג
           options: { _request: list_role_tags }
           defaultValue: { _request: load_soldier.0.role_tags }
+          renderTags: true
+          allowClear: true
       - id: soldier_form.notes
         type: TextArea
         # Visible only to managers/admins (Pitfall P10 belt-and-braces — the

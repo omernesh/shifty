@@ -38,7 +38,7 @@ requests:
       parameters:
         tenant_id: { _payload: tenant_id }
 
-  # ── Feed TagSelector autocomplete in the Add-soldier Modal ─────────────────
+  # ── Feed MultipleSelector options in the Add-soldier Modal ──────────────────
   # D-13: per-tenant role-tag catalog from plan 01's migration 0011_role_tag.
   - id: list_role_tags
     type: KnexRaw
@@ -291,7 +291,7 @@ blocks:
 
   # ── Add-soldier Modal ─────────────────────────────────────────────────────
   # Six fields per CONTEXT D-06 + D-07: display_name (req), email (opt),
-  # seniority (NumberInput 0-10, default 0), role_tags (TagSelector backed by
+  # seniority (NumberInput 0-10, default 0), role_tags (MultipleSelector backed by
   # list_role_tags), phone_e164 (opt), team_id (Selector backed by leaf teams).
   # OnOk action chain: Validate → CreateSoldier → refresh list → close + reset
   # + toast. CreateSoldier handles canonicalization at write time (D-12).
@@ -373,11 +373,14 @@ blocks:
               defaultValue: 0
               size: large
           - id: new_soldier_form.role_tags
-            type: TagSelector
+            type: MultipleSelector
             properties:
               # i18n: soldiers.form.role_tags
               label: תגיות תפקיד
+              placeholder: בחר תגיות מהקטלוג
               options: { _request: list_role_tags }
+              renderTags: true
+              allowClear: true
           - id: new_soldier_form.phone_e164
             type: TextInput
             properties:
