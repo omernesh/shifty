@@ -40,23 +40,27 @@ blocks:
     properties:
       title: הירשם
     events:
+      # I-3 (round 2): onError: is not a valid action key in Lowdefy 5.3.
+      # Restructured to events.onClick try:/catch: form.
+      # signin_after moved INSIDE try: so it stops on redeem failure (correct).
       onClick:
-        - id: do_redeem
-          type: Request
-          params:
-            requestId: redeem_invite
-          onError:
-            - id: set_error
-              type: SetState
-              params:
-                error_message: 'קוד הזמנה לא תקף או פג תוקף'
-        - id: signin_after
-          type: Login
-          params:
-            providerId: email
-            email:
-              _state: email_input
-            callbackUrl: /my_dashboard
+        try:
+          - id: do_redeem
+            type: Request
+            params:
+              requestId: redeem_invite
+          - id: signin_after
+            type: Login
+            params:
+              providerId: email
+              email:
+                _state: email_input
+              callbackUrl: /my_dashboard
+        catch:
+          - id: set_error
+            type: SetState
+            params:
+              error_message: 'קוד הזמנה לא תקף או פג תוקף'
 requests:
   - id: redeem_invite
     type: KnexRaw
