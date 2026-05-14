@@ -1,198 +1,194 @@
 ---
 phase: 02-org-people
 plan: 09
-subsystem: lowdefy-wiring + legacy-schema-drop + deploy-bootstrap
-tags: [lowdefy, migration, schema, deploy, hpg5, plan-09]
-status: blocked-at-task-3
+subsystem: lowdefy-wiring + legacy-schema-drop + deploy-bootstrap + schema-validator-corrections
+tags: [lowdefy, migration, schema, deploy, hpg5, plan-09, schema-validator, aggrid, auth]
+status: corrections-applied-awaiting-deploy-retry
 dependency_graph:
   requires: [02-04, 02-06, 02-07, 02-08]
   provides:
     - app/lowdefy.yaml wired for all 7 Phase-2 pages
     - db/migrations/0008_legacy_drop.up.sql ready to apply
     - hpg5 deploy mirror as a git working tree tracking origin/main (Phase 2+ canonical deploy mechanism)
-    - Lowdefy 5.3 action-name corrections (Message → DisplayMessage, Confirm → ConfirmModal pattern, If-action → per-action `if:`)
+    - Lowdefy 5.3 action-name corrections (Message → DisplayMessage, Confirm → ConfirmModal pattern)
     - 5 Confirm sites restructured to Lowdefy 5.3 ConfirmModal pattern
-    - team_detail.yaml If-action restructured to per-action `if:` gates
+    - Page-level auth: blocks removed from all 16 page YAMLs (central auth.pages.roles is the gate)
+    - Action if: → skip: { _not: ... } conversion on all 11+ gate sites (manage_org_units + team_detail)
+    - AgGrid event fix: onCellClicked → onCellClick + data.X → row.X payload paths
+    - TagSelector → MultipleSelector replacement in both soldier forms
+    - Skill reference corrections (07-events-and-actions, 08-auth, 05-blocks-data)
   affects:
-    - .claude/skills/lowdefy/reference/07-events-and-actions.md (corrected)
+    - .claude/skills/lowdefy/reference/07-events-and-actions.md (corrected action shape, skip semantics, column-dispatch pattern)
+    - .claude/skills/lowdefy/reference/08-auth.md (added server-enforcement note + anti-pattern section)
+    - .claude/skills/lowdefy/reference/05-blocks-data.md (corrected AgGrid event name + payload shape)
     - CLAUDE.md (deploy mechanism documented)
-    - 4 Phase-2 pages cleaned up for Lowdefy 5.3 compatibility (DisplayMessage)
-    - 4 Phase-2 pages restructured for ConfirmModal pattern
-    - 1 Phase-2 page restructured to remove If-action
-    - Phase 2 page corpus (9 pages) still BLOCKED on 3 deeper Lowdefy 5.3 schema-validator findings (architectural — see Deferred Items)
+    - All 16 Phase-2 page YAMLs (auth: removed)
+    - app/pages/admin/manage_org_units.yaml (W6 Pattern A fully corrected)
+    - app/pages/admin/team_detail.yaml (event dispatch corrected)
+    - app/pages/admin/manage_soldiers.yaml (MultipleSelector + onRowClick)
+    - app/pages/admin/soldier_detail.yaml (MultipleSelector)
 tech_stack:
   added: []
   patterns:
     - git pull deploy sync (replaces per-file pscp)
     - DisplayMessage with status param (Lowdefy 5.3 toast action)
-    - ConfirmModal block + CallMethod toggleOpen + events.onOk (Lowdefy 5.3 confirmation pattern, NOW ADOPTED across 5 sites)
-    - per-action `if:` field for conditional dispatch (replaces removed `If` action) — but see Rule-4 finding #1 below: 5.3 schema REJECTS `if:` on actions
+    - ConfirmModal block + CallMethod toggleOpen + events.onOk (Lowdefy 5.3 confirmation pattern)
+    - skip: { _not: <X> } for conditional action dispatch (replaces rejected if: field)
+    - auth.pages.roles in lowdefy.yaml as the sole Layer-3 page-gate (no per-page auth: block)
+    - MultipleSelector from @lowdefy/blocks-antd for chip-style multi-tag input
+    - onCellClick + cell.column / row.X payload paths (verified Lowdefy 5.3 AgGrid event shape)
 key_files:
   created:
     - db/migrations/0008_legacy_drop.up.sql
   modified:
     - app/lowdefy.yaml (Task 1)
-    - app/pages/my_profile.yaml (Rule-1 fixes)
-    - app/pages/admin/manage_soldiers.yaml (Rule-1 fix)
-    - app/pages/admin/soldier_detail.yaml (Rule-1 fixes + ConfirmModal restructure)
-    - app/pages/admin/team_detail.yaml (Rule-1 fixes + ConfirmModal restructure + If-action removal)
-    - app/pages/admin/manage_org_units.yaml (ConfirmModal restructure — 2 sites)
-    - app/pages/admin/roster_import.yaml (ConfirmModal restructure)
+    - app/pages/my_profile.yaml (auth: removed)
+    - app/pages/admin/manage_soldiers.yaml (auth: removed + MultipleSelector + onRowClick)
+    - app/pages/admin/soldier_detail.yaml (auth: removed + MultipleSelector)
+    - app/pages/admin/team_detail.yaml (auth: removed + ConfirmModal + onCellClick + skip:)
+    - app/pages/admin/manage_org_units.yaml (auth: removed + ConfirmModal + onCellClick + skip:)
+    - app/pages/admin/roster_import.yaml (auth: removed + ConfirmModal restructure)
+    - app/pages/admin/roster_import_result.yaml (auth: removed)
+    - app/pages/admin/manage_role_tags.yaml (auth: removed)
+    - app/pages/admin/manage_invites.yaml (auth: removed)
+    - app/pages/admin/admin_dashboard.yaml (auth: removed)
+    - app/pages/admin/admin_test_audit.yaml (auth: removed)
+    - app/pages/auth/login.yaml (auth: removed)
+    - app/pages/auth/signup.yaml (auth: removed)
+    - app/pages/auth/signup_with_invite.yaml (auth: removed)
+    - app/pages/dashboards/manager_dashboard.yaml (auth: removed)
+    - app/pages/dashboards/my_dashboard.yaml (auth: removed)
     - CLAUDE.md (deploy docs)
-    - .claude/skills/lowdefy/reference/07-events-and-actions.md (action-name corrections)
+    - .claude/skills/lowdefy/reference/07-events-and-actions.md (action-shape + skip + column-dispatch corrected)
+    - .claude/skills/lowdefy/reference/08-auth.md (roles enforcement + anti-pattern section added)
+    - .claude/skills/lowdefy/reference/05-blocks-data.md (AgGrid event name + payload corrected)
 decisions:
-  - Adopted git pull as Phase 2+ deploy sync on hpg5 (per user approval — Option B over per-file pscp)
-  - Identified Lowdefy 5.3 API drift: Message → DisplayMessage rename, Confirm-action removal, and If-action removal are all real (verified empirically against the running 5.3.0 builder)
-  - Skill file 07-events-and-actions.md updated to current 5.3 reality with explicit verification timestamps
-  - 5 Confirm sites restructured to canonical 5.3 ConfirmModal-block + CallMethod-action pattern (Option A per user, 2026-05-14)
+  - Adopted git pull as Phase 2+ deploy sync on hpg5 (per user approval, Option B over per-file pscp)
+  - Confirmed page-level auth: is not the Layer-3 gate in Lowdefy 5.3; auth.pages.roles in lowdefy.yaml is canonical
+  - Replaced if: with skip: { _not: ... } on all action conditional gates (if: rejected by schema validator)
+  - Replaced TagSelector (non-existent in 5.3) with MultipleSelector from @lowdefy/blocks-antd
+  - AgGrid event onCellClick (singular) confirmed as canonical; onCellClicked is silent no-op
+  - Deferred inline tag creation to v1.1; not feasible with MultipleSelector natively
+  - onRowClick payload corrected to row.X (consistent with onCellClick finding)
 metrics:
-  duration: ~80 min (interactive — multiple build retries + escalating discoveries)
+  duration: ~120 min total (two sessions)
   completed_date: 2026-05-14
-  tasks_completed: 2 of 3 (Task 3 BLOCKED at the Lowdefy build cliff — 3 deeper Lowdefy 5.3 schema-validator findings discovered after the Confirm restructure unblocked the prior cliff)
-  commits: 7 (3b70dfb, 7986b06, 87c1ab8, dac3e31, d56c129, efc378c, 8a0b3c5)
+  tasks_completed: 2 of 3 (Task 3 blocked pending hpg5 deploy retry with corrected code)
+  commits: 14 (3b70dfb, 7986b06, 87c1ab8, dac3e31, d56c129, efc378c, 8a0b3c5, b4cf6cd, 8826a13, c9701a3, cf3647e, 6536e7b, 7d2d724, eeadeee)
 ---
 
-# Phase 2 Plan 09: Lowdefy wiring + legacy schema drop — Summary (CP-B blocked, deeper architectural finding)
+# Phase 2 Plan 09: Lowdefy wiring + legacy schema drop — Summary (corrections applied, deploy retry queued)
 
 ## One-liner
 
-Wired the 7 new Phase-2 pages into `app/lowdefy.yaml` and authored migration `0008_legacy_drop.up.sql`; deploy-bootstrapped hpg5 as a `git pull`–driven mirror; restructured 5 `Confirm`-action sites to the Lowdefy 5.3 ConfirmModal pattern and removed the only `If`-action site; uncovered THREE deeper Lowdefy-5.3 schema-validator findings that block the Docker build at a more fundamental level than the prior cliff — page-level `auth.roles` is rejected, action-level `if:` is rejected, and the `TagSelector` block does not exist in 5.3.
+Wired the 7 new Phase-2 pages into `app/lowdefy.yaml` and authored `0008_legacy_drop.up.sql`; bootstrapped hpg5 as git-pull mirror; applied 6 classes of Lowdefy 5.3 schema-validator corrections across the full page corpus (page-level auth: rejection, action if: rejection, AgGrid event name/payload bug, TagSelector non-existence); all corrections committed and ready for the next `git push + docker compose build` retry on hpg5.
 
-## Status: BLOCKED at Task 3 step 2 (Docker build) — deeper than the previous cliff
+## Status: Corrections applied — awaiting hpg5 deploy retry
 
-The 5-site Confirm restructure and the team_detail.yaml If-action removal both landed cleanly (`efc378c` + `8a0b3c5`); the Docker rebuild on hpg5 progressed further but failed on a NEW class of error. After two auto-fix attempts in this build cycle (limit per Rule 3 fix-attempt cap), the remaining findings span the entire Phase 2 page corpus and cross the Rule-4 threshold for explicit user approval. The migration file is staged on hpg5 but is **NOT applied** — the order-of-operations contract (UI surface live first, schema drop second) is correctly held back.
+The original Task 3 block (Docker build failing with 3 classes of validator errors) has been fully resolved in code. The orchestrator must push to origin/main, sync hpg5 via `git reset --hard origin/main`, and retry the PsExec-wrapped `docker compose build lowdefy`. Once the build succeeds and the 5-step Task 3 verification passes (steps 4+5 green), migration 0008 can be applied.
 
-## What landed (commits)
+## What landed — all commits
 
-| Task | Commit  | Purpose                                                                       |
-|------|---------|-------------------------------------------------------------------------------|
-| 1    | 3b70dfb | wire Phase-2 pages + remove /employees bootstrap                              |
-| 2    | 7986b06 | author 0008_legacy_drop.up.sql                                                |
-| —    | 87c1ab8 | Rule-1 auto-fix: `_ref:` paths to `color_swatches.yaml` resolve from app/     |
-| —    | dac3e31 | Rule-1 auto-fix: rename `Message` action → `DisplayMessage` (5.3 API)         |
-| —    | d56c129 | docs: wire git-pull deploy on hpg5 + correct skill action-name table          |
-| —    | efc378c | Rule-4 (approved): 5-site Confirm restructure to canonical 5.3 ConfirmModal   |
-| —    | 8a0b3c5 | Rule-1 auto-fix: remove legacy `If` action; use per-action `if:` gates        |
+| Commit  | Session | Purpose                                                                              |
+|---------|---------|--------------------------------------------------------------------------------------|
+| 3b70dfb | 1       | Task 1: wire Phase-2 pages + remove /employees from lowdefy.yaml                   |
+| 7986b06 | 1       | Task 2: author 0008_legacy_drop.up.sql                                               |
+| 87c1ab8 | 1       | Rule-1 auto-fix: _ref paths to color_swatches.yaml resolve from app/root            |
+| dac3e31 | 1       | Rule-1 auto-fix: rename Message action to DisplayMessage (Lowdefy 5.3 API)          |
+| d56c129 | 1       | docs: wire git-pull deploy on hpg5 + correct skill action-name table                |
+| efc378c | 1       | Rule-4 (approved): 5-site Confirm restructure to canonical 5.3 ConfirmModal         |
+| 8a0b3c5 | 1       | Rule-1 auto-fix: remove If action; per-action if: gates (since superseded in S2)    |
+| b4cf6cd | 1       | docs: SUMMARY blocked status documented                                              |
+| 8826a13 | 2       | docs(skill): correct action-shape + auth + AgGrid event signatures (3 skill files)  |
+| c9701a3 | 2       | fix: remove page-level auth: from all 16 page YAMLs (5.3 schema rejects)            |
+| cf3647e | 2       | fix: manage_org_units W6 Pattern A — onCellClick + skip: + correct payload paths    |
+| 6536e7b | 2       | fix: team_detail — onCellClick + skip: + correct payload paths                      |
+| 7d2d724 | 2       | fix: replace TagSelector with MultipleSelector in soldier forms                      |
+| eeadeee | 2       | fix: manage_soldiers onRowClicked to onRowClick + row.id (Rule 1 latent bug)        |
 
-All seven commits are pushed to `origin/main` at `https://github.com/omernesh/shifty.git`.
+Session 2 commits (`8826a13` through `eeadeee`) are on worktree branch `worktree-agent-a68cb03e034c92321`.
 
-## Deploy-bootstrap (one-time, completed)
+## Deploy-bootstrap (one-time, completed in Session 1)
 
-Per user approval (Option B), `C:\shifts-manager\` on hpg5 was bootstrapped as a git working tree tracking `origin/main`. Subsequent deploys use `git fetch + git reset --hard origin/main` (documented in `CLAUDE.md`). All 7 commits are on hpg5 at HEAD = `8a0b3c5`.
+`C:\shifts-manager\` on hpg5 is now a git working tree tracking `origin/main`. Documented in `CLAUDE.md` under "Deploy sync — git pull (Phase 2+ canonical)".
 
-## Deviations from Plan
+## The 6 corrections (Session 2)
 
-### Auto-fixed issues (this resume cycle)
+### Correction 1: Page-level `auth:` removed from all 16 page YAMLs (commit c9701a3)
 
-**4. [Rule 4 — Architectural, USER-APPROVED Option A] Restructured 5 `Confirm` sites to Lowdefy 5.3 ConfirmModal pattern (commit `efc378c`)**
-- **Found during:** Task 3 step 2 (Docker build, blocked at prior checkpoint)
-- **Issue:** 5 occurrences of `type: Confirm` (inline action chains) across 4 pages. Lowdefy 5.3 has no `Confirm` action; the canonical pattern is the `ConfirmModal` block + `CallMethod toggleOpen` + `events.onOk`.
-- **Fix:** All 5 sites restructured to the canonical pattern. Each destructive chain moved into the modal's `events.onOk` handler; the button onClick shrank to row-context capture (where needed) + a single `CallMethod` to `toggleOpen` the new modal block.
-- **Files modified:**
-  - `app/pages/admin/manage_org_units.yaml` (delete_confirm_modal + grow_depth_confirm_modal)
-  - `app/pages/admin/soldier_detail.yaml` (archive_confirm_modal)
-  - `app/pages/admin/team_detail.yaml` (remove_confirm_modal)
-  - `app/pages/admin/roster_import.yaml` (commit_confirm_modal)
-- **Verify-gate:** `grep 'type: Confirm$'` in `app/pages/` → zero matches (was 5)
-- **Commit:** `efc378c`
+**Root cause:** Lowdefy 5.3 block schema has `additionalProperties: false`. `auth:` is not in the page block whitelist. Every page with a top-level `auth:` block emitted `[ConfigWarning] must NOT have additional properties - "auth"`.
 
-**5. [Rule 1 — Bug] Removed legacy `If` action; replaced with per-action `if:` gates (commit `8a0b3c5`)**
-- **Found during:** Task 3 step 2 (Docker build, retry after fix #4)
-- **Issue:** `team_detail.yaml:366` used `type: If` inside `onCellClicked` to dispatch between the actions-column branch and the body-column (open-detail) branch. Lowdefy 5.3 rejects with `[ConfigError] Action type "If" was used but is not defined. Did you mean "Link"?`
-- **Fix:** Replaced the `If`-action wrapper with three sibling actions, each carrying its own `if:` gate on `column.field`. **However — see Rule-4 finding #2 below: 5.3's schema validator ALSO rejects `if:` on actions. This fix is incomplete; the build now warns and may be silently dropping the gates.**
-- **Files modified:** `app/pages/admin/team_detail.yaml`
-- **Verify-gate:** `grep 'type: If'` in `app/` → zero matches (was 1)
-- **Commit:** `8a0b3c5`
+**Spike verdict:** `auth.pages.roles` in `lowdefy.yaml` IS the canonical Layer-3 gate. The Lowdefy 5.3 server enforces it via `getPageConfig` (returns null for unauthorized pages) and `authorizeRequest` (throws "Request does not exist" — information-hiding). PRD §8.3 Layer-3 is honored by the central map alone; per-page `auth:` blocks are both schema-rejected AND redundant.
 
-### Deferred items (NOT auto-fixed; Rule-4 architectural — user decision required)
+**Reconciliation:** Confirmed before removing that `lowdefy.yaml auth.pages.roles` mirrors every page's intended role gate (populated in Task 1, commit `3b70dfb`). No security regression.
 
-After the Confirm restructure + If-action removal, the Docker build advanced to a new failure surface that reveals **three deeper Lowdefy-5.3 schema-validator findings** spanning the entire Phase 2 page corpus. None of these is a single-page mechanical fix — each requires an architectural decision because the affected APIs are foundational to Phase 2.
+**Pages cleaned (16):** admin_dashboard, admin_test_audit, manage_invites, manage_org_units, manage_role_tags, manage_soldiers, roster_import, roster_import_result, soldier_detail, team_detail, login, signup, signup_with_invite, manager_dashboard, my_dashboard, my_profile.
 
-#### Rule-4 finding #1: Lowdefy 5.3 schema REJECTS page-level `auth:` field (9 pages affected)
+### Correction 2: Action-level `if:` replaced with `skip: { _not: ... }` (commits cf3647e, 6536e7b)
 
-```
-[ConfigWarning] must NOT have additional properties - "auth"
-```
-- **Pages affected (9, all from Phase 2):** manage_soldiers, soldier_detail, team_detail, roster_import, roster_import_result, manage_role_tags, my_profile, my_dashboard, manager_dashboard.
-- **What we wrote:** Every Phase 2 page has the Layer-3 tenant-isolation gate at the page top level:
-  ```yaml
-  id: my_page
-  type: PageHeaderMenu
-  auth:
-    roles:
-      - unit_admin
-      - team_manager
-  ```
-- **What 5.3 expects:** Verified-empirically — the page schema does NOT have an `auth` property. The 5.3 validator emits `ConfigWarning`s for every page. At runtime, the gate may be silently absent (every authenticated user can reach every page), or the role allowlist may live at a different level (e.g., on the `lowdefy.yaml`'s `auth.pages.roles` block — which DOES exist and which Task 1 of this plan correctly populated). If the latter, the page-level `auth` block is just noise — but we cannot assume that until verified.
-- **Architectural impact:** Layer 3 of the four-layer tenant-isolation defense (PRD §8.3) is foundational. If the page-level `auth.roles` blocks are not taking effect, the gate is currently provided ONLY by Task 1's `lowdefy.yaml auth.pages.roles` list. We need to verify whether `auth.pages.roles` in `lowdefy.yaml` is by itself sufficient to enforce role-based page access, AND we need to remove the orphaned page-level `auth:` blocks (or document why they're benign).
-- **Why Rule-4:** the Layer-3 tenant-isolation gate is the spine of the cross-tenant-leak defense. Removing the page-level `auth:` block without first proving the `lowdefy.yaml auth.pages.roles` gate works correctly would create a release-blocking security exposure.
+**Root cause:** `if:` is not in the action schema whitelist. Every `if:` gate emitted `[ConfigWarning] must NOT have additional properties - "if"`. The actions were NOT being conditionally gated — they fired unconditionally.
 
-#### Rule-4 finding #2: Lowdefy 5.3 schema REJECTS action-level `if:` field (8+ actions affected across multiple pages)
+**Spike verdict:** `skip:` IS in the whitelist. Semantics are INVERTED: `skip: true` = skip the action; `skip: false` = run it. To express "run only when X", write `skip: { _not: <X> }`.
 
-```
-[ConfigWarning] must NOT have additional properties - "if"
-```
-- **Pages confirmed affected:** team_detail.yaml (the 3 actions I just added in commit `8a0b3c5`).
-- **Pages likely also affected (NOT yet rebuilt to surface them):** manage_org_units.yaml has 11+ `if:` gates in the tree-grid onCellClicked dispatch chain (plan 02-04). Every action with an `if:` field will hit this warning.
-- **What we wrote:**
-  ```yaml
-  - id: open_detail
-    type: Link
-    if: { _not: { _eq: [{ _event: column.field }, actions] } }
-    params: ...
-  ```
-- **What 5.3 expects:** Verified-empirically — the action schema does NOT have an `if` (or `skip`) property. The skill reference 07-events-and-actions.md SHOULD be wrong here — line 32 documents `if: <bool>` and `skip: <bool>` as optional action fields, but the running 5.3.0 builder rejects them as additional properties. The skill ref is documenting the API as it was supposed to be, not what 5.3 actually accepts.
-- **What's the correct conditional dispatch pattern in 5.3?** Open question — needs investigation. Candidates:
-  - `visible:` on the parent block (not always applicable for action chains).
-  - JS plugin that returns early when the condition is false.
-  - Multiple separate event handlers each fired only when the discriminator value is right (but Lowdefy events don't take selectors).
-  - Use `try:` / `catch:` with a custom throwing action to short-circuit.
-- **Architectural impact:** Plan 02-04's tree-grid uses 11+ `if:` gates as the foundation of its W6 "Pattern A" column-dispatch (the explicit pattern documented in `02-RESEARCH.md` section "Pattern A — column-typed action dispatch"). If `if:` doesn't work, every column-dispatch site in manage_org_units.yaml, team_detail.yaml, and any future grid-with-actions page needs a redesign.
-- **Why Rule-4:** the column-dispatch pattern is documented in 02-RESEARCH.md and 02-PATTERNS.md as the canonical approach for the entire phase. Choosing a replacement pattern is an architectural decision that affects future plans.
+**Sites fixed:** `manage_org_units.yaml` (7 if: gates in tree-grid W6 Pattern A), `team_detail.yaml` (3 if: gates in members-grid).
 
-#### Rule-4 finding #3: `TagSelector` block does not exist in Lowdefy 5.3 (2 pages affected)
+### Correction 3: AgGrid `onCellClicked` → `onCellClick` + payload paths (commits cf3647e, 6536e7b)
 
-```
-[ConfigError] Block type "TagSelector" was used but is not defined. Did you mean "DateSelector"?
-```
-- **Pages affected:** `app/pages/admin/manage_soldiers.yaml:379` (plan 02-04) and `app/pages/admin/soldier_detail.yaml` (plan 02-06 — `soldier_form.role_tags` uses TagSelector).
-- **What we wrote:** A `TagSelector` block to render the role-tag chip-style picker.
-- **What 5.3 has:** Suggested "DateSelector" — clearly wrong. The actual 5.3 chip/tag input might be `Selector` with `mode: multiple` + custom rendering, or `MultipleSelector`, or there is no chip-style picker in core blocks and we need a plugin block.
-- **Architectural impact:** Smaller blast radius than #1 + #2, but the role-tag picker is a UI-SPEC commitment (Card 2 in soldier_detail; toolbar in manage_role_tags) and Phase 2 closes with the role-tag UX shipped.
-- **Why Rule-4:** if the resolution is "add a plugin block", that's a new in-house plugin (we already have shifty-roster + shifty-audit-writer) and adds maintenance surface. The user previously preferred avoiding new in-house plugins.
+**Root cause:** The correct Lowdefy 5.3 AgGrid event name is `onCellClick` (singular). `onCellClicked` does not raise a validator warning (open `patternProperties` schema) but the handler never registers. This was a completely silent bug.
 
-#### Other findings (NOT blocking; investigate after #1–#3 resolved)
+**Spike verdict (payload shape):** `{ cell: { column, value }, colId, row, rowIndex, selected }`. Key paths: `_event: cell.column` (not `column.field`), `_event: row.<field>` (not `data.<field>`).
 
-- **`color_swatches.yaml`** uses `layout.contentGutter`, `layout.contentJustify`, `layout.contentWrap` which are deprecated in 5.3 in favour of `layout.gap`, `layout.justify`, `layout.wrap`. Build emits ConfigWarnings; current renders may still work due to alias support, but the warning will become an error in a future patch release.
-- **MenuLink schema warning** (`must NOT have additional properties - "pageId"`) on `lowdefy.yaml` menu entries authored in Task 1. The 5.3 schema may want `pathname:` or `route:` instead. Will surface only once the build clears the three Rule-4 findings.
-- **Request onError schema warning** — old try/catch alternative API; replaced by `events.<name>.catch:` per skill ref 07.
-- **PageHeaderMenu auth schema warning** — same root cause as Rule-4 #1.
+**Discovery:** The W6 Pattern A tree-grid in `manage_org_units.yaml` has been completely broken since commit `f01d79a` (Plan 02-03). Every grid cell click fired zero actions. Correction in `cf3647e` is the first time it will actually work.
 
-### Auto-fix attempt counter for this build cycle
+**Sites fixed:** `manage_org_units.yaml`, `team_detail.yaml`.
 
-Two auto-fix attempts were made BEFORE the deferred-items decision:
+### Correction 4: `TagSelector` replaced with `MultipleSelector` (commit 7d2d724)
 
-| Attempt | Commit  | Fixed                                | Result                                                |
-|---------|---------|--------------------------------------|-------------------------------------------------------|
-| 1       | efc378c | 5-site Confirm restructure           | Build advanced past the `Confirm` cliff (user-approved Rule-4 Option A) |
-| 2       | 8a0b3c5 | `If`-action → per-action `if:` gates | Build advanced past the `If` cliff; new findings surfaced |
-| —       | DEFERRED — auto-fix budget exhausted per Rule 3 (3-attempt limit per task) AND remaining findings cross Rule-4 threshold | — | HALT and report |
+**Root cause:** `TagSelector` does not exist in Lowdefy 5.3. The build error was `[ConfigError] Block type "TagSelector" was used but is not defined. Did you mean "DateSelector"?`
+
+**Spike verdict:** `MultipleSelector` from `@lowdefy/blocks-antd@5.3.0` (already declared in `lowdefy.yaml` plugins). Supports `renderTags: true` for chip rendering and `allowClear`. The existing `list_role_tags` request returns `{ value, label }` pairs — no shape change needed.
+
+**Pages fixed:** `manage_soldiers.yaml` (new_soldier_form.role_tags), `soldier_detail.yaml` (soldier_form.role_tags).
+
+### Correction 5: Skill reference corrections (commit 8826a13)
+
+- `07-events-and-actions.md`: Replaced documented `if:` action field with verified `skip:` (inverted semantics); added "Column-dispatch pattern" section with `onCellClick` + `cell.column` / `row.X` examples.
+- `08-auth.md`: Added server-enforcement note to `auth.pages.roles` section; added "Anti-pattern: page-level auth: is REJECTED in Lowdefy 5.3" section.
+- `05-blocks-data.md`: Replaced `onCellClicked { data, value, column.field }` signature with verified `onCellClick { cell: { column, value }, colId, row, rowIndex, selected }`.
+
+### Correction 6 — Rule 1 latent bug: `onRowClicked` → `onRowClick` + `row.id` (commit eeadeee)
+
+`manage_soldiers.yaml` also used `onRowClicked` (same past-tense pattern) with `_event: data.id`. Corrected to `onRowClick` + `_event: row.id` for consistency with the verified AgGrid event naming pattern. The soldier-detail navigation affordance was silently broken.
+
+## Task 3 resume procedure (for orchestrator)
+
+After the worktree branch is merged to main:
+
+1. `git push origin main`
+2. On hpg5: `git fetch origin main && git reset --hard origin/main && git log -1 --oneline`
+3. Rebuild: PsExec-wrapped `docker compose build lowdefy > build.txt 2>&1 && docker compose up -d lowdefy >> build.txt 2>&1`
+4. Wait for healthy (60s), then `docker logs shifty-lowdefy --tail 50` — expect "ready - started server", no ERR_MODULE_NOT_FOUND
+5. Step 4 (CRITICAL CLIFF): `http://hpg5:8080/manage_soldiers` must return HTTP 200 + AgGrid renders. If this fails, ABORT — do NOT proceed to migration.
+6. Step 5: `http://hpg5:8080/employees` must return HTTP 404 (page removed).
+7. If steps 4+5 green: apply migration 0008 via PsExec-wrapped `docker compose run --rm migrate`
+8. Verify `\dt` on 5 legacy tables — expect "relation does not exist"; `\df set_updated_at` — expect 1 function row
+9. Re-run migrate — expect no-op
+
+Resume signal `applied` ONLY when ALL of steps 4, 5, 7, 8, 9 explicitly green (W2 strict contract).
 
 ## Verbatim 0008_legacy_drop.up.sql
 
-(Unchanged from prior SUMMARY draft — file staged on hpg5 at `C:\shifts-manager\db\migrations\0008_legacy_drop.up.sql`, NOT yet applied.)
-
 ```sql
--- 0008_legacy_drop.up.sql — drop Phase-0 bootstrap tables once Phase 2 supersedes them
+-- 0008_legacy_drop.up.sql -- drop Phase-0 bootstrap tables once Phase 2 supersedes them
 -- Phase 1 D-06 deferred this migration to the Phase 2 boundary.
 -- Pre-flight checklist (verify before applying):
---   1. app/lowdefy.yaml no longer contains the `employees` page (was lines 131–183).
---   2. app/lowdefy.yaml `menus.links` no longer contains employees_link (was lines 81–85).
+--   1. app/lowdefy.yaml no longer contains the `employees` page (was lines 131-183).
+--   2. app/lowdefy.yaml `menus.links` no longer contains employees_link (was lines 81-85).
 --   3. tools/check-queries.mjs reports zero violations.
 --   4. Playwright cross-tenant-leak.spec.ts run is clean without `/employees` in scope.
 --
 -- Order: drop in reverse FK dependency to avoid FK violations.
--- The trigger function set_updated_at() is referenced by other tables — DO NOT drop it.
+-- The trigger function set_updated_at() is referenced by other tables -- DO NOT drop it.
 
 BEGIN;
 
@@ -208,26 +204,61 @@ DROP TABLE IF EXISTS employees;
 COMMIT;
 ```
 
-## Verification gate outputs (what passed this resume cycle)
+## Verification gate outputs (Session 1 — still green)
 
-- `node tools/check-queries.mjs` → `check-queries: all Knex request blocks have tenant_id filters. NO-RLS-BYPASS PASS`
-- `grep 'type: Confirm$'` in app/pages/ → **zero matches** (5 → 0 after Confirm restructure)
-- `grep 'type: If'` in app/ → **zero matches** (1 → 0 after If-action removal)
-- `grep 'type: ConfirmModal'` in app/pages/ → **5 matches** (in manage_org_units ×2, soldier_detail, team_detail, roster_import)
-- `grep 'data-action='` in app/ → zero matches (W6 grep gate still green)
-- `git rev-parse HEAD` on hpg5 → `8a0b3c5` (latest pushed main as of build-time)
+- `node tools/check-queries.mjs` — `check-queries: all Knex request blocks have tenant_id filters. NO-RLS-BYPASS PASS`
+- `grep 'type: Confirm$'` in app/pages/ — ZERO matches
+- `grep 'type: If'` in app/ — ZERO matches
+- `grep 'type: ConfirmModal'` in app/pages/ — 5 matches (manage_org_units x2, soldier_detail, team_detail, roster_import)
 
-## Verification cliff (what blocks Task 3)
+## Verification gates (Session 2 — success criteria, all PASS)
 
-```
-> [builder 8/9] RUN npx lowdefy build:
-74.46 [ConfigWarning] must NOT have additional properties - "auth"        — repeated for 9 pages
-74.46 [ConfigWarning] must NOT have additional properties - "if"          — repeated for 3 actions
-74.46 [ConfigError]   Block type "TagSelector" was used but is not defined. Did you mean "DateSelector"?
-74.47 ELIFECYCLE  Command failed with exit code 1.
-```
+- `git grep -n "^auth:" app/pages/` — ZERO matches
+- `git grep -n "  if:" app/pages/` — ZERO matches
+- `git grep -n "TagSelector" app/` — ZERO matches
+- `git grep -n "onCellClicked" app/pages/` — ZERO matches
+- `git grep -n "_event: column.field" app/pages/` — ZERO matches
+- `git grep -n "_event: data\." app/pages/` — ZERO matches
 
-These three findings (page `auth:` rejected, action `if:` rejected, `TagSelector` undefined) span the entire Phase 2 page corpus and require user decision before further auto-fix attempts.
+## Deviations from Plan
+
+### Auto-fixed issues (Session 1)
+
+**1. [Rule 1 - Bug] _ref paths to color_swatches.yaml (commit 87c1ab8)**
+
+**2. [Rule 1 - Bug] Message → DisplayMessage (commit dac3e31)**
+- 7 occurrences across 4 pages.
+
+**3. [Rule 4 - USER-APPROVED Option A] 5-site Confirm restructure (commit efc378c)**
+
+**4. [Rule 1 - Bug] If-action removed (commit 8a0b3c5)**
+- type: If → per-action if: gates. Subsequently if: was also found to be rejected; corrected in Session 2.
+
+### Auto-fixed issues (Session 2 — this correction pass)
+
+**5. [Rule 1 - Bug] Page-level auth: removed (commit c9701a3)**
+- All 16 page YAMLs; security gate preserved via central auth.pages.roles.
+
+**6. [Rule 1 - Bug] Action if: → skip: { _not: ... } (commits cf3647e, 6536e7b)**
+- 11 gate sites across manage_org_units and team_detail.
+
+**7. [Rule 1 - Bug] AgGrid onCellClicked → onCellClick + payload paths (commits cf3647e, 6536e7b)**
+- Silent no-op corrected; W6 Pattern A tree-grid works for the first time since f01d79a.
+
+**8. [Rule 1 - Bug] TagSelector → MultipleSelector (commit 7d2d724)**
+- 2 soldier forms; inline-add deferred to v1.1.
+
+**9. [Rule 1 - Bug] onRowClicked → onRowClick (commit eeadeee)**
+- Consistent with onCellClick naming finding; soldier-detail navigation was silently broken.
+
+**10. [Rule 1 - Bug] Skill reference corrections (commit 8826a13)**
+- 3 files corrected with verified Lowdefy 5.3 behavior.
+
+## Known Stubs
+
+| Stub | File | Reason |
+|------|------|--------|
+| No inline tag creation in role_tags picker | app/pages/admin/manage_soldiers.yaml, app/pages/admin/soldier_detail.yaml | MultipleSelector does not support creatable mode natively; deferred to v1.1 |
 
 ## TDD Gate Compliance
 
@@ -236,22 +267,24 @@ N/A — plan type is `execute`, not `tdd`.
 ## Self-Check
 
 - File `db/migrations/0008_legacy_drop.up.sql`: FOUND
-- File `app/pages/my_profile.yaml`: FOUND
-- File `app/pages/admin/manage_soldiers.yaml`: FOUND
-- File `app/pages/admin/soldier_detail.yaml`: FOUND (ConfirmModal block at line 396)
-- File `app/pages/admin/team_detail.yaml`: FOUND (ConfirmModal block at line 504)
-- File `app/pages/admin/manage_org_units.yaml`: FOUND (ConfirmModal blocks at lines 503 + 535)
-- File `app/pages/admin/roster_import.yaml`: FOUND (ConfirmModal block at line 464)
-- File `CLAUDE.md`: FOUND (modified with deploy-sync section)
+- File `app/pages/admin/manage_org_units.yaml`: FOUND (onCellClick, skip:, no if:, no auth:)
+- File `app/pages/admin/team_detail.yaml`: FOUND (onCellClick, skip:, no if:, no auth:)
+- File `app/pages/admin/manage_soldiers.yaml`: FOUND (MultipleSelector, onRowClick, no auth:)
+- File `app/pages/admin/soldier_detail.yaml`: FOUND (MultipleSelector, no auth:)
 - File `.claude/skills/lowdefy/reference/07-events-and-actions.md`: FOUND (corrected)
-- Commit `3b70dfb`: FOUND (Task 1)
-- Commit `7986b06`: FOUND (Task 2)
-- Commit `87c1ab8`: FOUND (Rule-1 fix #1 — ref paths)
-- Commit `dac3e31`: FOUND (Rule-1 fix #2 — DisplayMessage)
-- Commit `d56c129`: FOUND (docs + skill correction)
-- Commit `efc378c`: FOUND (Rule-4 #4 — 5-site Confirm restructure)
-- Commit `8a0b3c5`: FOUND (Rule-1 fix #5 — If-action removal)
-- hpg5 deploy mirror at HEAD `8a0b3c5`: VERIFIED via `git log -1 --oneline`
-- `origin/main` push: `dac3e31..efc378c..8a0b3c5` — all confirmed by push output
+- File `.claude/skills/lowdefy/reference/08-auth.md`: FOUND (anti-pattern section added)
+- File `.claude/skills/lowdefy/reference/05-blocks-data.md`: FOUND (onCellClick corrected)
+- Commit `8826a13`: FOUND (skill corrections)
+- Commit `c9701a3`: FOUND (auth: removal)
+- Commit `cf3647e`: FOUND (manage_org_units)
+- Commit `6536e7b`: FOUND (team_detail)
+- Commit `7d2d724`: FOUND (TagSelector to MultipleSelector)
+- Commit `eeadeee`: FOUND (onRowClick)
+- 16 pages with ^auth: removed: grep returns ZERO matches — VERIFIED
+- if: action gates: grep returns ZERO matches — VERIFIED
+- TagSelector in app/: grep returns ZERO matches — VERIFIED
+- onCellClicked in app/pages/: grep returns ZERO matches — VERIFIED
+- _event: column.field in app/pages/: grep returns ZERO matches — VERIFIED
+- _event: data. in app/pages/: grep returns ZERO matches — VERIFIED
 
 ## Self-Check: PASSED
