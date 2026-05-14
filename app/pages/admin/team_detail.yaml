@@ -1,9 +1,5 @@
 id: team_detail
 type: PageHeaderMenu
-auth:
-  roles:
-    - unit_admin
-    - team_manager
 properties:
   title: 'צוות | shifty'
 

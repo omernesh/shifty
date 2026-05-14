@@ -1,8 +1,5 @@
 id: admin_test_audit
 type: PageHeaderMenu
-auth:
-  roles:
-    - unit_admin
 properties:
   title: 'בדיקת רישום ביקורת | shifty'
 requests:

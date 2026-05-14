@@ -1,8 +1,5 @@
 id: manage_role_tags
 type: PageHeaderMenu
-auth:
-  roles:
-    - unit_admin
 properties:
   title: 'תגיות תפקיד | shifty'
 

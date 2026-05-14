@@ -1,7 +1,5 @@
 id: signup_with_invite
 type: PageHeaderMenu
-auth:
-  protected: false
 properties:
   title: הרשמה עם קוד הזמנה | shifty
 blocks:

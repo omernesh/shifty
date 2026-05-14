@@ -1,7 +1,5 @@
 id: login
 type: PageHeaderMenu
-auth:
-  protected: false
 properties:
   title: Sign in | shifty
 blocks:

@@ -1,9 +1,5 @@
 id: manage_org_units
 type: PageHeaderMenu
-auth:
-  roles:
-    - unit_admin
-    - team_manager
 properties:
   title: 'ניהול יחידות ארגוניות | shifty'
 requests:

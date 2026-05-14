@@ -1,9 +1,5 @@
 id: soldier_detail
 type: PageHeaderMenu
-auth:
-  roles:
-    - unit_admin
-    - team_manager
 properties:
   title: 'עריכת חייל | shifty'
 
