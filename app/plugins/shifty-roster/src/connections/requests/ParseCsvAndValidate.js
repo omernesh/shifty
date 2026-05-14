@@ -1,14 +1,17 @@
 // app/plugins/shifty-roster/src/connections/requests/ParseCsvAndValidate.js
-// Lowdefy custom request: parse an uploaded CSV (base64) and produce a per-row
+// Lowdefy custom request: parse CSV text (pasted by admin) and produce a per-row
 // preview state for the import wizard (ok / warn / error per row).
 // Tenant ID from request.user (session) — NEVER from request.properties. Layer-4 defense.
+//
+// I-1 round 2: Upload block (non-existent in Lowdefy 5.3) replaced with TextArea paste.
+// Handler now receives csv_text (UTF-8 string) directly instead of base64-encoded file bytes.
 //
 // knex imported dynamically inside the function body so unit tests can import
 // this module without requiring 'knex' to be installed in the test environment.
 // In the Lowdefy Docker image, knex is available via @lowdefy/connection-knex.
 //
 // Implementation (Plan 02-08 Task 2 — replaces plan 02-02 stub):
-// 1. decode base64 file bytes -> UTF-8 string
+// 1. receive csv_text (UTF-8 string) directly — no base64 decode step
 // 2. Papa.parse({ header: true, skipEmptyLines: true })
 // 3. Required-header gate: display_name, email, role_tags, seniority, team_id
 // 4. Per-tenant pre-flight SELECTs (all WHERE tenant_id = :tenant_id):
@@ -34,7 +37,7 @@ const REQUIRED_HEADERS = ['display_name', 'email', 'role_tags', 'seniority', 'te
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 async function ParseCsvAndValidate({ request, connection }) {
-  const { file_b64 } = request.properties || {};
+  const { csv_text } = request.properties || {};
 
   // Layer-4 tenant / actor guards (BEFORE any DB interaction).
   const tenant_id = request.user?.tenant_id;
@@ -46,17 +49,13 @@ async function ParseCsvAndValidate({ request, connection }) {
     throw new Error('ParseCsvAndValidate: actor_user_id missing from session — unauthenticated request');
   }
 
-  if (!file_b64) {
-    throw new Error('ParseCsvAndValidate: file_b64 is required');
+  if (!csv_text || typeof csv_text !== 'string' || !csv_text.trim()) {
+    throw new Error('ParseCsvAndValidate: csv_text is required — paste CSV content into the text area');
   }
 
-  // STEP 1 — decode base64 → UTF-8.
-  let csvText;
-  try {
-    csvText = Buffer.from(file_b64, 'base64').toString('utf-8');
-  } catch (err) {
-    throw new Error(`ParseCsvAndValidate: failed to decode base64 file: ${err.message}`);
-  }
+  // I-1 round 2: csv_text is received as a plain UTF-8 string (pasted by admin).
+  // No base64 decode needed. Use it directly.
+  const csvText = csv_text;
 
   // STEP 2 — parse with papaparse (header mode; empty lines skipped).
   const parsed = Papa.parse(csvText, { header: true, skipEmptyLines: true });
@@ -174,9 +173,9 @@ async function ParseCsvAndValidate({ request, connection }) {
 
 ParseCsvAndValidate.schema = {
   type: 'object',
-  required: ['file_b64'],
+  required: ['csv_text'],
   properties: {
-    file_b64: { type: 'string', minLength: 1 },
+    csv_text: { type: 'string', minLength: 1 },
   },
 };
 ParseCsvAndValidate.connectionType = 'Knex';
