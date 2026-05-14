@@ -155,8 +155,7 @@ blocks:
         - _gt: [{ _request: get_import_summary.0.rows_errored }, 0]
     properties:
       title: 'שגיאות לפי שורה'
-      headStyle:
-        textAlign: right
+      # L-3 (round 2): headStyle removed — silently dropped in 5.3. RTL header from dir="rtl".
       style:
         marginTop: 24
     blocks:

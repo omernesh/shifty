@@ -143,8 +143,7 @@ blocks:
         - _eq: [{ _state: wizard_step }, null]
     properties:
       title: 'שלב 1 — טען קובץ'
-      headStyle:
-        textAlign: right
+      # L-3 (round 2): headStyle removed — silently dropped in 5.3. RTL header from dir="rtl".
       style:
         marginBottom: 24
     blocks:
@@ -218,8 +217,7 @@ blocks:
       _eq: [{ _state: wizard_step }, 2]
     properties:
       title: 'שלב 2 — סקור ושפר'
-      headStyle:
-        textAlign: right
+      # L-3 (round 2): headStyle removed — silently dropped in 5.3. RTL header from dir="rtl".
       style:
         marginBottom: 24
     blocks:
@@ -441,8 +439,7 @@ blocks:
       _eq: [{ _state: wizard_step }, 3]
     properties:
       title: 'שלב 3 — אשר ושלח'
-      headStyle:
-        textAlign: right
+      # L-3 (round 2): headStyle removed — silently dropped in 5.3. RTL header from dir="rtl".
     blocks:
       - id: commit_progress_intro
         type: Paragraph
