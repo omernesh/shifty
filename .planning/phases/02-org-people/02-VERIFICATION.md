@@ -1,9 +1,15 @@
 ---
 phase: 02-org-people
 verified: 2026-05-14T18:30:00Z
-status: human_needed
-score: 12/13 must-haves verified
+status: blocked
+score: 12/13 must-haves verified (static); LIVE UAT BLOCKED — see 02-UAT-FINDINGS.md
 overrides_applied: 0
+# UPDATE 2026-05-14 (post-UAT attempt):
+# Live UAT against hpg5 surfaced a fundamental architecture gap — Phase 02's custom
+# request types (ParseCsvAndValidate, CreateSoldier, AuditWrite, KnexRawTenant, …)
+# are not registered with Lowdefy 5.3's runtime due to a plugin-pattern mismatch.
+# See `02-UAT-FINDINGS.md` for the full picture, what was fixed, and what blocks
+# milestone close.
 human_verification:
   - test: "Plan 10 Task 4 — full hpg5 phase-gate (Playwright e2e + 6 manual UI scenarios + RTL email smoke)"
     expected: |
