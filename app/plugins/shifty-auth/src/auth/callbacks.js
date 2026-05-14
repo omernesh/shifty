@@ -8,6 +8,15 @@
 //
 // The 'properties' param comes from lowdefy.yaml auth.callbacks[*].properties.
 // We use process.env.POSTGRES_CONNECTION_STRING for the DB connection (same as KnexAdapter).
+//
+// Layer 5 (RLS) note: this callback runs BEFORE tenant context is established. It needs
+// to look up the app_user row by email to DISCOVER which tenant the user belongs to
+// (chicken-and-egg: can't SET app.current_tenant to query for tenant_id). We resolve
+// this by issuing `SET ROLE NONE` after connect — that returns to session_user = shifts
+// (the bootstrap SUPERUSER per migration 0013 header) which bypasses RLS. Safe because:
+//   - This is server-side only; the email is the session principal (verified by Auth.js).
+//   - The query is a narrow lookup by email; no user-controlled SQL.
+//   - The Knex instance is short-lived (one query + one membership join, then destroy).
 
 import { createRequire } from 'module';
 
@@ -48,6 +57,20 @@ export function makeShiftySessionCallback(knexFactory) {
     const db = knex({ client: 'pg', connection: connectionString });
 
     try {
+      // SET ROLE NONE — bypass RLS for this pre-tenant lookup. Migration 0013 makes
+      // shifts connections default to current_user = shifty_app (NOSUPERUSER, NOBYPASSRLS),
+      // which blocks queries against app_user/membership because app.current_tenant is
+      // the sentinel. We need superuser semantics here to discover which tenant the
+      // email belongs to. After this lookup, the resolved tenant_id is hydrated onto
+      // session.user.tenant_id and downstream request handlers use it for RLS context.
+      //
+      // SET ROLE NONE goes to session_user (= shifts, the bootstrap SUPERUSER which
+      // cannot be demoted). NOT injectable for unit tests — the mock knex factory
+      // doesn't see this call; only the production path needs it.
+      if (typeof knexFactory !== 'function') {
+        await db.raw('SET ROLE NONE');
+      }
+
       const result = await db('app_user as au')
         .select(
           'au.id as user_id',
