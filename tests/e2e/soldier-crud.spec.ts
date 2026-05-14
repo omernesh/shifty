@@ -66,10 +66,11 @@ async function seedTeamManager(tenantA: TenantFixture): Promise<{
       [randomUUID(), tenantA.tenantId, soldierId, tenantA.teamId]
     );
 
-    // A second soldier in the same leaf team for the edit-own-team test
+    // A second soldier in the same leaf team for the edit-own-team test.
+    // Note: `soldier` has no `email` column — identity is via `soldier.user_id → app_user.email`.
     await c.query(
-      `INSERT INTO soldier (id, tenant_id, display_name, email)
-       VALUES ($1, $2, 'Target Soldier Own Team', 'target-own@example.test')
+      `INSERT INTO soldier (id, tenant_id, display_name)
+       VALUES ($1, $2, 'Target Soldier Own Team')
        ON CONFLICT DO NOTHING`,
       [soldierOwnTeam, tenantA.tenantId]
     );

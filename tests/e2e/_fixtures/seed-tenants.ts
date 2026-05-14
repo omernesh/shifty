@@ -148,8 +148,10 @@ export async function signInAs(email: string): Promise<SignInResult> {
       [randomUUID(), sessionToken, userId]
     );
     // NextAuth default cookie name for HTTP: `next-auth.session-token`
-    // (in HTTPS production: `__Secure-next-auth.session-token`)
-    const cookies = `next-auth.session-token=${sessionToken}; Path=/; HttpOnly`;
+    // (in HTTPS production: `__Secure-next-auth.session-token`).
+    // Format: bare `name=value` only — Path/HttpOnly are Set-Cookie response attrs and
+    // must NOT appear in a request Cookie header (some parsers reject the whole header).
+    const cookies = `next-auth.session-token=${sessionToken}`;
     return { sessionToken, userId, cookies };
   } finally {
     await client.end();
