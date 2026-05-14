@@ -281,9 +281,9 @@ blocks:
 
       # Members AgGrid (UI-SPEC §"Reusable Components — 8" enableRtl + §9 dot)
       # Action column "actions" (W6 Pattern A): one single-affordance icon-button
-      # per row. onCellClicked branches on _event.column.field — the body
+      # per row. onCellClick branches on _event.cell.column — the body
       # columns dispatch to soldier_detail/{id}; the actions column dispatches
-      # the remove flow with a Confirm step.
+      # the remove flow with a ConfirmModal step.
       - id: team_members_grid
         type: AgGridAlpine
         properties:
@@ -357,33 +357,34 @@ blocks:
                     _nunjucks:
                       template: '<span title="הסר" style="cursor:pointer;color:#FF4D4F">🗑</span>'
         events:
-          # Lowdefy 5.3 has no `If` action — branch via per-action `if:` gates.
-          # The two mutually-exclusive branches share `clicked-column == actions`
+          # Lowdefy 5.3 column-dispatch via per-action skip: gates (verified).
+          # skip: semantics are INVERTED — action fires when skip evaluates false.
+          # Event name is onCellClick (singular); payload is cell.column + row.<field>.
+          # The two mutually-exclusive branches share `cell.column == actions`
           # as the discriminator: actions column → remove flow; any other body
           # column → navigate to soldier_detail.
-          onCellClicked:
+          onCellClick:
             # ── actions column branch: capture row + open ConfirmModal ──
             - id: set_remove_target
               type: SetState
-              if: { _eq: [{ _event: column.field }, actions] }
+              skip: { _not: { _eq: [{ _event: cell.column }, actions] } }
               params:
-                remove_target_membership_id: { _event: data.membership_id }
-                remove_target_display_name: { _event: data.display_name }
+                remove_target_membership_id: { _event: row.membership_id }
+                remove_target_display_name: { _event: row.display_name }
             - id: open_remove_confirm
               type: CallMethod
-              if: { _eq: [{ _event: column.field }, actions] }
+              skip: { _not: { _eq: [{ _event: cell.column }, actions] } }
               params:
                 blockId: remove_confirm_modal
                 method: toggleOpen
             # ── body-column branch: open soldier_detail in same window ──
             - id: open_detail
               type: Link
-              if:
-                _not: { _eq: [{ _event: column.field }, actions] }
+              skip: { _eq: [{ _event: cell.column }, actions] }
               params:
                 pageId: soldier_detail
                 urlQuery:
-                  id: { _event: data.id }
+                  id: { _event: row.id }
 
       # Empty-state for the members grid (UI-SPEC Hebrew copy table line 229).
       - id: members_empty_state
@@ -490,7 +491,7 @@ blocks:
   # The destructive chain (remove_membership KnexRaw → audit write → refresh
   # both lists → toast) runs from onOk after the user confirms. Row context
   # (remove_target_membership_id, remove_target_display_name) is captured into
-  # state by the grid's onCellClicked → set_remove_target action before the
+  # state by the grid's onCellClick → set_remove_target action before the
   # CallMethod toggleOpen fires.
   - id: remove_confirm_modal
     type: ConfirmModal
