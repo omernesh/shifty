@@ -43,10 +43,12 @@ test.describe('shifty-audit-writer plugin (D-08)', () => {
 
   test('clicking write_test_audit button creates a schedule_audit row for tenant A only', async ({ page }) => {
     await page.context().addCookies([{
-      name: 'next-auth.session-token',
+      name: '__Secure-next-auth.session-token',
       value: adminASession.sessionToken,
       url: BASE_URL,
       httpOnly: true,
+        secure: false,
+        sameSite: 'Lax',
     }]);
 
     let navigated = false;
@@ -100,10 +102,12 @@ test.describe('shifty-audit-writer plugin (D-08)', () => {
   // breaking the RLS USING clause).
   test('Knex afterCreate hook sets app.current_tenant equal to session.tenant_id (Warning 10)', async ({ page }) => {
     await page.context().addCookies([{
-      name: 'next-auth.session-token',
+      name: '__Secure-next-auth.session-token',
       value: adminASession.sessionToken,
       url: BASE_URL,
       httpOnly: true,
+        secure: false,
+        sameSite: 'Lax',
     }]);
 
     let navigated = false;

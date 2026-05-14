@@ -68,14 +68,16 @@ test.describe('Auth cookies (AUTH-02)', () => {
   test('AUTH-02: session cookie is HttpOnly', async ({ page }) => {
     // Add the forged session cookie
     await page.context().addCookies([{
-      name: 'next-auth.session-token',
+      name: '__Secure-next-auth.session-token',
       value: adminSession.sessionToken,
       url: BASE_URL,
-      httpOnly: true, // we set this in signInAs — verify the Playwright API accepted it
+      httpOnly: true,
+        secure: false,
+        sameSite: 'Lax', // we set this in signInAs — verify the Playwright API accepted it
     }]);
 
     const cookies = await page.context().cookies();
-    const sessionCookie = cookies.find(c => c.name === 'next-auth.session-token');
+    const sessionCookie = cookies.find(c => c.name === '__Secure-next-auth.session-token');
     expect(sessionCookie, 'Session cookie not found').toBeTruthy();
     expect(sessionCookie!.httpOnly).toBe(true);
 

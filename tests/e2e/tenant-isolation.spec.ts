@@ -173,10 +173,12 @@ test.describe('Tenant isolation — forge tests (SEC / Phase 2)', () => {
     const tenantBTeamId = tenantB.teamId;
 
     await page.context().addCookies([{
-      name: 'next-auth.session-token',
+      name: '__Secure-next-auth.session-token',
       value: (await signInAs(tenantA.adminEmail)).sessionToken,
       url: BASE_URL,
       httpOnly: true,
+        secure: false,
+        sameSite: 'Lax',
     }]);
 
     try {

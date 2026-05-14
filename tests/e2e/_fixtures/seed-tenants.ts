@@ -6,14 +6,27 @@
 //
 // Layer 5 (RLS) note: migration 0013 makes `shifts` connections automatically SET ROLE
 // shifty_app (NOSUPERUSER, NOBYPASSRLS). For seeding (multi-tenant inserts), we issue
-// `SET ROLE NONE` after connect to return to session_user = shifts (the bootstrap SUPERUSER
-// which bypasses RLS). This keeps the seed logic simple — set_config per tenant still
-// scopes app.current_tenant correctly for the assertions in cross-tenant-leak.spec.ts.
+// `SET ROLE NONE` after connect to return to session_user = shifts (the bootstrap
+// SUPERUSER which cannot be demoted) for the seeding path. `RESET ROLE` is NOT
+// equivalent — it would reset to the default-role set by ALTER ROLE, which is
+// shifty_app, so RESET ROLE has no effect for our purposes.
+//
+// NextAuth secure-cookie naming: when NEXTAUTH_URL begins with `https://` (as it does
+// in the hpg5 deployment — `https://apps.nesher.co`), Auth.js uses the `__Secure-`
+// prefix on the session-token cookie name. The Cookie header sent by tests must match
+// that name even when the test traffic itself goes over plain HTTP (the Cloudflare
+// Tunnel terminates HTTPS upstream; the container side sees HTTP but Auth.js still
+// uses secure-cookie naming based on the configured NEXTAUTH_URL). Tests use
+// `__Secure-next-auth.session-token=<token>` as the Cookie header; Playwright's
+// addCookies in page tests must also use that name with `secure: true`.
 
 import { Client } from 'pg';
 import { randomUUID, randomBytes } from 'node:crypto';
 
 const PG_URL = process.env.PG_TEST_URL ?? 'postgres://shifts:changeme@localhost:5432/shifts';
+
+/** NextAuth session-token cookie name in HTTPS deployments (the hpg5 default). */
+export const SESSION_COOKIE_NAME = '__Secure-next-auth.session-token';
 
 export interface TenantFixture {
   tenantId: string;
@@ -52,8 +65,9 @@ async function seedOne(client: Client, label: 'A' | 'B'): Promise<TenantFixture>
 
   // Set RLS context before each tenant's inserts.
   // set_config with false (not local) persists for the connection session — combined
-  // with SET ROLE NONE in seedTwoTenants(), the shifts SUPERUSER session bypasses RLS for
-  // INSERTs and the app.current_tenant is the same value that tests will assert against.
+  // with SET ROLE NONE in seedTwoTenants(), the shifts SUPERUSER session bypasses RLS
+  // for INSERTs and the app.current_tenant is the same value that tests will assert
+  // against in cross-tenant-leak.spec.ts (direct-pg path).
   await client.query(`SELECT set_config('app.current_tenant', $1, false)`, [tenantId]);
 
   await client.query(
@@ -117,8 +131,10 @@ export async function seedTwoTenants(): Promise<{ tenantA: TenantFixture; tenant
   const client = new Client({ connectionString: PG_URL });
   await client.connect();
   try {
-    // Migration 0013 makes shifts auto SET ROLE shifty_app on connect; reset to
-    // session_user (shifts, still SUPERUSER per bootstrap rule) so seeding bypasses RLS.
+    // Migration 0013 makes shifts auto SET ROLE shifty_app on connect; SET ROLE NONE
+    // switches to session_user (shifts, still SUPERUSER per bootstrap rule) so seeding
+    // bypasses RLS. (RESET ROLE does NOT work here — it resets to the ALTER ROLE default
+    // which is shifty_app.)
     await client.query('SET ROLE NONE');
     const tenantA = await seedOne(client, 'A');
     const tenantB = await seedOne(client, 'B');
@@ -138,6 +154,12 @@ export interface SignInResult {
  * Inserts a session row directly into the `sessions` table (bypassing the email link click).
  * Returns the cookie value that NextAuth would set after a successful magic-link callback.
  * Used for test speed — NOT a production attack surface.
+ *
+ * Cookie format: `__Secure-next-auth.session-token=<token>`. The `__Secure-` prefix is
+ * required because NEXTAUTH_URL is HTTPS (`https://apps.nesher.co`); Auth.js refuses
+ * to recognize the bare `next-auth.session-token` cookie name when useSecureCookies is
+ * active. The cookie name is exported as SESSION_COOKIE_NAME for page-context cookie
+ * setup in cross-tenant-leak.spec.ts.
  */
 export async function signInAs(email: string): Promise<SignInResult> {
   const client = new Client({ connectionString: PG_URL });
@@ -161,11 +183,11 @@ export async function signInAs(email: string): Promise<SignInResult> {
        VALUES ($1, $2, $3, now() + interval '30 days')`,
       [randomUUID(), sessionToken, userId]
     );
-    // NextAuth default cookie name for HTTP: `next-auth.session-token`
-    // (in HTTPS production: `__Secure-next-auth.session-token`).
     // Format: bare `name=value` only — Path/HttpOnly are Set-Cookie response attrs and
     // must NOT appear in a request Cookie header (some parsers reject the whole header).
-    const cookies = `next-auth.session-token=${sessionToken}`;
+    // The `__Secure-` prefix matches Auth.js's useSecureCookies=true behavior for
+    // https NEXTAUTH_URL deployments.
+    const cookies = `${SESSION_COOKIE_NAME}=${sessionToken}`;
     return { sessionToken, userId, cookies };
   } finally {
     await client.end();

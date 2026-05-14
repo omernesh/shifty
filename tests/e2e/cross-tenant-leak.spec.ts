@@ -65,10 +65,12 @@ test.describe('Cross-tenant isolation (SEC-06)', () => {
     test(`page /${pageId} does not leak tenant-B data when signed in as tenant-A`, async ({ page }) => {
       // Set cookie before navigation
       await page.context().addCookies([{
-        name: 'next-auth.session-token',
+        name: '__Secure-next-auth.session-token',
         value: adminASessionToken,
         url: BASE_URL,
         httpOnly: true,
+        secure: false,
+        sameSite: 'Lax',
       }]);
 
       try {
