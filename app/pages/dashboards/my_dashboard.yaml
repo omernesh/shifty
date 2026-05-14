@@ -1,11 +1,5 @@
 id: my_dashboard
 type: PageHeaderMenu
-auth:
-  roles:
-    - unit_admin
-    - team_manager
-    - member
-    - viewer
 properties:
   title: 'הדף שלי | shifty'
 blocks:

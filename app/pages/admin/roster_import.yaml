@@ -1,9 +1,5 @@
 id: roster_import
 type: PageHeaderMenu
-auth:
-  roles:
-    - unit_admin
-    - team_manager
 properties:
   title: 'ייבוא חיילים מקובץ CSV | shifty'
 

@@ -1,9 +1,5 @@
 id: manage_org_units
 type: PageHeaderMenu
-auth:
-  roles:
-    - unit_admin
-    - team_manager
 properties:
   title: 'ניהול יחידות ארגוניות | shifty'
 requests:
@@ -202,10 +198,10 @@ blocks:
     #
     # W6 (revision iter 1) — PURE Pattern A from RESEARCH P9: three SEPARATE action
     # columns (col_add_child, col_rename, col_delete), each rendering ONE icon-button
-    # cellRenderer. Dispatch via onCellClicked branching purely on _event.column.field.
+    # cellRenderer. Dispatch via onCellClick branching purely on _event.cell.column.
     # NO HTML data attribute bridge — Lowdefy cannot reliably hook click events on
     # nunjucks-rendered HTML spans. The column-dispatch pattern is documented in
-    # skill reference/05-blocks-data.md (line 107: onCellClicked { data, value, column.field }).
+    # skill reference/05-blocks-data.md (verified: onCellClick { cell: { column, value }, row }).
     properties:
       enableRtl: true
       treeData: true
@@ -291,36 +287,39 @@ blocks:
                         value: unit_admin
                     children: { __args: 0.data.child_count }
       events:
-        # W6 Pattern A: route by column.field, never by an HTML data attribute.
-        # Captures row context to _state for the chained Confirm + Request actions
-        # rendered in the modals/cards below.
-        onCellClicked:
+        # W6 Pattern A: route by cell.column (verified Lowdefy 5.3 payload path),
+        # never by an HTML data attribute. Captures row context to _state for the
+        # chained ConfirmModal + Request actions rendered in the modals/cards below.
+        # skip: semantics are INVERTED — action fires when skip evaluates false.
+        # To express "run only when X", write skip: { _not: <X> }.
+        onCellClick:
           - id: capture_row
             type: SetState
             params:
-              clicked_column: { _event: column.field }
-              clicked_row_id: { _event: data.id }
-              clicked_row_name: { _event: data.name }
-              clicked_row_level: { _event: data.level }
-              clicked_row_child_count: { _event: data.child_count }
+              clicked_column: { _event: cell.column }
+              clicked_row_id: { _event: row.id }
+              clicked_row_name: { _event: row.name }
+              clicked_row_level: { _event: row.level }
+              clicked_row_child_count: { _event: row.child_count }
 
           # ---- col_rename branch — admin OR team_manager on own team row ----
           - id: prefill_rename
             type: SetState
-            if:
-              _and:
-                - { _eq: [{ _state: clicked_column }, col_rename] }
-                - _or:
-                    - _array.includes:
-                        on: { _user: roles }
-                        value: unit_admin
-                    - _and:
-                        - _array.includes:
-                            on: { _user: roles }
-                            value: team_manager
-                        - _array.includes:
-                            on: { _user: team_ids }
-                            value: { _state: clicked_row_id }
+            skip:
+              _not:
+                _and:
+                  - { _eq: [{ _state: clicked_column }, col_rename] }
+                  - _or:
+                      - _array.includes:
+                          on: { _user: roles }
+                          value: unit_admin
+                      - _and:
+                          - _array.includes:
+                              on: { _user: roles }
+                              value: team_manager
+                          - _array.includes:
+                              on: { _user: team_ids }
+                              value: { _state: clicked_row_id }
             params:
               edit_unit_id: { _state: clicked_row_id }
               edit_name_input: { _state: clicked_row_name }
@@ -332,24 +331,26 @@ blocks:
           # list_units refresh run from the modal's onOk handler below.
           - id: stage_delete_id
             type: SetState
-            if:
-              _and:
-                - { _eq: [{ _state: clicked_column }, col_delete] }
-                - _array.includes:
-                    on: { _user: roles }
-                    value: unit_admin
-                - { _eq: [{ _state: clicked_row_child_count }, 0] }
+            skip:
+              _not:
+                _and:
+                  - { _eq: [{ _state: clicked_column }, col_delete] }
+                  - _array.includes:
+                      on: { _user: roles }
+                      value: unit_admin
+                  - { _eq: [{ _state: clicked_row_child_count }, 0] }
             params:
               delete_unit_id: { _state: clicked_row_id }
           - id: open_delete_confirm
             type: CallMethod
-            if:
-              _and:
-                - { _eq: [{ _state: clicked_column }, col_delete] }
-                - _array.includes:
-                    on: { _user: roles }
-                    value: unit_admin
-                - { _eq: [{ _state: clicked_row_child_count }, 0] }
+            skip:
+              _not:
+                _and:
+                  - { _eq: [{ _state: clicked_column }, col_delete] }
+                  - _array.includes:
+                      on: { _user: roles }
+                      value: unit_admin
+                  - { _eq: [{ _state: clicked_row_child_count }, 0] }
             params:
               blockId: delete_confirm_modal
               method: toggleOpen
@@ -357,23 +358,25 @@ blocks:
           # ---- col_add_child branch — admin only, may need D-04 grow-depth modal ----
           - id: stash_add_target
             type: SetState
-            if:
-              _and:
-                - { _eq: [{ _state: clicked_column }, col_add_child] }
-                - _array.includes:
-                    on: { _user: roles }
-                    value: unit_admin
+            skip:
+              _not:
+                _and:
+                  - { _eq: [{ _state: clicked_column }, col_add_child] }
+                  - _array.includes:
+                      on: { _user: roles }
+                      value: unit_admin
             params:
               add_child_target_id: { _state: clicked_row_id }
               add_child_target_level: { _state: clicked_row_level }
           - id: fetch_tenant_depth
             type: Request
-            if:
-              _and:
-                - { _eq: [{ _state: clicked_column }, col_add_child] }
-                - _array.includes:
-                    on: { _user: roles }
-                    value: unit_admin
+            skip:
+              _not:
+                _and:
+                  - { _eq: [{ _state: clicked_column }, col_add_child] }
+                  - _array.includes:
+                      on: { _user: roles }
+                      value: unit_admin
             params:
               requestId: get_tenant_depth
           # When the new child would exceed the current tenant.org_depth, the
@@ -383,15 +386,16 @@ blocks:
           # handler stages the new depth and opens the Add-child modal.
           - id: open_grow_depth_confirm
             type: CallMethod
-            if:
-              _and:
-                - { _eq: [{ _state: clicked_column }, col_add_child] }
-                - _array.includes:
-                    on: { _user: roles }
-                    value: unit_admin
-                - _gt:
-                    - { _sum: [{ _state: clicked_row_level }, 1] }
-                    - { _request: get_tenant_depth.0.org_depth }
+            skip:
+              _not:
+                _and:
+                  - { _eq: [{ _state: clicked_column }, col_add_child] }
+                  - _array.includes:
+                      on: { _user: roles }
+                      value: unit_admin
+                  - _gt:
+                      - { _sum: [{ _state: clicked_row_level }, 1] }
+                      - { _request: get_tenant_depth.0.org_depth }
             params:
               blockId: grow_depth_confirm_modal
               method: toggleOpen
@@ -401,16 +405,17 @@ blocks:
           # modal's onOk handler — see below.)
           - id: open_add_child_modal
             type: SetState
-            if:
-              _and:
-                - { _eq: [{ _state: clicked_column }, col_add_child] }
-                - _array.includes:
-                    on: { _user: roles }
-                    value: unit_admin
-                - _not:
-                    _gt:
-                      - { _sum: [{ _state: clicked_row_level }, 1] }
-                      - { _request: get_tenant_depth.0.org_depth }
+            skip:
+              _not:
+                _and:
+                  - { _eq: [{ _state: clicked_column }, col_add_child] }
+                  - _array.includes:
+                      on: { _user: roles }
+                      value: unit_admin
+                  - _not:
+                      _gt:
+                        - { _sum: [{ _state: clicked_row_level }, 1] }
+                        - { _request: get_tenant_depth.0.org_depth }
             params:
               show_add_child_modal: true
 
@@ -497,7 +502,7 @@ blocks:
   # The destructive chain (delete_org_unit Request → list_units refresh) runs
   # from onOk after the user confirms. The row context (clicked_row_name for
   # the prompt and delete_unit_id for the DELETE statement) is captured into
-  # state by the grid's onCellClicked → capture_row + stage_delete_id actions
+  # state by the grid's onCellClick → capture_row + stage_delete_id actions
   # before the CallMethod toggleOpen fires.
   - id: delete_confirm_modal
     type: ConfirmModal
@@ -530,7 +535,7 @@ blocks:
   # grow_org_depth_and_add_child request) and then open the Add-child modal
   # (where the admin types the child name). The non-grow path skips this
   # modal entirely — see the parallel `open_add_child_modal` action in the
-  # tree-grid's onCellClicked dispatch above.
+  # tree-grid's onCellClick dispatch above.
   - id: grow_depth_confirm_modal
     type: ConfirmModal
     properties:

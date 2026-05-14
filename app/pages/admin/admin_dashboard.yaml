@@ -1,8 +1,5 @@
 id: admin_dashboard
 type: PageHeaderMenu
-auth:
-  roles:
-    - unit_admin
 properties:
   title: 'לוח בקרה - מנהל מערך | shifty'
 requests:

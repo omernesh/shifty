@@ -230,6 +230,45 @@ auth:
 
 A user can have multiple roles — Lowdefy unions the allowed pages. The `_user: role` field can be a string or an array; the gate matches if any user role is in the page's roles.
 
+**Server enforcement (verified 2026-05-14 against Lowdefy 5.3.0 source):** The `auth.pages.roles` map in `lowdefy.yaml` IS the canonical Layer-3 tenant-isolation gate. The Lowdefy build internalises the role map and the server enforces it via `getPageConfig` (returns null for unauthorized pages — the client never sees the page config) and `authorizeRequest` (throws "Request does not exist" for requests on pages the caller cannot reach — information-hiding). Manual page-level `auth:` declarations are NOT the enforcement mechanism; `auth.pages.roles` at `lowdefy.yaml` top-level is. PRD §8.3 Layer-3 is satisfied by correctly populating this map.
+
+## Anti-pattern: page-level `auth:` is REJECTED in Lowdefy 5.3
+
+**Verified 2026-05-14 (Plan 02-09 Task 3 spike against `packages/build/src/lowdefySchema.js`)**
+
+```yaml
+# WRONG — Lowdefy 5.3 REJECTS this:
+id: manage_soldiers
+type: PageHeaderMenu
+auth:           # ← [ConfigWarning] must NOT have additional properties - "auth"
+  roles:
+    - unit_admin
+```
+
+Pages are blocks. The block schema has `additionalProperties: false`. `auth:` is not in the whitelist. Every page with a top-level `auth:` block will emit a `[ConfigWarning] must NOT have additional properties - "auth"` and the build exits non-zero.
+
+**Fix:** Remove the page-level `auth:` block from all page YAMLs. The role gate is enforced by the central `auth.pages.roles` map in `lowdefy.yaml`. Before removing, verify that every page's intended role gate is mirrored in `lowdefy.yaml auth.pages.roles` — do not remove and lose the gate.
+
+```yaml
+# CORRECT — page has no auth: block; gate lives in lowdefy.yaml:
+id: manage_soldiers
+type: PageHeaderMenu
+properties:
+  title: 'ניהול חיילים | shifty'
+```
+
+```yaml
+# In lowdefy.yaml:
+auth:
+  pages:
+    protected: true
+    public: [login, signup, signup_with_invite, '404']
+    roles:
+      unit_admin:
+        - manage_soldiers
+        - ...
+```
+
 ## Public landing + protected app
 
 Common pattern: keep `/` public, gate everything else.

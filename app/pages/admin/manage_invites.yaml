@@ -1,8 +1,5 @@
 id: manage_invites
 type: PageHeaderMenu
-auth:
-  roles:
-    - unit_admin
 properties:
   title: 'ניהול קודי הזמנה | shifty'
 requests:

@@ -1,7 +1,5 @@
 id: signup
 type: PageHeaderMenu
-auth:
-  protected: false
 properties:
   title: יצירת חשבון חדש | shifty
 blocks:

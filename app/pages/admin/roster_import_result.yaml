@@ -1,9 +1,5 @@
 id: roster_import_result
 type: PageHeaderMenu
-auth:
-  roles:
-    - unit_admin
-    - team_manager
 properties:
   title: 'סיכום ייבוא | shifty'
 
