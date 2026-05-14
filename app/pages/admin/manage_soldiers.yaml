@@ -234,13 +234,13 @@ blocks:
                   on:
                     value: { __args: 0.value }
     events:
-      onRowClicked:
+      onRowClick:
         - id: open_detail
           type: Link
           params:
             pageId: soldier_detail
             urlQuery:
-              id: { _event: data.id }
+              id: { _event: row.id }
 
   # ── Empty-state Result (UI-SPEC Hebrew copy table line 228) ────────────────
   # Visible only when list_soldiers is empty AND request has resolved.
