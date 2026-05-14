@@ -21,7 +21,7 @@ requests:
   # D-13: per-tenant scoped via Layer 2 + Layer 5 (inline RLS policy from 0011).
   # ORDER BY key ASC for predictable browsing (slug naming is alphabet-friendly).
   - id: list_role_tags
-    type: KnexRaw
+    type: KnexRawTenant
     connectionId: shifts_db
     payload:
       tenant_id:

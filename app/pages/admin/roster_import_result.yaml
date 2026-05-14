@@ -23,7 +23,7 @@ properties:
 
 requests:
   - id: get_import_summary
-    type: KnexRaw
+    type: KnexRawTenant
     connectionId: shifts_db
     payload:
       tenant_id:

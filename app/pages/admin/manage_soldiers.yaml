@@ -21,7 +21,7 @@ requests:
   # NOTE: the literal SQL fragment `s.status = 'active'` is one contiguous token —
   # verify-command grep searches for it as ONE substring (W4 fix from PLAN revision iter 1).
   - id: list_soldiers
-    type: KnexRaw
+    type: KnexRawTenant
     connectionId: shifts_db
     payload:
       tenant_id:
@@ -41,7 +41,7 @@ requests:
   # ── Feed MultipleSelector options in the Add-soldier Modal ──────────────────
   # D-13: per-tenant role-tag catalog from plan 01's migration 0011_role_tag.
   - id: list_role_tags
-    type: KnexRaw
+    type: KnexRawTenant
     connectionId: shifts_db
     payload:
       tenant_id:
@@ -59,7 +59,7 @@ requests:
   # TEN-05: schedules + assignments live at leaf nodes. NOT EXISTS sub-select
   # excludes any org_unit that has children. Both arms scoped by tenant_id.
   - id: list_leaf_teams
-    type: KnexRaw
+    type: KnexRawTenant
     connectionId: shifts_db
     payload:
       tenant_id:

@@ -2,7 +2,12 @@
 // Full implementation (Plan 01 was a partial scaffold; Plan 04 replaces it).
 // Truncates all test data in reverse FK order.
 // Preserves the applied schema (does not drop tables).
-// TRUNCATE bypasses RLS (it's DDL-adjacent, not DML) — no need to set app.current_tenant.
+//
+// Layer 5 (RLS) note: migration 0013 makes `shifts` connections automatically SET ROLE
+// shifty_app (NOSUPERUSER, NOBYPASSRLS). shifty_app does NOT have TRUNCATE on the audit
+// tables (REVOKE in migration 0010+0013 enforces append-only). Teardown needs superuser
+// to wipe everything, so we issue `RESET ROLE` after connect — this returns to
+// session_user = shifts which is still the bootstrap SUPERUSER.
 
 import { Client } from 'pg';
 
@@ -12,9 +17,13 @@ export async function teardownTestData(): Promise<void> {
   const client = new Client({ connectionString: PG_URL });
   await client.connect();
   try {
+    // RESET ROLE returns to session_user (shifts), which remains the bootstrap SUPERUSER
+    // (Postgres refuses to demote the bootstrap user — see migration 0013 header).
+    // This is required so TRUNCATE works on audit tables that REVOKE TRUNCATE from shifty_app.
+    await client.query('RESET ROLE');
     // Reverse FK order to avoid constraint violations.
     // RESTART IDENTITY resets sequences. CASCADE drops dependent rows automatically.
-    // Tables that may not exist in all migration states are listed but protected by CASCADE.
+    // TRUNCATE as superuser bypasses RLS.
     await client.query(`
       TRUNCATE TABLE
         invite_code_redemption,

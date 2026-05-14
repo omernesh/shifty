@@ -4,7 +4,7 @@ properties:
   title: 'ניהול יחידות ארגוניות | shifty'
 requests:
   - id: list_units
-    type: KnexRaw
+    type: KnexRawTenant
     connectionId: shifts_db
     # Recursive CTE emits a `path TEXT[]` so AgGrid `treeData: true` can rebuild the
     # tree via `getDataPath: data => data.path`. The `counts` CTE adds `child_count`
@@ -43,7 +43,7 @@ requests:
         tenant_id: { _payload: tenant_id }
 
   - id: get_tenant_depth
-    type: KnexRaw
+    type: KnexRawTenant
     connectionId: shifts_db
     # Reads the tenant's current org_depth ceiling so the UI can detect when
     # an Add-child action at level == org_depth requires the D-04 grow-depth modal.
@@ -60,7 +60,7 @@ requests:
         tenant_id: { _payload: tenant_id }
 
   - id: create_org_unit
-    type: KnexRaw
+    type: KnexRawTenant
     connectionId: shifts_db
     # Note: request-level auth.roles not supported in Lowdefy 5.3.0; page-level auth.roles provides gate.
     # tenant_id derived from _user:tenant_id (server-side session) — cannot be spoofed by client.
@@ -81,7 +81,7 @@ requests:
         name: { _payload: name }
 
   - id: rename_org_unit
-    type: KnexRaw
+    type: KnexRawTenant
     connectionId: shifts_db
     # Note: request-level auth.roles not supported in Lowdefy 5.3.0; page-level auth.roles provides gate.
     payload:
@@ -99,7 +99,7 @@ requests:
         new_name: { _payload: new_name }
 
   - id: delete_org_unit
-    type: KnexRaw
+    type: KnexRawTenant
     connectionId: shifts_db
     # Note: request-level auth.roles not supported in Lowdefy 5.3.0; page-level auth.roles provides gate.
     payload:
@@ -120,7 +120,7 @@ requests:
         id: { _payload: id }
 
   - id: grow_org_depth_and_add_child
-    type: KnexRaw
+    type: KnexRawTenant
     connectionId: shifts_db
     # D-04 transactional grow-depth + insert-child in one statement.
     #

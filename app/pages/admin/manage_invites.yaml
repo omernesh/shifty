@@ -4,7 +4,7 @@ properties:
   title: 'ניהול קודי הזמנה | shifty'
 requests:
   - id: list_org_units_for_select
-    type: KnexRaw
+    type: KnexRawTenant
     connectionId: shifts_db
     payload:
       tenant_id:
@@ -18,7 +18,7 @@ requests:
         tenant_id: { _payload: tenant_id }
 
   - id: list_active_codes
-    type: KnexRaw
+    type: KnexRawTenant
     connectionId: shifts_db
     payload:
       tenant_id:
@@ -38,7 +38,7 @@ requests:
         tenant_id: { _payload: tenant_id }
 
   - id: create_invite
-    type: KnexRaw
+    type: KnexRawTenant
     connectionId: shifts_db
     # Note: request-level auth.roles not supported in Lowdefy 5.3.0; page-level auth.roles provides gate.
     payload:

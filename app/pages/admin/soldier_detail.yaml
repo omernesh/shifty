@@ -35,7 +35,7 @@ requests:
   # `visible:` gated as defense-in-depth (3 layers: SELECT NULL, client visible,
   # UpdateSoldier CASE WHEN gate).
   - id: load_soldier
-    type: KnexRaw
+    type: KnexRawTenant
     connectionId: shifts_db
     payload:
       tenant_id:
@@ -80,7 +80,7 @@ requests:
 
   # ── role_tag autocomplete options (D-13) ─────────────────────────────────
   - id: list_role_tags
-    type: KnexRaw
+    type: KnexRawTenant
     connectionId: shifts_db
     payload:
       tenant_id:
@@ -96,7 +96,7 @@ requests:
 
   # ── leaf teams for the Memberships MultipleSelector (TEN-05) ─────────────
   - id: list_leaf_teams
-    type: KnexRaw
+    type: KnexRawTenant
     connectionId: shifts_db
     payload:
       tenant_id:

@@ -3,6 +3,12 @@
 // Seeds two independent tenants for cross-tenant isolation tests.
 // Uses the `pg` package directly (not Lowdefy) — connects to localhost:5432.
 // DDL never; only INSERT. Schema must already be applied via migrations.
+//
+// Layer 5 (RLS) note: migration 0013 makes `shifts` connections automatically SET ROLE
+// shifty_app (NOSUPERUSER, NOBYPASSRLS). For seeding (multi-tenant inserts), we issue
+// `RESET ROLE` after connect to return to session_user = shifts (the bootstrap SUPERUSER
+// which bypasses RLS). This keeps the seed logic simple — set_config per tenant still
+// scopes app.current_tenant correctly for the assertions in cross-tenant-leak.spec.ts.
 
 import { Client } from 'pg';
 import { randomUUID, randomBytes } from 'node:crypto';
@@ -45,8 +51,9 @@ async function seedOne(client: Client, label: 'A' | 'B'): Promise<TenantFixture>
   const inviteCode = crockford8();
 
   // Set RLS context before each tenant's inserts.
-  // The `shifts` role is superuser (migration 0001), so RLS applies but can be bypassed
-  // by set_config. set_config with false (not local) persists for the connection session.
+  // set_config with false (not local) persists for the connection session — combined
+  // with RESET ROLE in seedTwoTenants(), the shifts SUPERUSER session bypasses RLS for
+  // INSERTs and the app.current_tenant is the same value that tests will assert against.
   await client.query(`SELECT set_config('app.current_tenant', $1, false)`, [tenantId]);
 
   await client.query(
@@ -110,6 +117,9 @@ export async function seedTwoTenants(): Promise<{ tenantA: TenantFixture; tenant
   const client = new Client({ connectionString: PG_URL });
   await client.connect();
   try {
+    // Migration 0013 makes shifts auto SET ROLE shifty_app on connect; reset to
+    // session_user (shifts, still SUPERUSER per bootstrap rule) so seeding bypasses RLS.
+    await client.query('RESET ROLE');
     const tenantA = await seedOne(client, 'A');
     const tenantB = await seedOne(client, 'B');
     return { tenantA, tenantB };
@@ -133,6 +143,10 @@ export async function signInAs(email: string): Promise<SignInResult> {
   const client = new Client({ connectionString: PG_URL });
   await client.connect();
   try {
+    // RESET ROLE so the session insert works without RLS interference.
+    // `sessions` is an Auth.js table, intentionally not RLS-protected, but the lookup
+    // of users by email above is also unprotected and needs no tenant scope.
+    await client.query('RESET ROLE');
     const userResult = await client.query<{ id: string }>(
       `SELECT id FROM "users" WHERE email = $1`,
       [email]

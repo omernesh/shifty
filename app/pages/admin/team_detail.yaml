@@ -37,7 +37,7 @@ properties:
 requests:
   # ── Load the team row ──────────────────────────────────────────────────────
   - id: get_team
-    type: KnexRaw
+    type: KnexRawTenant
     connectionId: shifts_db
     payload:
       tenant_id:
@@ -67,7 +67,7 @@ requests:
   # `s.status = 'active'` is one canonical SQL token (W4 fix); archived
   # soldiers preserve membership rows (D-08) but are hidden from this picker.
   - id: list_team_members
-    type: KnexRaw
+    type: KnexRawTenant
     connectionId: shifts_db
     payload:
       tenant_id:
@@ -101,7 +101,7 @@ requests:
   # Feeds the Add-member MultipleSelector. NOT EXISTS sub-select filtered by
   # tenant_id on both arms. Only active soldiers are eligible.
   - id: list_addable_soldiers
-    type: KnexRaw
+    type: KnexRawTenant
     connectionId: shifts_db
     payload:
       tenant_id:
@@ -157,7 +157,7 @@ requests:
   #     Phase 3+, not in membership row retention).
   #   - Schedule history is preserved by snapshot pattern on assignment.
   - id: remove_membership
-    type: KnexRaw
+    type: KnexRawTenant
     connectionId: shifts_db
     payload:
       tenant_id: { _user: tenant_id }

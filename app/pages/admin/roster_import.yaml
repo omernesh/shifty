@@ -48,7 +48,7 @@ requests:
 
   # ── role_tag autocomplete options for inline-edit in the preview cells ───
   - id: list_role_tags
-    type: KnexRaw
+    type: KnexRawTenant
     connectionId: shifts_db
     payload:
       tenant_id:
@@ -64,7 +64,7 @@ requests:
 
   # ── leaf teams for the team_id Selector in the preview ───────────────────
   - id: list_leaf_teams
-    type: KnexRaw
+    type: KnexRawTenant
     connectionId: shifts_db
     payload:
       tenant_id:

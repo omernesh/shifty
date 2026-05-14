@@ -32,7 +32,7 @@ requests:
   # self-signup but the soldier row was never created, this returns 0 rows —
   # the empty-state Result below covers that case.
   - id: load_my_soldier
-    type: KnexRaw
+    type: KnexRawTenant
     connectionId: shifts_db
     payload:
       user_id:
@@ -59,7 +59,7 @@ requests:
   # The color hex value comes from the shared color_swatches block's
   # selected_color_hex state slot (D-16 / plan 02-06 shared block contract).
   - id: update_my_color
-    type: KnexRaw
+    type: KnexRawTenant
     connectionId: shifts_db
     payload:
       user_id: { _user: user_id }
