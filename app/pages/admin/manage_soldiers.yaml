@@ -176,11 +176,10 @@ blocks:
   - id: soldiers_grid
     type: AgGridAlpine
     properties:
-      enableRtl: true
+      # L-2 (round 2): enableRtl + rowSelection + animateRows stripped — not in
+      # 5.3 AgGrid whitelist. RTL from page-level dir="rtl".
       pagination: true
       paginationPageSize: 25
-      rowSelection: single
-      animateRows: true
       quickFilterText: { _state: search_query }
       rowData: { _request: list_soldiers }
       defaultColDef:

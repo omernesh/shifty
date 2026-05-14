@@ -288,10 +288,9 @@ blocks:
       - id: team_members_grid
         type: AgGridAlpine
         properties:
-          enableRtl: true
+          # L-2 (round 2): enableRtl + rowSelection + animateRows stripped —
+          # not in 5.3 AgGrid whitelist. RTL from page-level dir="rtl".
           pagination: false
-          rowSelection: single
-          animateRows: true
           rowData: { _request: list_team_members }
           defaultColDef:
             sortable: true

@@ -292,34 +292,23 @@ blocks:
                               - re_invite: { __args: 0.is_duplicate }
 
       # ── Preview AgGrid ─────────────────────────────────────────────────
-      # enableRtl mandatory per UI-SPEC §"Reusable Components — 8".
+      # L-2 (round 2): enableRtl + animateRows + getRowStyle stripped — not in
+      # 5.3 AgGrid whitelist (silently dropped). RTL from page-level dir="rtl".
+      # Row background by status is deferred to Phase 3 (requires custom cellStyle
+      # function or CSS class approach supported by the 5.3 AgGrid block API).
       # Status pill cellRenderer recipe copied byte-equal from UI-SPEC
       # §"Reusable Components — 3" (D-09 + Pitfall P9 Pattern A — no
       # data-action HTML, click handling is via field-typed columns).
       - id: preview_grid
         type: AgGridAlpine
         properties:
-          enableRtl: true
           rowData: { _state: parsed_rows }
-          animateRows: true
           defaultColDef:
             sortable: true
             resizable: true
             filter: false
             editable: true
             flex: 1
-          getRowStyle:
-            _function:
-              __args: 0
-              __return:
-                _if:
-                  test: { _eq: [{ __args: 0.data.status }, 'error'] }
-                  then: { background: '#FFE5E5' }
-                  else:
-                    _if:
-                      test: { _eq: [{ __args: 0.data.status }, 'warn'] }
-                      then: { background: '#FFFBE6' }
-                      else: null
           columnDefs:
             - field: status
               headerName: מצב
@@ -362,8 +351,8 @@ blocks:
             - field: re_invite
               headerName: שלח שוב
               width: 100
+              # L-2 (round 2): cellEditor stripped — not in 5.3 AgGrid column whitelist.
               cellRenderer: agCheckboxCellRenderer
-              cellEditor: agCheckboxCellEditor
               hide:
                 _not:
                   _array.some:

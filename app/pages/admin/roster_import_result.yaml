@@ -163,9 +163,9 @@ blocks:
       - id: error_details_grid
         type: AgGridAlpine
         properties:
-          enableRtl: true
+          # L-2 (round 2): enableRtl + domLayout stripped — not in 5.3 AgGrid whitelist.
+          # RTL from page-level dir="rtl".
           rowData: { _request: get_import_summary.0.error_details }
-          domLayout: autoHeight
           defaultColDef:
             sortable: true
             resizable: true
