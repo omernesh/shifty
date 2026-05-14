@@ -14,7 +14,7 @@ Shifty's v1 is a Hebrew-RTL, multi-tenant shift-planning SaaS for Israeli reserv
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundations** - Lowdefy runtime + tenancy + RBAC + 5-layer tenant defense + custom-plugin scaffold + ops baseline (completed 2026-05-12)
-- [ ] **Phase 2: Org & People** - Units/teams CRUD, soldier roster CRUD, CSV roster import with smart-quote canonicalization
+- [x] **Phase 2: Org & People** - Units/teams CRUD, soldier roster CRUD, CSV roster import with smart-quote canonicalization (deploy green 2026-05-14; Plan 10 Task 4 manual UAT pending)
 - [ ] **Phase 3: Availability & Rules** - Shift slots, planning windows, hybrid availability UI, 8-rule catalog with per-soldier tightening
 - [ ] **Phase 4: Solver & Schedule** - FastAPI CP-SAT solver with unsat-core infeasibility, draft → publish lifecycle, manager hand-edit
 - [ ] **Phase 5: Lifecycle Features** - Swap workflow + manager manual override + time clock (3 parallel sub-streams)
@@ -64,8 +64,8 @@ Decimal phases appear between their surrounding integers in numeric order.
   - [x] 02-06-PLAN.md — Wave 2 soldier_detail + color_swatches block + CreateSoldier/UpdateSoldier/ArchiveSoldier/InviteLater bodies
   - [x] 02-07-PLAN.md — Wave 2 team_detail (Add/Remove member) + my_profile color override + CreateMembership body
   - [x] 02-08-PLAN.md — Wave 3 CSV import wizard + ParseCsvAndValidate + CommitRosterImport (Auth.js spike + Resend dispatch loop)
-  - [ ] 02-09-PLAN.md — Wave 4 lowdefy.yaml wiring + 0008_legacy_drop (UI ships before migration)
-  - [ ] 02-10-PLAN.md — Wave 4 E2E specs (roster-csv-import + soldier-crud + tenant-isolation) + 4 CSV fixtures + phase-gate smoke
+  - [x] 02-09-PLAN.md — Wave 4 lowdefy.yaml wiring + 0008_legacy_drop + Lowdefy 5.3 audit corrections (rounds 1+2; UX downgrade — Upload→TextArea paste, custom RosterUpload deferred to Phase 3)
+  - [x] 02-10-PLAN.md — Wave 4 E2E specs + 5 CSV fixtures + 63/63 unit tests pass; Task 4 live UAT deferred (checkpoint:human-action)
 **Sequencing notes**: Sequential FK chain — org_unit CRUD → soldier CRUD → role tags + seniority → membership. CSV import path builds in parallel with the single-row form once `soldier.display_name` write semantics are settled.
 **Avoids pitfalls**: P5 (CSV direction-mark stripping at write time), P10 (display-name normalization, 24-color palette spec).
 
