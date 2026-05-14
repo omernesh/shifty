@@ -203,9 +203,9 @@ blocks:
     # nunjucks-rendered HTML spans. The column-dispatch pattern is documented in
     # skill reference/05-blocks-data.md (verified: onCellClick { cell: { column, value }, row }).
     properties:
-      enableRtl: true
+      # L-2 (round 2): enableRtl + animateRows stripped — not in 5.3 AgGrid whitelist.
+      # RTL text alignment from page-level dir="rtl". treeData retained (valid property).
       treeData: true
-      animateRows: true
       groupDefaultExpanded: -1
       rowData: { _request: list_units }
       autoGroupColumnDef:

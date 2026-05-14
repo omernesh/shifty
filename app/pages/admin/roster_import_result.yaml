@@ -59,11 +59,12 @@ blocks:
       title: 'הייבוא לא נמצא'
       subTitle: 'מזהה הייבוא לא תקף או אינו שייך לארגון שלך.'
     blocks:
+      # D-1/D-2 (round 2): contentGutter/contentJustify renamed for Lowdefy 5.3.
       - id: not_found_actions
-        type: Box
+        type: Flex
         properties:
-          contentGutter: [8, 8]
-          contentJustify: center
+          gap: small
+          justify: center
         blocks:
           - id: not_found_back
             type: Button
@@ -112,11 +113,12 @@ blocks:
             skipped: { _request: get_import_summary.0.rows_skipped }
             errored: { _request: get_import_summary.0.rows_errored }
     blocks:
+      # D-1/D-2 (round 2): contentGutter/contentJustify renamed for Lowdefy 5.3.
       - id: result_actions
-        type: Box
+        type: Flex
         properties:
-          contentGutter: [8, 8]
-          contentJustify: center
+          gap: small
+          justify: center
           style:
             marginTop: 16
         blocks:
@@ -153,17 +155,16 @@ blocks:
         - _gt: [{ _request: get_import_summary.0.rows_errored }, 0]
     properties:
       title: 'שגיאות לפי שורה'
-      headStyle:
-        textAlign: right
+      # L-3 (round 2): headStyle removed — silently dropped in 5.3. RTL header from dir="rtl".
       style:
         marginTop: 24
     blocks:
       - id: error_details_grid
         type: AgGridAlpine
         properties:
-          enableRtl: true
+          # L-2 (round 2): enableRtl + domLayout stripped — not in 5.3 AgGrid whitelist.
+          # RTL from page-level dir="rtl".
           rowData: { _request: get_import_summary.0.error_details }
-          domLayout: autoHeight
           defaultColDef:
             sortable: true
             resizable: true

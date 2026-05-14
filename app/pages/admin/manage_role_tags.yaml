@@ -60,10 +60,10 @@ blocks:
   - id: tags_grid
     type: AgGridAlpine
     properties:
-      enableRtl: true
+      # L-2 (round 2): enableRtl + domLayout stripped — not in 5.3 AgGrid whitelist.
+      # RTL from page-level dir="rtl"; autoHeight layout via CSS instead.
       rowData:
         _request: list_role_tags
-      domLayout: autoHeight
       defaultColDef:
         sortable: true
         resizable: true

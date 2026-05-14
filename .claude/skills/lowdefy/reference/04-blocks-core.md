@@ -34,38 +34,66 @@ Every block has `id`, `type`, and most have `properties`, `events`, `style`, `la
           last_changed: name
 ```
 
-## Layout: `Box`
+## Layout: `Flex` (was `Box` with `layout.content*` in 4.x)
 
-The workhorse layout block.
+> **Lowdefy 5.3 breaking change:** `Box.layout.contentJustify`, `contentAlign`,
+> `contentGutter`, `contentWrap` are DEPRECATED and silently ignored by the Box
+> renderer. The Box block does not apply flex layout — it is just a plain wrapper.
+> Use the **`Flex`** block for actual flex behaviour.
 
 ```yaml
-- id: my_box
-  type: Box
-  layout:
-    contentJustify: space-between       # flex justify-content
-    contentAlign: center                # flex align-items
-    contentGutter: [16, 16]             # [row, col] gap
+# CORRECT (5.3) — Flex block with properties
+- id: toolbar
+  type: Flex
+  properties:
+    justify: space-between       # flex justify-content: flex-start | center | space-between | flex-end
+    align: center                # flex align-items: flex-start | center | flex-end
+    gap: small                   # small | middle | large  (or a number)
+    wrap: wrap                   # wrap | nowrap
   style:
     padding: 24
-    background: '#fff'
-    borderRadius: 8
   blocks:
     - id: child_1
       type: Title
       ...
+
+# WRONG (produces no flex layout in 5.3 — contentJustify silently ignored)
+- id: toolbar
+  type: Box
+  layout:
+    contentJustify: space-between   # DEPRECATED — ignored by Box renderer in 5.3
+    contentAlign: center            # DEPRECATED — ignored
+    contentGutter: [16, 16]         # DEPRECATED — ignored
 ```
 
-`Box` properties also accept `inline: true` for inline-flex.
+`Box` is still valid as a plain container block (no flex). Use `Flex` whenever you need flex behaviour.
 
 ## Container blocks
 
 - **`Card`** — bordered card with optional header/footer slots.
+  > **GOTCHA (5.3):** `headStyle` and `bodyStyle` are NOT in the 5.3 Card properties whitelist — they are silently ignored. Header text alignment comes from the page-level `dir="rtl"` attribute. Do not add `headStyle: { textAlign: right }`.
 - **`Tabs`** — tabbed container; child blocks are tab panels (`Tab` block).
 - **`Collapse`** — accordion.
 - **`Modal`** — opens via `setOpen` method or `CallMethod` action.
 - **`Drawer`** — side panel; same trigger pattern as Modal.
 - **`Affix`** — sticky positioning.
 - **`Anchor`** — TOC nav.
+- **`Spinner`** — loading indicator from plugin `@lowdefy/blocks-loaders`. Properties: `size: small | medium | large`. Must be declared in both `lowdefy.yaml plugins:` AND `package.json dependencies`. No `tip` property — add a separate `Paragraph` block for loading text.
+  ```yaml
+  # In lowdefy.yaml:
+  plugins:
+    - name: '@lowdefy/blocks-loaders'
+      version: '5.3.0'
+  # In app/package.json:
+  # "@lowdefy/blocks-loaders": "5.3.0"
+  
+  # Block usage:
+  - id: my_spinner
+    type: Spinner
+    properties:
+      size: large
+  ```
+  > **`Spin` does not exist in Lowdefy 5.3.** Use `Spinner` from `@lowdefy/blocks-loaders`.
 
 ## `Form`
 
@@ -143,11 +171,12 @@ Shared events: `onChange { value }`, `onBlur`, `onFocus`, `onPressEnter`, `onInp
 | Block                | Notes                                                              |
 | -------------------- | ------------------------------------------------------------------ |
 | `Selector`           | Single-select dropdown.                                            |
-| `MultipleSelector`   | Multi-select with tags.                                            |
+| `MultipleSelector`   | Multi-select with tags. Use `renderTags: true` for chip rendering. |
 | `ButtonSelector`     | Radio-button-style group.                                          |
 | `CheckboxSelector`   | Multi-select via checkboxes.                                       |
 | `RadioSelector`      | Radio button group.                                                |
-| `TagSelector`        | Tag-style multi-select.                                            |
+
+> **`TagSelector` does not exist in Lowdefy 5.3.** The build error is `[ConfigError] Block type "TagSelector" was used but is not defined. Did you mean "DateSelector"?`. Use `MultipleSelector` instead — it supports `renderTags: true` for chip-style rendering.
 
 Options can be a flat array or an array of objects:
 

@@ -2,8 +2,8 @@
 phase: 02-org-people
 plan: 09
 subsystem: lowdefy-wiring + legacy-schema-drop + deploy-bootstrap + schema-validator-corrections
-tags: [lowdefy, migration, schema, deploy, hpg5, plan-09, schema-validator, aggrid, auth]
-status: corrections-applied-awaiting-deploy-retry
+tags: [lowdefy, migration, schema, deploy, hpg5, plan-09, schema-validator, aggrid, auth, round2]
+status: round2-corrections-applied-awaiting-deploy-retry
 dependency_graph:
   requires: [02-04, 02-06, 02-07, 02-08]
   provides:
@@ -71,21 +71,32 @@ decisions:
   - Deferred inline tag creation to v1.1; not feasible with MultipleSelector natively
   - onRowClick payload corrected to row.X (consistent with onCellClick finding)
 metrics:
-  duration: ~120 min total (two sessions)
+  duration: ~180 min total (three sessions)
   completed_date: 2026-05-14
   tasks_completed: 2 of 3 (Task 3 blocked pending hpg5 deploy retry with corrected code)
-  commits: 14 (3b70dfb, 7986b06, 87c1ab8, dac3e31, d56c129, efc378c, 8a0b3c5, b4cf6cd, 8826a13, c9701a3, cf3647e, 6536e7b, 7d2d724, eeadeee)
+  commits: 22 (3b70dfb, 7986b06, 87c1ab8, dac3e31, d56c129, efc378c, 8a0b3c5, b4cf6cd, 8826a13, c9701a3, cf3647e, 6536e7b, 7d2d724, eeadeee, c73c8b9, aa1f3af, 4e27c89, 5dceb60, 530f925, e8221f0, 9893854)
 ---
 
-# Phase 2 Plan 09: Lowdefy wiring + legacy schema drop — Summary (corrections applied, deploy retry queued)
+# Phase 2 Plan 09: Lowdefy wiring + legacy schema drop — Summary (round 2 corrections applied, deploy retry queued)
 
 ## One-liner
 
-Wired the 7 new Phase-2 pages into `app/lowdefy.yaml` and authored `0008_legacy_drop.up.sql`; bootstrapped hpg5 as git-pull mirror; applied 6 classes of Lowdefy 5.3 schema-validator corrections across the full page corpus (page-level auth: rejection, action if: rejection, AgGrid event name/payload bug, TagSelector non-existence); all corrections committed and ready for the next `git push + docker compose build` retry on hpg5.
+Wired the 7 new Phase-2 pages into `app/lowdefy.yaml` and authored `0008_legacy_drop.up.sql`; bootstrapped hpg5 as git-pull mirror; applied 6 classes of Lowdefy 5.3 schema-validator corrections (Sessions 1+2); then applied a 2nd exhaustive audit pass (Session 3) fixing 3 INVALID, 4 DEPRECATED, 3 latent bug, and 4 skill-ref classes across 8 atomic commits — all corrections committed and ready for the next deploy retry.
 
-## Status: Corrections applied — awaiting hpg5 deploy retry
+## Status: Round 2 corrections applied — awaiting hpg5 deploy retry
 
-The original Task 3 block (Docker build failing with 3 classes of validator errors) has been fully resolved in code. The orchestrator must push to origin/main, sync hpg5 via `git reset --hard origin/main`, and retry the PsExec-wrapped `docker compose build lowdefy`. Once the build succeeds and the 5-step Task 3 verification passes (steps 4+5 green), migration 0008 can be applied.
+Round 1 corrected 6 build-blocking classes. Round 2 (this session) corrects the 3 additional classes that surfaced from the hpg5 build attempt PLUS a full audit of all remaining Lowdefy 5.3 mismatches.
+
+Round 2 scope resolved:
+- **I-1** Upload block (non-existent) → TextArea paste UI + ParseCsvAndValidate.js adapter
+- **I-2** Spin block (non-existent) → Spinner from @lowdefy/blocks-loaders
+- **I-3** `onError:` action key → `try:`/`catch:` event form
+- **D-1/D-2/D-3/D-4** `contentGutter`/`contentJustify`/`contentWrap`/`contentAlign` → `Flex` block properties
+- **L-2** AgGrid extra props silently dropped: enableRtl, animateRows, rowSelection, getRowStyle, domLayout, cellEditor
+- **L-3** Card `headStyle` silently dropped (11 sites)
+- **S-1/S-2/S-3/S-4** Skill reference corrections in 4 reference files
+
+The orchestrator must push to origin/main, sync hpg5 via `git reset --hard origin/main`, and retry the PsExec-wrapped `docker compose build lowdefy`.
 
 ## What landed — all commits
 
@@ -159,6 +170,27 @@ Session 2 commits (`8826a13` through `eeadeee`) are on worktree branch `worktree
 ### Correction 6 — Rule 1 latent bug: `onRowClicked` → `onRowClick` + `row.id` (commit eeadeee)
 
 `manage_soldiers.yaml` also used `onRowClicked` (same past-tense pattern) with `_event: data.id`. Corrected to `onRowClick` + `_event: row.id` for consistency with the verified AgGrid event naming pattern. The soldier-detail navigation affordance was silently broken.
+
+## Round 2 commits (Session 3)
+
+| Commit  | Wave    | Purpose                                                                                        |
+|---------|---------|-----------------------------------------------------------------------------------------------|
+| c73c8b9 | 1.1     | feat: replace Upload block with TextArea paste UI + ParseCsvAndValidate.js adapter            |
+| aa1f3af | 1.2     | feat: Spin → Spinner with @lowdefy/blocks-loaders plugin install                              |
+| 4e27c89 | 1.3     | fix: onError: → try/catch event shape (signup_with_invite)                                    |
+| 5dceb60 | 2       | fix: layout content* renames + Box→Flex on toolbar sites (12 sites across 6 files)            |
+| 530f925 | 3.1     | fix: strip AgGrid extra props (enableRtl + 6 others, silently dropped)                        |
+| e8221f0 | 3.2     | fix: strip Card headStyle (silently dropped, 11 sites)                                        |
+| 9893854 | 4       | docs(skill): Lowdefy 5.3 audit corrections to 4 skill ref files                               |
+
+## Phase 3 deferred items
+
+| Item | Reason |
+|------|--------|
+| Custom RosterUpload block (drag-drop + file picker) | Upload block non-existent; user-confirmed TextArea paste for Phase 2 |
+| AgGrid row-background-by-status (getRowStyle) | getRowStyle silently ignored in 5.3; requires cellStyle per-column function or CSS approach |
+| AgGrid rowSelection (single/multiple) | Not in 5.3 AgGrid whitelist; deferred |
+| Hebrew column alignment in AgGrid | enableRtl silently ignored; page-level dir="rtl" handles text bidi but column order LTR |
 
 ## Task 3 resume procedure (for orchestrator)
 
@@ -254,6 +286,36 @@ COMMIT;
 **10. [Rule 1 - Bug] Skill reference corrections (commit 8826a13)**
 - 3 files corrected with verified Lowdefy 5.3 behavior.
 
+### Auto-fixed issues (Session 3 — round 2 exhaustive audit)
+
+**11. [Rule 1 - Bug] Upload block replaced with TextArea paste (commits c73c8b9)**
+- Upload block does not exist in Lowdefy 5.3. User confirmed TextArea paste UI.
+- ParseCsvAndValidate.js updated: csv_text (UTF-8 string) replaces file_b64 (base64).
+- Phase 3 deferred: custom RosterUpload block with drag-drop.
+
+**12. [Rule 1 - Bug] Spin → Spinner from @lowdefy/blocks-loaders (commit aa1f3af)**
+- Spin block does not exist in Lowdefy 5.3. Added @lowdefy/blocks-loaders plugin.
+- Spin.tip not a Spinner property; split into Paragraph label + Spinner.
+
+**13. [Rule 1 - Bug] onError: → try/catch event form (commit 4e27c89)**
+- onError: is not in Lowdefy 5.3 action whitelist. Restructured signup_with_invite.yaml.
+- signin_after moved inside try: for correct semantics (stop on redeem failure).
+
+**14. [Rule 2 - Deprecated] Layout content* renames + Box→Flex (commit 5dceb60)**
+- 12 sites across 6 files: contentGutter→gap, contentJustify→justify, contentWrap→wrap.
+- 4 toolbar/footer sites with contentAlign: middle converted from Box to Flex block.
+- color_swatches.yaml converted to Flex (wrapping swatch grid).
+
+**15. [Rule 2 - Deprecated] AgGrid extra props stripped (commit 530f925)**
+- 6 sites: enableRtl (silently ignored), animateRows, rowSelection, getRowStyle, domLayout, cellEditor.
+- Phase 3 follow-up: restore row-background-by-status via supported cellStyle API.
+
+**16. [Rule 2 - Deprecated] Card headStyle stripped (commit e8221f0)**
+- 11 sites across 5 files. Not in 5.3 Card whitelist; silently ignored.
+
+**17. [Rule 1 - Bug] Skill reference corrections (commit 9893854)**
+- 4 files: layout block guide (Flex vs Box), AgGrid whitelist, onError/if gotchas, Spinner + TagSelector removed.
+
 ## Known Stubs
 
 | Stub | File | Reason |
@@ -287,4 +349,16 @@ N/A — plan type is `execute`, not `tdd`.
 - _event: column.field in app/pages/: grep returns ZERO matches — VERIFIED
 - _event: data. in app/pages/: grep returns ZERO matches — VERIFIED
 
-## Self-Check: PASSED
+## Self-Check (Round 2 additions)
+
+- `git grep "type: Upload" app/` — ZERO matches (I-1 resolved)
+- `git grep "type: Spin$" app/` — ZERO matches (I-2 resolved)
+- `git grep -n "^[^#]*onError:" app/pages/` — ZERO matches (I-3 resolved)
+- `git grep "contentGutter:\|contentJustify:\|contentWrap:\|contentAlign:" app/` — ZERO matches (D-1/D-4 resolved)
+- `git grep "^[^#]*enableRtl:\|^[^#]*animateRows:\|^[^#]*rowSelection:\|^[^#]*domLayout:\|^[^#]*cellEditor:" app/pages/` — ZERO matches (L-2 resolved)
+- `git grep "headStyle:" app/pages/` — ZERO matches (L-3 resolved)
+- `app/lowdefy.yaml` includes `@lowdefy/blocks-loaders`: CONFIRMED
+- `app/package.json` includes `@lowdefy/blocks-loaders`: CONFIRMED
+- Skill files updated: 01-schema-and-app.md, 04-blocks-core.md, 05-blocks-data.md, 07-events-and-actions.md
+
+## Self-Check: PASSED (Rounds 1 + 2)

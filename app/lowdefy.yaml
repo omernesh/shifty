@@ -9,6 +9,8 @@ plugins:
     version: '5.3.0'
   - name: '@lowdefy/blocks-antd'
     version: '5.3.0'
+  - name: '@lowdefy/blocks-loaders'
+    version: '5.3.0'
   - name: '@lowdefy/plugin-next-auth'
     version: '5.3.0'
   - name: 'shifty-auth'

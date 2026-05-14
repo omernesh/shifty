@@ -96,8 +96,7 @@ blocks:
     type: Card
     properties:
       title: צבע אישי
-      headStyle:
-        textAlign: right
+      # L-3 (round 2): headStyle removed — silently dropped in 5.3. RTL header from dir="rtl".
       style:
         marginBottom: 24
     blocks:

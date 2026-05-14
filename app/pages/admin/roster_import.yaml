@@ -23,15 +23,17 @@ properties:
 #                       cross-tenant breach at the DB layer.
 
 requests:
-  # ── Parse the uploaded base64 CSV + return per-row {status,errors,warnings} ─
+  # ── Parse the pasted CSV text + return per-row {status,errors,warnings} ──────
   # Triggered by the Step 1 "נתח קובץ" button. Server-side parse via papaparse;
   # tenant-scoped pre-flight on app_user emails (T-02-02 — duplicate detection
   # is intra-tenant only), org_unit ids, and role_tag keys.
+  # I-1 (round 2): Upload block (non-existent in 5.3) replaced with TextArea paste.
+  # Handler now receives csv_text (UTF-8 string) instead of file_b64.
   - id: parse_csv_request
     type: ParseCsvAndValidate
     connectionId: shifts_db
     payload:
-      file_b64: { _state: csv_upload_input }
+      csv_text: { _state: csv_text_input }
 
   # ── Commit the parsed (and admin-edited) preview to the database ─────────
   # Stage 1: one DB transaction (soldier + app_user + membership + role_tag).
@@ -93,12 +95,13 @@ blocks:
   # pending in #D9D9D9. We use Box+Tag rather than Ant Steps so the YAML stays
   # plugin-agnostic (the @lowdefy/blocks-antd Steps block exposure is unverified
   # at write time; Tags ship with @lowdefy/blocks-antd@5.3.0 confirmed in plan 04).
+  # D-1/D-4 (round 2): Box with contentGutter/contentJustify/contentAlign → Flex.
   - id: step_indicator
-    type: Box
+    type: Flex
     properties:
-      contentGutter: [16, 16]
-      contentJustify: center
-      contentAlign: middle
+      gap: middle
+      justify: center
+      align: center
       style:
         marginTop: 24
         marginBottom: 24
@@ -140,8 +143,7 @@ blocks:
         - _eq: [{ _state: wizard_step }, null]
     properties:
       title: 'שלב 1 — טען קובץ'
-      headStyle:
-        textAlign: right
+      # L-3 (round 2): headStyle removed — silently dropped in 5.3. RTL header from dir="rtl".
       style:
         marginBottom: 24
     blocks:
@@ -152,22 +154,31 @@ blocks:
             בחר קובץ CSV עם העמודות הבאות: display_name, email, role_tags (separator |), seniority, team_id (UUID).
             הקובץ חייב להיות בקידוד UTF-8. תאים ריקים מותרים בשדות לא חובה.
 
-      # Upload block — Lowdefy 5.3 Upload emits base64 file content in its state
-      # (RESEARCH §"Step 1: File upload" / Assumption A3; pinned in skill ref 04).
-      # If the block doesn't emit base64 as expected at runtime, fallback per
-      # RESEARCH Open Q (A3 mitigation) is a TextArea paste; not wired in v1.
-      - id: csv_upload_input
-        type: Upload
+      # TextArea paste UI — I-1 round 2: Upload block (not defined in Lowdefy 5.3)
+      # replaced with TextArea. Admins paste CSV content; ParseCsvAndValidate
+      # receives csv_text (UTF-8 string) instead of base64 file bytes.
+      # Size cap: 512 KB as a string (>512 KB is ~25k+ rows — unrealistic for Phase 2).
+      - id: csv_text_input
+        type: TextArea
         properties:
-          label: 'טען קובץ CSV (UTF-8)'
-          accept: '.csv,text/csv'
-          multiple: false
+          title: 'הדבק תוכן CSV'
+          placeholder: 'display_name,email,role_tags,seniority,team_id'
+          rows: 12
+          autoSize: false
+        validate:
+          - status: error
+            message: 'גודל הטקסט חורג מ-512KB — פצל לקבצים קטנים יותר'
+            pass:
+              _lt:
+                - _string.length: { _state: csv_text_input }
+                - 524288
 
+      # D-1/D-2 (round 2): contentGutter/contentJustify renamed for Lowdefy 5.3.
       - id: step_1_actions
-        type: Box
+        type: Flex
         properties:
-          contentGutter: [8, 8]
-          contentJustify: flex-start
+          gap: small
+          justify: flex-start
         blocks:
           - id: parse_btn
             type: Button
@@ -176,7 +187,7 @@ blocks:
               type: primary
               icon: AiOutlineFileSearch
               disabled:
-                _not: { _state: csv_upload_input }
+                _not: { _state: csv_text_input }
             events:
               onClick:
                 - id: do_parse
@@ -206,8 +217,7 @@ blocks:
       _eq: [{ _state: wizard_step }, 2]
     properties:
       title: 'שלב 2 — סקור ושפר'
-      headStyle:
-        textAlign: right
+      # L-3 (round 2): headStyle removed — silently dropped in 5.3. RTL header from dir="rtl".
       style:
         marginBottom: 24
     blocks:
@@ -217,11 +227,12 @@ blocks:
       # every row with is_duplicate (D-11). The "trim whitespace" button
       # re-canonicalizes display_name and email (defense-in-depth though the
       # parse step already does this).
+      # D-1/D-2 (round 2): contentGutter/contentJustify renamed for Lowdefy 5.3.
       - id: bulk_fix_toolbar
-        type: Box
+        type: Flex
         properties:
-          contentGutter: [8, 8]
-          contentJustify: flex-start
+          gap: small
+          justify: flex-start
           style:
             marginBottom: 16
         blocks:
@@ -279,34 +290,23 @@ blocks:
                               - re_invite: { __args: 0.is_duplicate }
 
       # ── Preview AgGrid ─────────────────────────────────────────────────
-      # enableRtl mandatory per UI-SPEC §"Reusable Components — 8".
+      # L-2 (round 2): enableRtl + animateRows + getRowStyle stripped — not in
+      # 5.3 AgGrid whitelist (silently dropped). RTL from page-level dir="rtl".
+      # Row background by status is deferred to Phase 3 (requires custom cellStyle
+      # function or CSS class approach supported by the 5.3 AgGrid block API).
       # Status pill cellRenderer recipe copied byte-equal from UI-SPEC
       # §"Reusable Components — 3" (D-09 + Pitfall P9 Pattern A — no
       # data-action HTML, click handling is via field-typed columns).
       - id: preview_grid
         type: AgGridAlpine
         properties:
-          enableRtl: true
           rowData: { _state: parsed_rows }
-          animateRows: true
           defaultColDef:
             sortable: true
             resizable: true
             filter: false
             editable: true
             flex: 1
-          getRowStyle:
-            _function:
-              __args: 0
-              __return:
-                _if:
-                  test: { _eq: [{ __args: 0.data.status }, 'error'] }
-                  then: { background: '#FFE5E5' }
-                  else:
-                    _if:
-                      test: { _eq: [{ __args: 0.data.status }, 'warn'] }
-                      then: { background: '#FFFBE6' }
-                      else: null
           columnDefs:
             - field: status
               headerName: מצב
@@ -349,8 +349,8 @@ blocks:
             - field: re_invite
               headerName: שלח שוב
               width: 100
+              # L-2 (round 2): cellEditor stripped — not in 5.3 AgGrid column whitelist.
               cellRenderer: agCheckboxCellRenderer
-              cellEditor: agCheckboxCellEditor
               hide:
                 _not:
                   _array.some:
@@ -385,11 +385,12 @@ blocks:
                       callback: { _eq: [{ __args: 0.status }, 'error'] }
 
       # ── Step 2 footer: Back + Confirm ──────────────────────────────────
+      # D-1/D-2 (round 2): contentGutter/contentJustify renamed for Lowdefy 5.3.
       - id: step_2_footer
-        type: Box
+        type: Flex
         properties:
-          contentGutter: [16, 16]
-          contentJustify: space-between
+          gap: middle
+          justify: space-between
           style:
             marginTop: 24
         blocks:
@@ -438,17 +439,21 @@ blocks:
       _eq: [{ _state: wizard_step }, 3]
     properties:
       title: 'שלב 3 — אשר ושלח'
-      headStyle:
-        textAlign: right
+      # L-3 (round 2): headStyle removed — silently dropped in 5.3. RTL header from dir="rtl".
     blocks:
       - id: commit_progress_intro
         type: Paragraph
         properties:
           content: 'הייבוא בעיצומו... זמן משוער מתחת ל-35 שניות עבור 50 שורות.'
-      - id: commit_spinner
-        type: Spin
+      # I-2 (round 2): Spin block replaced with Spinner from @lowdefy/blocks-loaders.
+      # Spin.tip is not a Spinner property — split into Paragraph label + Spinner.
+      - id: commit_spinner_label
+        type: Paragraph
         properties:
-          tip: 'מבצע ייבוא ושולח הזמנות'
+          content: 'מבצע ייבוא ושולח הזמנות'
+      - id: commit_spinner
+        type: Spinner
+        properties:
           size: large
 
   # ───── Commit confirmation modal (Lowdefy 5.3 canonical ConfirmModal) ─────

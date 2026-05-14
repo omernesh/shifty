@@ -11,11 +11,11 @@
 #   - writes: _state.selected_color_index + _state.selected_color_hex on click
 
 id: color_swatches
-type: Box
-layout:
-  contentGutter: [8, 8]
-  contentWrap: wrap
-  contentJustify: flex-start
+type: Flex
+properties:
+  gap: small
+  wrap: wrap
+  justify: flex-start
 style:
   maxWidth: 256
   padding: 16

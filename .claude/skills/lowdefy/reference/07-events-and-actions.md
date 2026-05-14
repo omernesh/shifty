@@ -39,6 +39,42 @@ The full whitelist (verified against Lowdefy 5.3.0 schema, `packages/build/src/l
 
 **There is NO `if:` field on an action.** The canonical conditional gate is `skip:` with INVERTED semantics — the action is skipped when `skip` evaluates `true`. To express "run only when X is true", write `skip: { _not: <X> }`.
 
+> **Common mistakes — rejected action keys (all emit `[ConfigWarning] must NOT have additional properties`):**
+>
+> | Wrong key | Correct pattern |
+> |-----------|----------------|
+> | `if:` | Use `skip: { _not: <condition> }` (inverted semantics) |
+> | `onError:` | Use `events.onClick: try:/catch:` object form on the **event** (not the action) |
+> | `then:` / `else:` | Use `_if` operator on `params` values, or `skip:` gates on separate actions |
+>
+> **`onError:` is specifically a 5.3 trap:** it looks like it should catch errors on a single Request action, but it is not in the action whitelist. The correct error-handling pattern is to restructure the entire event to `try:`/`catch:` form:
+> ```yaml
+> # WRONG — onError: is rejected
+> events:
+>   onClick:
+>     - id: do_action
+>       type: Request
+>       params:
+>         requestId: my_request
+>       onError:
+>         - id: handle_error
+>           type: SetState
+>           params: { error_msg: 'failed' }
+>
+> # CORRECT — try/catch on the event
+> events:
+>   onClick:
+>     try:
+>       - id: do_action
+>         type: Request
+>         params:
+>           requestId: my_request
+>     catch:
+>       - id: handle_error
+>         type: SetState
+>         params: { error_msg: 'failed' }
+> ```
+
 Example — run the action only when `_state.should_archive` is true:
 
 ```yaml

@@ -113,17 +113,19 @@ blocks:
   #   a missing destination route renders a Lowdefy 404 gracefully — acceptable per
   #   plan scope_constraints).
   # Right: search TextInput → drives AgGrid quickFilterText (AgGrid native filter).
+  # D-1/D-2/D-4 (round 2): Box with content* layout props → Flex with properties.
   - id: toolbar
-    type: Box
+    type: Flex
     properties:
-      contentGutter: [8, 8]
-      contentJustify: space-between
-      contentAlign: middle
+      gap: small
+      justify: space-between
+      align: center
     blocks:
+      # D-1 (round 2): contentGutter renamed to gap for Lowdefy 5.3.
       - id: toolbar_left
-        type: Box
+        type: Flex
         properties:
-          contentGutter: [8, 8]
+          gap: small
         blocks:
           - id: add_soldier_btn
             type: Button
@@ -174,11 +176,10 @@ blocks:
   - id: soldiers_grid
     type: AgGridAlpine
     properties:
-      enableRtl: true
+      # L-2 (round 2): enableRtl + rowSelection + animateRows stripped — not in
+      # 5.3 AgGrid whitelist. RTL from page-level dir="rtl".
       pagination: true
       paginationPageSize: 25
-      rowSelection: single
-      animateRows: true
       quickFilterText: { _state: search_query }
       rowData: { _request: list_soldiers }
       defaultColDef:
@@ -258,11 +259,12 @@ blocks:
       # i18n: soldiers.empty_subtitle
       subTitle: הוסף חייל בודד או ייבא קובץ CSV
     blocks:
+      # D-1/D-2 (round 2): contentGutter/contentJustify renamed for Lowdefy 5.3.
       - id: empty_actions
-        type: Box
+        type: Flex
         properties:
-          contentGutter: [8, 8]
-          contentJustify: center
+          gap: small
+          justify: center
         blocks:
           - id: empty_add_btn
             type: Button

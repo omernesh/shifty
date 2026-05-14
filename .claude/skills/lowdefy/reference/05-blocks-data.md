@@ -123,7 +123,38 @@ events:
 
 `cellRenderer` accepts a `_function` operator that returns a string (HTML allowed by default — be careful with untrusted data).
 
-Read AG Grid's official docs for the full column / grid option surface; the Lowdefy block exposes the same surface.
+**IMPORTANT — Lowdefy 5.3 AgGrid property whitelist (verified 2026-05-14, Plan 02-09r2 audit):**
+
+The Lowdefy 5.3 `@lowdefy/blocks-aggrid` block does NOT expose the full AG Grid API surface. Properties not in the whitelist are **silently ignored** at runtime — no build error, no warning. The confirmed whitelist is:
+
+| Accepted property | Notes |
+|-------------------|-------|
+| `rowData` | Array of row objects |
+| `columnDefs` | Column configuration array |
+| `defaultColDef` | Applied to all columns |
+| `height` | Grid height in px |
+| `rowId` | Stable row identity field name |
+| `pagination`, `paginationPageSize` | Pagination |
+| `enableBrowserTooltips` | |
+| `suppressCellFocus` | |
+| `tooltipShowDelay`, `tooltipHideDelay` | |
+| `quickFilterText` | Drives built-in quick filter |
+| `treeData`, `autoGroupColumnDef`, `getDataPath`, `groupDefaultExpanded` | Tree data |
+
+**Silently ignored (do not use):**
+
+| Dropped property | Alternative |
+|-----------------|-------------|
+| `enableRtl` | Use page-level `dir="rtl"` attribute |
+| `animateRows` | Not supported |
+| `rowSelection` | Not supported (single/multiple selection) |
+| `getRowStyle` | Not supported; use column `cellStyle` function |
+| `domLayout: autoHeight` | Use CSS height instead |
+| `suppressRowClickSelection` | Not supported |
+| `getRowId` | Use `rowId` (string field name) instead |
+| Column-level `cellEditor` | Not in column whitelist |
+
+Read AG Grid's official docs for context, but always verify a property works in Lowdefy 5.3 before committing — the block is a thin wrapper, not a full AG Grid pass-through.
 
 ## `AntTable`
 
