@@ -1,0 +1,55 @@
+# perf-50.csv — W1 fix + ROST-13; 50 valid rows used by Test A2 to exercise the SLO interpretation:
+#   dbCommitWall < 2000ms, firstBatchWall < 8000ms, totalWall < 35000ms
+# The 35s ceiling allows for 50 x 500ms Resend gap = 25s + DB commit budget (2s) + 8s retry buffer.
+# Generation: rows 1..50 with display_name = "perf row-N", email = "perfN@example.test", role_tags=driving, seniority=5, team_id={TENANT_A_TEAM_UUID}.
+display_name,email,role_tags,seniority,team_id
+perf row-1,perf1@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-2,perf2@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-3,perf3@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-4,perf4@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-5,perf5@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-6,perf6@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-7,perf7@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-8,perf8@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-9,perf9@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-10,perf10@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-11,perf11@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-12,perf12@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-13,perf13@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-14,perf14@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-15,perf15@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-16,perf16@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-17,perf17@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-18,perf18@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-19,perf19@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-20,perf20@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-21,perf21@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-22,perf22@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-23,perf23@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-24,perf24@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-25,perf25@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-26,perf26@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-27,perf27@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-28,perf28@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-29,perf29@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-30,perf30@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-31,perf31@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-32,perf32@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-33,perf33@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-34,perf34@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-35,perf35@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-36,perf36@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-37,perf37@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-38,perf38@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-39,perf39@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-40,perf40@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-41,perf41@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-42,perf42@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-43,perf43@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-44,perf44@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-45,perf45@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-46,perf46@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-47,perf47@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-48,perf48@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-49,perf49@example.test,driving,5,{TENANT_A_TEAM_UUID}
+perf row-50,perf50@example.test,driving,5,{TENANT_A_TEAM_UUID}

@@ -1,0 +1,8 @@
+# clean.csv — happy-path CSV (D-09); 5 rows, all valid
+# All rows should produce status:ok on ParseCsvAndValidate
+display_name,email,role_tags,seniority,team_id
+יוסי כהן,yossi@example.test,driving,5,{TENANT_A_TEAM_UUID}
+דנה לוי,dana@example.test,comms|medic,7,{TENANT_A_TEAM_UUID}
+אבי מזרחי,avi@example.test,driving,3,{TENANT_A_TEAM_UUID}
+שרה גולן,sara@example.test,medic,6,{TENANT_A_TEAM_UUID}
+רועי ברק,roi@example.test,comms,4,{TENANT_A_TEAM_UUID}

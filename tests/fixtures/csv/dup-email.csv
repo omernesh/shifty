@@ -1,0 +1,6 @@
+# dup-email.csv — D-11 + ROST-10; two rows share an email present in tenant after first row commits
+# admin-a@example.test is the seeded admin's email (from Phase 1 seedTwoTenants)
+# Both CSV rows should be flagged duplicate; spec checks re-invite toggle behavior
+display_name,email,role_tags,seniority,team_id
+דוד אזולאי,admin-a@example.test,driving,5,{TENANT_A_TEAM_UUID}
+אבי כהן,admin-a@example.test,driving,5,{TENANT_A_TEAM_UUID}
