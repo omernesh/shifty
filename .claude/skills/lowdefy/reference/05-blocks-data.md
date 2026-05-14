@@ -101,10 +101,25 @@ Key properties:
 
 Key events:
 
-- `onRowClicked { data, rowIndex }`
-- `onSelectionChanged { selectedRows }`
-- `onCellValueChanged { data, oldValue, newValue, column.field }`
-- `onCellClicked { data, value, column.field }`
+- `onRowClicked { data, rowIndex }` — **payload shape unverified; use with caution**
+- `onSelectionChanged { selectedRows }` — **payload shape unverified; use with caution**
+- `onCellValueChanged { data, oldValue, newValue, column.field }` — **payload shape unverified; use with caution**
+- `onCellClick { cell: { column, value }, colId, row, rowIndex, selected }` — **verified 2026-05-14**
+
+**IMPORTANT (verified 2026-05-14, Plan 02-09 Task 3 spike):**
+- The correct event name is **`onCellClick`** (singular), NOT `onCellClicked`. The events schema is open (patternProperties), so `onCellClicked` does not raise a validator warning — but the handler never registers. This is a silent bug.
+- The verified payload paths are: `_event: cell.column` (the column field name), `_event: row.<field>` (any row data field). **NOT** `_event: column.field` or `_event: data.<field>` — those paths are wrong and return undefined silently.
+
+```yaml
+events:
+  onCellClick:                                # singular, not onCellClicked
+    - id: capture
+      type: SetState
+      params:
+        clicked_col: { _event: cell.column }  # column field name
+        clicked_id:  { _event: row.id }       # row field
+        clicked_name: { _event: row.name }    # row field
+```
 
 `cellRenderer` accepts a `_function` operator that returns a string (HTML allowed by default — be careful with untrusted data).
 

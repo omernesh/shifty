@@ -25,15 +25,31 @@ Actions in `try:` run sequentially. If any action throws, the chain stops and `c
 
 ```yaml
 - id: my_action
-  type: <ActionType>
-  params: <action-specific>
-  if: <bool>                                     # optional — skip if false
-  skip: <bool>                                   # alias of !if
-  messages:                                       # optional UI feedback
+  type: <ActionType>                                # required, string
+  params: <action-specific>                         # action-type-defined
+  skip: <bool>                                      # optional — skip THIS action if true
+  async: <bool>                                     # optional — fire-and-forget; chain doesn't await
+  messages:                                         # optional UI feedback
     loading: 'Saving...'
     success: 'Saved'
     error: 'Failed: {{ error.message }}'
 ```
+
+The full whitelist (verified against Lowdefy 5.3.0 schema, `packages/build/src/lowdefySchema.js` definition `action`): `~ignoreBuildChecks, ~r, ~l, async, id, messages, params, skip, type`. Anything else is a `[ConfigWarning] must NOT have additional properties` at build time.
+
+**There is NO `if:` field on an action.** The canonical conditional gate is `skip:` with INVERTED semantics — the action is skipped when `skip` evaluates `true`. To express "run only when X is true", write `skip: { _not: <X> }`.
+
+Example — run the action only when `_state.should_archive` is true:
+
+```yaml
+- id: maybe_archive
+  type: Request
+  params: archive
+  skip:
+    _not: { _state: should_archive }
+```
+
+**This corrects the prior version of this file (verified 2026-05-14, Plan 02-09 Task 3 spike): `if:` was documented as a valid optional action field. It is not, and never was — the W6 Pattern A column-dispatch on `manage_org_units.yaml`'s tree-grid built around `if:` failed with `[ConfigWarning] must NOT have additional properties - "if"` for every gate site. Use `skip: { _not: ... }` everywhere.**
 
 ## Action types
 
@@ -274,6 +290,8 @@ events:
 
 ### Conditional actions
 
+**`skip:` semantics are INVERTED:** the action is skipped when `skip` is `true`. To express "run only when X", write `skip: { _not: <X> }`.
+
 ```yaml
 events:
   onClick:
@@ -283,11 +301,64 @@ events:
     - id: maybe_archive
       type: Request
       params: archive
-      if: { _state: should_archive }
+      skip:
+        _not: { _state: should_archive }    # runs only when should_archive is truthy
     - id: persist
       type: Request
       params: save
 ```
+
+### Column-dispatch pattern (AgGrid `onCellClick`)
+
+The verified AgGrid event name is **`onCellClick`** (NOT `onCellClicked`). The event payload shape is:
+
+```
+{ cell: { column, value }, colId, row, rowIndex, selected }
+```
+
+Key paths:
+- `_event: cell.column` — the `field` name of the clicked column
+- `_event: row.id` — row field `id`
+- `_event: row.<field>` — any other row field
+
+**NOT** `_event: column.field` / `_event: data.id` / `_event: data.<field>` — those are wrong and silently return undefined.
+
+Example — W6 Pattern A column-dispatch with `skip:` gates:
+
+```yaml
+events:
+  onCellClick:
+    - id: capture_row
+      type: SetState
+      params:
+        clicked_column: { _event: cell.column }
+        clicked_row_id: { _event: row.id }
+        clicked_row_name: { _event: row.name }
+
+    # actions column branch
+    - id: set_remove_target
+      type: SetState
+      skip: { _not: { _eq: [{ _event: cell.column }, actions] } }
+      params:
+        remove_target_id: { _event: row.id }
+    - id: open_remove_confirm
+      type: CallMethod
+      skip: { _not: { _eq: [{ _event: cell.column }, actions] } }
+      params:
+        blockId: remove_confirm_modal
+        method: toggleOpen
+
+    # body-column branch
+    - id: open_detail
+      type: Link
+      skip: { _eq: [{ _event: cell.column }, actions] }
+      params:
+        pageId: detail_page
+        urlQuery:
+          id: { _event: row.id }
+```
+
+**Important — event timing:** `_event` is only available at the time the event fires. If you need to reference `_event` values inside actions that run after a `CallMethod toggleOpen` (which may cause re-render), capture them into `_state` first via a `SetState` action, then reference `_state` in subsequent actions.
 
 ### Debounce — typeahead
 
