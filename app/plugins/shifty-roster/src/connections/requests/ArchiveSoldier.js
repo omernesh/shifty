@@ -2,9 +2,11 @@
 // Lowdefy custom request: archive (soft-delete) a soldier row.
 // Tenant ID from request.user (session) — NEVER from request.properties. Layer-4 defense.
 //
-// knex imported dynamically inside the function body so unit tests can import
-// this module without requiring 'knex' to be installed in the test environment.
-// In the Lowdefy Docker image, knex is available via @lowdefy/connection-knex.
+// Layer 5 (RLS) wireup: the transaction is opened via withTenantTx, which issues
+// SET LOCAL app.current_tenant before any DB activity.
+//
+// knex is loaded indirectly via withTenantTx (dynamic import). Unit tests that exercise
+// only the guard clauses can still import this module without knex installed.
 //
 // Implementation (Plan 02-06 Task 1, replaces plan 02-02 stub):
 // - UPDATE soldier SET status = 'archived' (NEVER DELETE — D-08, ROST-05, Pitfall P11)
@@ -12,6 +14,8 @@
 //   can archive only soldiers in their _user.team_ids
 // - Preserves all membership rows, app_user row, audit history (D-08)
 // - schedule_audit row (to_state='soldier_archived')
+
+import { withTenantTx } from 'shifty-auth/hooks/with-tenant-tx';
 
 async function ArchiveSoldier({ request, connection }) {
   const { soldier_id } = request.properties || {};
@@ -33,54 +37,48 @@ async function ArchiveSoldier({ request, connection }) {
     throw new Error('ArchiveSoldier: soldier_id is required');
   }
 
-  const { default: knex } = await import('knex');
-  const db = knex(connection);
-  try {
-    const result = await db.transaction(async (trx) => {
-      // Soft-delete UPDATE with Layer-4 scope check.
-      // D-08 + Pitfall P11: this MUST be an UPDATE (never DELETE) so memberships,
-      // schedule_audit history, and app_user remain intact. The literal SQL fragment
-      // `status = 'archived'` is one contiguous token (W4 fix from PLAN revision).
-      const updateRows = await trx.raw(
-        `UPDATE soldier
-            SET status = 'archived',
-                updated_at = now()
-          WHERE id = :soldier_id
-            AND tenant_id = :tenant_id
-            AND (
-              :is_admin
-              OR EXISTS (
-                SELECT 1 FROM membership m
-                 WHERE m.soldier_id = :soldier_id
-                   AND m.org_unit_id = ANY(:caller_team_ids)
-              )
+  const result = await withTenantTx(connection, tenant_id, async (trx) => {
+    // Soft-delete UPDATE with Layer-4 scope check.
+    // D-08 + Pitfall P11: this MUST be an UPDATE (never DELETE) so memberships,
+    // schedule_audit history, and app_user remain intact. The literal SQL fragment
+    // `status = 'archived'` is one contiguous token (W4 fix from PLAN revision).
+    const updateRows = await trx.raw(
+      `UPDATE soldier
+          SET status = 'archived',
+              updated_at = now()
+        WHERE id = :soldier_id
+          AND tenant_id = :tenant_id
+          AND (
+            :is_admin
+            OR EXISTS (
+              SELECT 1 FROM membership m
+               WHERE m.soldier_id = :soldier_id
+                 AND m.org_unit_id = ANY(:caller_team_ids)
             )
-        RETURNING id`,
-        { soldier_id, tenant_id, is_admin, caller_team_ids }
-      );
-      const rows = updateRows?.rows ?? updateRows;
-      if (!rows || rows.length === 0) {
-        throw new Error('ArchiveSoldier: soldier not found or access denied');
-      }
+          )
+      RETURNING id`,
+      { soldier_id, tenant_id, is_admin, caller_team_ids }
+    );
+    const rows = updateRows?.rows ?? updateRows;
+    if (!rows || rows.length === 0) {
+      throw new Error('ArchiveSoldier: soldier not found or access denied');
+    }
 
-      // Audit row.
-      await trx('schedule_audit').insert({
-        tenant_id,
-        planning_window_id: null,
-        from_state: 'soldier_pre_archive',
-        to_state: 'soldier_archived',
-        actor_user_id,
-        actor_kind: 'user',
-        payload: JSON.stringify({ soldier_id }),
-      });
-
-      return { soldier_id };
+    // Audit row.
+    await trx('schedule_audit').insert({
+      tenant_id,
+      planning_window_id: null,
+      from_state: 'soldier_pre_archive',
+      to_state: 'soldier_archived',
+      actor_user_id,
+      actor_kind: 'user',
+      payload: JSON.stringify({ soldier_id }),
     });
 
-    return { success: true, soldier_id: result.soldier_id };
-  } finally {
-    await db.destroy();
-  }
+    return { soldier_id };
+  });
+
+  return { success: true, soldier_id: result.soldier_id };
 }
 
 ArchiveSoldier.schema = {

@@ -3,9 +3,15 @@
 // and synchronously dispatch Resend magic-link invites with progress reporting.
 // Tenant ID from request.user (session) — NEVER from request.properties. Layer-4 defense.
 //
-// knex imported dynamically inside the function body so unit tests can import
-// this module without requiring 'knex' to be installed in the test environment.
-// In the Lowdefy Docker image, knex is available via @lowdefy/connection-knex.
+// Layer 5 (RLS) wireup: Stage 1 (per-row INSERT batch) and Stage 3 (roster_import_log
+// summary) each run inside withTenantTx with SET LOCAL app.current_tenant. Stage 2
+// (Resend dispatch) uses a bare Knex instance because sendInvite's only DB write is
+// to `verification_tokens` (an Auth.js table that is intentionally NOT RLS-protected —
+// magic links cross tenant boundaries by design; tenant scoping happens at session
+// hydration in ShiftySessionCallback).
+//
+// knex is loaded indirectly via withTenantTx (dynamic import). Unit tests that exercise
+// only the guard clauses can still import this module without knex installed.
 //
 // Implementation (Plan 02-08 Task 2 — replaces plan 02-02 stub):
 //
@@ -26,8 +32,7 @@
 //   For each created soldier with email + (re_invite OR not duplicate):
 //     - sendInvite({ email, callbackUrl, locale: 'he', knexTx: db }).
 //     - On 429 / rate-limit: backoff [1000, 4000, 16000] ms, max 3 retries.
-//     - After each successful send: sleep(500) — Resend free-tier 2 req/s budget
-//       (02-RESEARCH §"Resend rate limits — actual budget for D-10").
+//     - After each successful send: sleep(500) — Resend free-tier 2 req/s budget.
 //     - Failures push into errorDetails (no throw — soldier exists; admin can retry
 //       from soldier_detail's "Invite later" button).
 //
@@ -36,18 +41,12 @@
 //     id, tenant_id, imported_by, source, rows_created, rows_skipped,
 //     rows_errored, error_details, created_at.
 //   `source: 'csv'` is one canonical SQL token (W4 fix from PLAN revision).
-//
-// ROST-13 SLO interpretation (RESEARCH Pitfall P6):
-//   Strict <10s/50rows reading is impossible at Resend 2 req/s (25s minimum).
-//   Accepted interpretation: DB commit + result page reachable within 10s; Resend
-//   dispatch progresses async with a progress bar. Plan 10 Test A2 exercises the
-//   50-row split-timing budget (dbCommitWall<2000ms / firstBatchWall<8000ms /
-//   totalWall<35000ms).
 
 import { canonicalizeText } from '../../helpers/canonicalize.js';
 import { canonicalizeRoleTag } from '../../helpers/role-tag.js';
 import { pickNextColor, PALETTE } from '../../helpers/palette.js';
 import { sendInvite, bulkDispatchWithBackoff } from '../../dispatch/resend.js';
+import { withTenantTx } from 'shifty-auth/hooks/with-tenant-tx';
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -75,15 +74,9 @@ async function CommitRosterImport({ request, connection }) {
     throw new Error('CommitRosterImport: rows must be an array');
   }
 
-  // Touch helper imports so the dispatch chain is exercised even on empty input
-  // (the bulkDispatchWithBackoff export is the documented bulk primitive; we use
-  // a hand-rolled inline loop below to interleave the audit row + counter updates,
-  // but the import keeps the contract visible).
+  // Touch helper imports so the dispatch chain is exercised even on empty input.
   // eslint-disable-next-line no-unused-vars
   const _bulk = bulkDispatchWithBackoff;
-
-  const { default: knex } = await import('knex');
-  const db = knex(connection);
 
   // Counters accumulated across all rows.
   let rowsCreated = 0;
@@ -92,164 +85,157 @@ async function CommitRosterImport({ request, connection }) {
   const errorDetails = [];
   // Rows that successfully INSERTed and need invite dispatch — populated inside the
   // transaction, drained sync in Stage 2 AFTER commit so verification_tokens rows
-  // are persisted via a separate connection (sendInvite uses `db`, not `trx`).
+  // are persisted via a separate connection.
   const dispatchQueue = [];
 
-  try {
-    // ── STAGE 1: transactional INSERT batch ──────────────────────────────────
-    await db.transaction(async (trx) => {
-      for (const row of rows) {
-        // Skip rows the preview already flagged as unfixable.
-        if (row.status === 'error') {
+  // ── STAGE 1: transactional INSERT batch (RLS-scoped) ──────────────────────
+  await withTenantTx(connection, tenant_id, async (trx) => {
+    for (const row of rows) {
+      // Skip rows the preview already flagged as unfixable.
+      if (row.status === 'error') {
+        rowsErrored++;
+        errorDetails.push({
+          row_index: row.row_index,
+          reason: 'error_state',
+          details: row.errors || [],
+        });
+        continue;
+      }
+
+      // Duplicates default to skip; admin can opt-in to re-invite (D-11).
+      if (row.is_duplicate && !row.re_invite) {
+        rowsSkipped++;
+        continue;
+      }
+
+      // (a) UPSERT unknown role_tag keys. Re-canonicalize at write time.
+      const writeRoleTags = Array.isArray(row.role_tags)
+        ? Array.from(new Set(row.role_tags.map(canonicalizeRoleTag).filter(Boolean)))
+        : [];
+      const unknownTagsForRow = Array.isArray(row.unknown_tags)
+        ? row.unknown_tags.map(canonicalizeRoleTag).filter(Boolean)
+        : [];
+      if (unknownTagsForRow.length > 0) {
+        await trx('role_tag')
+          .insert(unknownTagsForRow.map((key) => ({ tenant_id, key })))
+          .onConflict(['tenant_id', 'key'])
+          .ignore();
+      }
+
+      // (b) Resolve / create app_user.
+      let appUserId = null;
+      if (row.email && typeof row.email === 'string') {
+        const lowerEmail = String(row.email).toLowerCase();
+        const existing = await trx('app_user')
+          .where({ tenant_id, email: lowerEmail })
+          .first('id');
+        if (existing) {
+          appUserId = existing.id;
+        } else {
+          const inserted = await trx('app_user')
+            .insert({
+              tenant_id,
+              email: lowerEmail,
+              display_name: canonicalizeText(row.display_name),
+              locale: 'he',
+            })
+            .returning('id');
+          appUserId = inserted[0]?.id ?? inserted[0];
+        }
+      }
+
+      // (c) Race-safe color assignment.
+      let colorIndex = 0;
+      let colorHex = PALETTE[0];
+      if (row.team_id) {
+        const ouRow = await trx('org_unit')
+          .where({ id: row.team_id, tenant_id })
+          .forUpdate()
+          .first('last_color_index');
+        if (!ouRow) {
           rowsErrored++;
           errorDetails.push({
             row_index: row.row_index,
-            reason: 'error_state',
-            details: row.errors || [],
+            reason: 'team_id_not_found',
           });
           continue;
         }
-
-        // Duplicates default to skip; admin can opt-in to re-invite (D-11).
-        if (row.is_duplicate && !row.re_invite) {
-          rowsSkipped++;
-          continue;
-        }
-
-        // (a) UPSERT unknown role_tag keys. Re-canonicalize at write time
-        // (belt-and-braces). ON CONFLICT (tenant_id, key) DO NOTHING handles
-        // concurrent admin sessions adding the same key.
-        const writeRoleTags = Array.isArray(row.role_tags)
-          ? Array.from(new Set(row.role_tags.map(canonicalizeRoleTag).filter(Boolean)))
-          : [];
-        const unknownTagsForRow = Array.isArray(row.unknown_tags)
-          ? row.unknown_tags.map(canonicalizeRoleTag).filter(Boolean)
-          : [];
-        if (unknownTagsForRow.length > 0) {
-          await trx('role_tag')
-            .insert(unknownTagsForRow.map((key) => ({ tenant_id, key })))
-            .onConflict(['tenant_id', 'key'])
-            .ignore();
-        }
-
-        // (b) Resolve / create app_user.
-        let appUserId = null;
-        if (row.email && typeof row.email === 'string') {
-          const lowerEmail = String(row.email).toLowerCase();
-          const existing = await trx('app_user')
-            .where({ tenant_id, email: lowerEmail })
-            .first('id');
-          if (existing) {
-            appUserId = existing.id;
-          } else {
-            const inserted = await trx('app_user')
-              .insert({
-                tenant_id,
-                email: lowerEmail,
-                display_name: canonicalizeText(row.display_name),
-                locale: 'he',
-              })
-              .returning('id');
-            appUserId = inserted[0]?.id ?? inserted[0];
-          }
-        }
-
-        // (c) Race-safe color assignment (RESEARCH Open Q4 mitigation; mirrors
-        // CreateSoldier from plan 02-06). SELECT FOR UPDATE inside this transaction.
-        let colorIndex = 0;
-        let colorHex = PALETTE[0];
-        if (row.team_id) {
-          const ouRow = await trx('org_unit')
-            .where({ id: row.team_id, tenant_id })
-            .forUpdate()
-            .first('last_color_index');
-          if (!ouRow) {
-            // Should have been caught in pre-flight; treat as error and continue
-            // — do NOT abort the whole transaction for one bad row.
-            rowsErrored++;
-            errorDetails.push({
-              row_index: row.row_index,
-              reason: 'team_id_not_found',
-            });
-            continue;
-          }
-          colorIndex = pickNextColor(ouRow.last_color_index);
-          colorHex = PALETTE[colorIndex];
-          await trx('org_unit')
-            .where({ id: row.team_id, tenant_id })
-            .update({ last_color_index: colorIndex, updated_at: trx.fn.now() });
-        }
-
-        // (d) INSERT soldier — second canonicalizeText layer (Pitfall P2 belt-and-braces).
-        const canonicalDisplayName = canonicalizeText(row.display_name);
-        const soldierInsert = await trx('soldier')
-          .insert({
-            tenant_id,
-            user_id: appUserId,
-            display_name: canonicalDisplayName,
-            color: colorHex,
-            seniority: typeof row.seniority === 'number' ? row.seniority : 0,
-            role_tags: writeRoleTags,
-            phone_e164: row.phone_e164 || null,
-            status: 'active',
-          })
-          .returning('id');
-        const soldier_id = soldierInsert[0]?.id ?? soldierInsert[0];
-
-        // (e) SELECT-driven membership INSERT when team_id supplied — refuses
-        // cross-tenant joins even if upstream payload is forged.
-        if (row.team_id) {
-          await trx.raw(
-            `INSERT INTO membership (tenant_id, soldier_id, org_unit_id, role)
-             SELECT s.tenant_id, s.id, ou.id, 'member'
-               FROM soldier s, org_unit ou
-              WHERE s.id = :soldier_id
-                AND ou.id = :team_id
-                AND s.tenant_id = :tenant_id
-                AND ou.tenant_id = :tenant_id
-             ON CONFLICT (soldier_id, org_unit_id) DO NOTHING`,
-            { soldier_id, team_id: row.team_id, tenant_id }
-          );
-        }
-
-        // (f) audit row per created soldier — to_state literal aligns with the
-        // verify-grep token and is unique to the CSV import code path so audit
-        // forensics can filter for bulk imports.
-        await trx('schedule_audit').insert({
-          tenant_id,
-          planning_window_id: null,
-          from_state: null,
-          to_state: 'soldier_created_via_csv_import',
-          actor_user_id,
-          actor_kind: 'user',
-          payload: JSON.stringify({
-            soldier_id,
-            team_id: row.team_id || null,
-            source: 'csv',
-            role_tags: writeRoleTags,
-            app_user_id: appUserId,
-            color_index: row.team_id ? colorIndex : null,
-          }),
-        });
-
-        rowsCreated++;
-
-        // Enqueue for Stage 2 invite dispatch if we have an email AND
-        // (this is a fresh soldier OR admin opted-in to re-invite the duplicate).
-        if (row.email && (row.re_invite || !row.is_duplicate)) {
-          dispatchQueue.push({
-            row_index: row.row_index,
-            soldier_id,
-            email: row.email,
-            displayName: canonicalDisplayName,
-          });
-        }
+        colorIndex = pickNextColor(ouRow.last_color_index);
+        colorHex = PALETTE[colorIndex];
+        await trx('org_unit')
+          .where({ id: row.team_id, tenant_id })
+          .update({ last_color_index: colorIndex, updated_at: trx.fn.now() });
       }
-    });
 
-    // ── STAGE 2: SYNC Resend dispatch loop (post-commit) ─────────────────────
-    // Backoff schedule: [1s, 4s, 16s] (NOTF-07). Inter-call gap: 500 ms
-    // (Resend free-tier 2 req/s budget — 02-RESEARCH §"Resend rate limits").
+      // (d) INSERT soldier — second canonicalizeText layer (Pitfall P2 belt-and-braces).
+      const canonicalDisplayName = canonicalizeText(row.display_name);
+      const soldierInsert = await trx('soldier')
+        .insert({
+          tenant_id,
+          user_id: appUserId,
+          display_name: canonicalDisplayName,
+          color: colorHex,
+          seniority: typeof row.seniority === 'number' ? row.seniority : 0,
+          role_tags: writeRoleTags,
+          phone_e164: row.phone_e164 || null,
+          status: 'active',
+        })
+        .returning('id');
+      const soldier_id = soldierInsert[0]?.id ?? soldierInsert[0];
+
+      // (e) SELECT-driven membership INSERT when team_id supplied.
+      if (row.team_id) {
+        await trx.raw(
+          `INSERT INTO membership (tenant_id, soldier_id, org_unit_id, role)
+           SELECT s.tenant_id, s.id, ou.id, 'member'
+             FROM soldier s, org_unit ou
+            WHERE s.id = :soldier_id
+              AND ou.id = :team_id
+              AND s.tenant_id = :tenant_id
+              AND ou.tenant_id = :tenant_id
+           ON CONFLICT (soldier_id, org_unit_id) DO NOTHING`,
+          { soldier_id, team_id: row.team_id, tenant_id }
+        );
+      }
+
+      // (f) audit row per created soldier.
+      await trx('schedule_audit').insert({
+        tenant_id,
+        planning_window_id: null,
+        from_state: null,
+        to_state: 'soldier_created_via_csv_import',
+        actor_user_id,
+        actor_kind: 'user',
+        payload: JSON.stringify({
+          soldier_id,
+          team_id: row.team_id || null,
+          source: 'csv',
+          role_tags: writeRoleTags,
+          app_user_id: appUserId,
+          color_index: row.team_id ? colorIndex : null,
+        }),
+      });
+
+      rowsCreated++;
+
+      // Enqueue for Stage 2 invite dispatch.
+      if (row.email && (row.re_invite || !row.is_duplicate)) {
+        dispatchQueue.push({
+          row_index: row.row_index,
+          soldier_id,
+          email: row.email,
+          displayName: canonicalDisplayName,
+        });
+      }
+    }
+  });
+
+  // ── STAGE 2: SYNC Resend dispatch loop (post-commit) ─────────────────────
+  // verification_tokens is an Auth.js table; intentionally NOT RLS-protected (PRD §8.3).
+  // So Resend dispatch can use a bare Knex instance without tenant context.
+  const { default: knex } = await import('knex');
+  const db = knex(connection);
+  try {
     const backoffSchedule = [1000, 4000, 16000];
     for (let i = 0; i < dispatchQueue.length; i++) {
       const job = dispatchQueue[i];
@@ -292,9 +278,6 @@ async function CommitRosterImport({ request, connection }) {
       }
 
       if (!dispatched) {
-        // Soft-fail — soldier row already committed; record in errorDetails so the
-        // result page can show a "retry these" list. Admin can also retry per-row
-        // from soldier_detail's "Invite later" button.
         errorDetails.push({
           row_index: job.row_index,
           soldier_id: job.soldier_id,
@@ -303,19 +286,18 @@ async function CommitRosterImport({ request, connection }) {
         });
       }
 
-      // 500 ms inter-call gap, but only if more sends remain.
       if (i < dispatchQueue.length - 1) {
         await sleep(500);
       }
     }
+  } finally {
+    await db.destroy();
+  }
 
-    // ── STAGE 3: append roster_import_log summary (LIVE schema — Pitfall P12) ─
-    // Column names are byte-equal to 0007_imports_and_exports.up.sql:
-    //   id, tenant_id, imported_by, source, rows_created, rows_skipped,
-    //   rows_errored, error_details, created_at.
-    // The `source: 'csv'` literal is one canonical SQL token (W4 fix — the verify
-    // grep matches it as one substring, not split tokens).
-    const summaryInsert = await db('roster_import_log')
+  // ── STAGE 3: roster_import_log summary (RLS-scoped) ──────────────────────
+  // roster_import_log IS RLS-protected, so wrap in withTenantTx.
+  const import_id = await withTenantTx(connection, tenant_id, async (trx) => {
+    const summaryInsert = await trx('roster_import_log')
       .insert({
         tenant_id,
         imported_by: actor_user_id,
@@ -326,19 +308,17 @@ async function CommitRosterImport({ request, connection }) {
         error_details: JSON.stringify(errorDetails),
       })
       .returning('id');
-    const import_id = summaryInsert[0]?.id ?? summaryInsert[0];
+    return summaryInsert[0]?.id ?? summaryInsert[0];
+  });
 
-    return {
-      success: true,
-      import_id,
-      rowsCreated,
-      rowsSkipped,
-      rowsErrored,
-      errorDetails,
-    };
-  } finally {
-    await db.destroy();
-  }
+  return {
+    success: true,
+    import_id,
+    rowsCreated,
+    rowsSkipped,
+    rowsErrored,
+    errorDetails,
+  };
 }
 
 CommitRosterImport.schema = {

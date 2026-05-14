@@ -3,17 +3,23 @@
 // Per D-08 (T-02-01): actor_user_id comes from session (request.user), NEVER from request.properties.
 // Throws hard if request.user is absent — unauthenticated callers must not produce audit rows.
 //
-// knex is imported dynamically inside the function body so that unit tests (which test
-// only the guard clauses) can import this module without requiring 'knex' to be installed
-// in the test environment. In the Lowdefy Docker image, knex is available via
-// @lowdefy/connection-knex which peer-depends on knex.
+// Layer 5 (RLS) wireup: runs inside withTenantTx so app.current_tenant is SET LOCAL to
+// request.user.tenant_id before the INSERT. RLS USING/WITH CHECK on schedule_audit blocks
+// any cross-tenant insert at the database level (defense-in-depth on top of Layer 4).
+//
+// knex is loaded indirectly via withTenantTx (which does the dynamic import). Unit tests
+// that exercise only the guard clauses can still import this module without knex installed,
+// because withTenantTx is only invoked AFTER the guards pass.
+
+import { withTenantTx } from 'shifty-auth/hooks/with-tenant-tx';
 
 async function AuditWrite({ request, connection }) {
   const { planning_window_id, from_state, to_state, actor_kind, payload_json } = request.properties || {};
   const actor_user_id = request.user?.user_id;
+  const tenant_id = request.user?.tenant_id;
 
-  // T-02-01 mitigation: actor identity from session only — reject unauthenticated calls
-  // These guards run BEFORE any DB interaction (no knex import needed at this point).
+  // T-02-01 mitigation: actor identity from session only — reject unauthenticated calls.
+  // These guards run BEFORE any DB interaction.
   if (!actor_user_id) {
     throw new Error('AuditWrite: actor_user_id missing from session — unauthenticated request');
   }
@@ -21,12 +27,9 @@ async function AuditWrite({ request, connection }) {
     throw new Error('AuditWrite: to_state is required');
   }
 
-  // Dynamic import: allows unit tests to exercise guard clauses without needing knex installed.
-  const { default: knex } = await import('knex');
-  const db = knex(connection);
-  try {
-    await db('schedule_audit').insert({
-      tenant_id: request.user.tenant_id,
+  return withTenantTx(connection, tenant_id, async (trx) => {
+    await trx('schedule_audit').insert({
+      tenant_id,
       planning_window_id: planning_window_id || null,
       from_state: from_state || null,
       to_state,
@@ -35,9 +38,7 @@ async function AuditWrite({ request, connection }) {
       payload: payload_json ? JSON.stringify(payload_json) : null,
     });
     return { success: true };
-  } finally {
-    await db.destroy();
-  }
+  });
 }
 
 AuditWrite.schema = {

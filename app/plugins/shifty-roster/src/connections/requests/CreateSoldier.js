@@ -2,9 +2,13 @@
 // Lowdefy custom request: create a single soldier row.
 // Tenant ID from request.user (session) — NEVER from request.properties. Layer-4 defense.
 //
-// knex imported dynamically inside the function body so unit tests can import
-// this module without requiring 'knex' to be installed in the test environment.
-// In the Lowdefy Docker image, knex is available via @lowdefy/connection-knex.
+// Layer 5 (RLS) wireup: the transaction is opened via withTenantTx, which issues
+// SET LOCAL app.current_tenant = '<tenant_id>' at the top so every INSERT/UPDATE/SELECT
+// inside the transaction is RLS-scoped to this tenant.
+//
+// knex is loaded indirectly via withTenantTx (dynamic import). Unit tests that exercise
+// only the guard clauses can still import this module without knex installed, because
+// withTenantTx is only invoked AFTER the guards pass.
 //
 // Implementation (Plan 02-06 Task 1, replaces plan 02-02 stub):
 // 1. canonicalizeText(display_name) BEFORE INSERT (D-12, ROST-11; Pitfall P2 mitigation)
@@ -22,6 +26,7 @@
 import { canonicalizeText } from '../../helpers/canonicalize.js';
 import { canonicalizeRoleTag } from '../../helpers/role-tag.js';
 import { pickNextColor, PALETTE } from '../../helpers/palette.js';
+import { withTenantTx } from 'shifty-auth/hooks/with-tenant-tx';
 
 async function CreateSoldier({ request, connection }) {
   const { display_name, seniority, role_tags, email, phone_e164, notes, team_id } =
@@ -61,135 +66,129 @@ async function CreateSoldier({ request, connection }) {
   // Notes column is server-side gated to managers/admins (Pitfall P10).
   const safeNotes = (typeof notes === 'string' && is_manager_or_admin) ? notes : null;
 
-  const { default: knex } = await import('knex');
-  const db = knex(connection);
-  try {
-    const result = await db.transaction(async (trx) => {
-      // Step 1: upsert any new role_tag keys for this tenant. ON CONFLICT DO NOTHING
-      // covers concurrent admin sessions adding the same key.
-      if (canonicalRoleTags.length > 0) {
-        await trx('role_tag')
-          .insert(canonicalRoleTags.map((key) => ({ tenant_id, key })))
-          .onConflict(['tenant_id', 'key'])
-          .ignore();
+  const result = await withTenantTx(connection, tenant_id, async (trx) => {
+    // Step 1: upsert any new role_tag keys for this tenant. ON CONFLICT DO NOTHING
+    // covers concurrent admin sessions adding the same key.
+    if (canonicalRoleTags.length > 0) {
+      await trx('role_tag')
+        .insert(canonicalRoleTags.map((key) => ({ tenant_id, key })))
+        .onConflict(['tenant_id', 'key'])
+        .ignore();
+    }
+
+    // Step 2: optional app_user resolution.
+    let appUserId = null;
+    if (email && typeof email === 'string') {
+      const lowerEmail = email.toLowerCase();
+      const existing = await trx('app_user')
+        .where({ tenant_id, email: lowerEmail })
+        .first('id');
+      if (existing) {
+        appUserId = existing.id;
+      } else {
+        const inserted = await trx('app_user')
+          .insert({
+            tenant_id,
+            email: lowerEmail,
+            display_name: canonicalName,
+            locale: 'he',
+          })
+          .returning('id');
+        appUserId = inserted[0]?.id ?? inserted[0];
       }
+    }
 
-      // Step 2: optional app_user resolution.
-      let appUserId = null;
-      if (email && typeof email === 'string') {
-        const lowerEmail = email.toLowerCase();
-        const existing = await trx('app_user')
-          .where({ tenant_id, email: lowerEmail })
-          .first('id');
-        if (existing) {
-          appUserId = existing.id;
-        } else {
-          const inserted = await trx('app_user')
-            .insert({
-              tenant_id,
-              email: lowerEmail,
-              display_name: canonicalName,
-              locale: 'he',
-            })
-            .returning('id');
-          appUserId = inserted[0]?.id ?? inserted[0];
-        }
+    // Step 3: race-safe color assignment via SELECT FOR UPDATE
+    // (RESEARCH Open Q4 — concurrent inserts in the same team would otherwise read
+    // the same last_color_index and both write the same color).
+    let colorIndex = 0;
+    let colorHex = PALETTE[0];
+    if (team_id) {
+      const ouRow = await trx('org_unit')
+        .where({ id: team_id, tenant_id })
+        .forUpdate()
+        .first('last_color_index');
+      if (!ouRow) {
+        throw new Error('CreateSoldier: team_id not found in this tenant');
       }
+      colorIndex = pickNextColor(ouRow.last_color_index);
+      colorHex = PALETTE[colorIndex];
+      await trx('org_unit')
+        .where({ id: team_id, tenant_id })
+        .update({ last_color_index: colorIndex, updated_at: trx.fn.now() });
+    }
 
-      // Step 3: race-safe color assignment via SELECT FOR UPDATE
-      // (RESEARCH Open Q4 — concurrent inserts in the same team would otherwise read
-      // the same last_color_index and both write the same color).
-      let colorIndex = 0;
-      let colorHex = PALETTE[0];
-      if (team_id) {
-        const ouRow = await trx('org_unit')
-          .where({ id: team_id, tenant_id })
-          .forUpdate()
-          .first('last_color_index');
-        if (!ouRow) {
-          throw new Error('CreateSoldier: team_id not found in this tenant');
-        }
-        colorIndex = pickNextColor(ouRow.last_color_index);
-        colorHex = PALETTE[colorIndex];
-        await trx('org_unit')
-          .where({ id: team_id, tenant_id })
-          .update({ last_color_index: colorIndex, updated_at: trx.fn.now() });
-      }
-
-      // Step 4: INSERT soldier.
-      const soldierInsert = await trx('soldier')
-        .insert({
-          tenant_id,
-          user_id: appUserId,
-          display_name: canonicalName,
-          color: colorHex,
-          seniority: typeof seniority === 'number' ? seniority : 0,
-          role_tags: canonicalRoleTags, // pg TEXT[] — knex passes through
-          phone_e164: phone_e164 || null,
-          status: 'active',
-          notes: safeNotes,
-        })
-        .returning('id');
-      const soldier_id = soldierInsert[0]?.id ?? soldierInsert[0];
-
-      // Step 5: SELECT-driven membership INSERT (RESEARCH §"Membership — Constraints"
-      // safe form). The SELECT enforces cross-tenant safety even if upstream payload
-      // is forged: rows are emitted only when both soldier and org_unit live in the
-      // same tenant. ON CONFLICT keeps the operation idempotent on retries.
-      if (team_id) {
-        await trx.raw(
-          `INSERT INTO membership (tenant_id, soldier_id, org_unit_id, role)
-           SELECT s.tenant_id, s.id, ou.id, 'member'
-             FROM soldier s, org_unit ou
-            WHERE s.id = :soldier_id
-              AND ou.id = :team_id
-              AND s.tenant_id = :tenant_id
-              AND ou.tenant_id = :tenant_id
-           ON CONFLICT (soldier_id, org_unit_id) DO NOTHING`,
-          { soldier_id, team_id, tenant_id }
-        );
-      }
-
-      // Step 6: audit row (matches shifty-audit-writer payload shape).
-      await trx('schedule_audit').insert({
+    // Step 4: INSERT soldier.
+    const soldierInsert = await trx('soldier')
+      .insert({
         tenant_id,
-        planning_window_id: null,
-        from_state: null,
-        to_state: 'soldier_created',
-        actor_user_id,
-        actor_kind: 'user',
-        payload: JSON.stringify({
-          soldier_id,
-          display_name: canonicalName,
-          team_id: team_id || null,
-          role_tags: canonicalRoleTags,
-          app_user_id: appUserId,
-          color_index: team_id ? colorIndex : null,
-        }),
-      });
-
-      return {
-        soldier_id,
+        user_id: appUserId,
+        display_name: canonicalName,
         color: colorHex,
-        color_index: team_id ? colorIndex : null,
+        seniority: typeof seniority === 'number' ? seniority : 0,
+        role_tags: canonicalRoleTags, // pg TEXT[] — knex passes through
+        phone_e164: phone_e164 || null,
+        status: 'active',
+        notes: safeNotes,
+      })
+      .returning('id');
+    const soldier_id = soldierInsert[0]?.id ?? soldierInsert[0];
+
+    // Step 5: SELECT-driven membership INSERT (RESEARCH §"Membership — Constraints"
+    // safe form). The SELECT enforces cross-tenant safety even if upstream payload
+    // is forged: rows are emitted only when both soldier and org_unit live in the
+    // same tenant. ON CONFLICT keeps the operation idempotent on retries.
+    if (team_id) {
+      await trx.raw(
+        `INSERT INTO membership (tenant_id, soldier_id, org_unit_id, role)
+         SELECT s.tenant_id, s.id, ou.id, 'member'
+           FROM soldier s, org_unit ou
+          WHERE s.id = :soldier_id
+            AND ou.id = :team_id
+            AND s.tenant_id = :tenant_id
+            AND ou.tenant_id = :tenant_id
+         ON CONFLICT (soldier_id, org_unit_id) DO NOTHING`,
+        { soldier_id, team_id, tenant_id }
+      );
+    }
+
+    // Step 6: audit row (matches shifty-audit-writer payload shape).
+    await trx('schedule_audit').insert({
+      tenant_id,
+      planning_window_id: null,
+      from_state: null,
+      to_state: 'soldier_created',
+      actor_user_id,
+      actor_kind: 'user',
+      payload: JSON.stringify({
+        soldier_id,
+        display_name: canonicalName,
+        team_id: team_id || null,
+        role_tags: canonicalRoleTags,
         app_user_id: appUserId,
-      };
+        color_index: team_id ? colorIndex : null,
+      }),
     });
 
     return {
-      success: true,
-      soldier: {
-        id: result.soldier_id,
-        display_name: canonicalName,
-        color: result.color,
-        role_tags: canonicalRoleTags,
-      },
-      app_user_id: result.app_user_id,
-      color_index: result.color_index,
+      soldier_id,
+      color: colorHex,
+      color_index: team_id ? colorIndex : null,
+      app_user_id: appUserId,
     };
-  } finally {
-    await db.destroy();
-  }
+  });
+
+  return {
+    success: true,
+    soldier: {
+      id: result.soldier_id,
+      display_name: canonicalName,
+      color: result.color,
+      role_tags: canonicalRoleTags,
+    },
+    app_user_id: result.app_user_id,
+    color_index: result.color_index,
+  };
 }
 
 CreateSoldier.schema = {

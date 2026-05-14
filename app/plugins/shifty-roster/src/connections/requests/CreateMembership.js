@@ -2,9 +2,11 @@
 // Lowdefy custom request: add a soldier as a member of a team (org_unit).
 // Tenant ID from request.user (session) — NEVER from request.properties. Layer-4 defense.
 //
-// knex imported dynamically inside the function body so unit tests can import
-// this module without requiring 'knex' to be installed in the test environment.
-// In the Lowdefy Docker image, knex is available via @lowdefy/connection-knex.
+// Layer 5 (RLS) wireup: the transaction is opened via withTenantTx, which issues
+// SET LOCAL app.current_tenant before any DB activity.
+//
+// knex is loaded indirectly via withTenantTx (dynamic import). Unit tests that exercise
+// only the guard clauses can still import this module without knex installed.
 //
 // Implementation (Plan 02-07 Task 1, replaces plan 02-02 stub):
 // 1. Layer-4 caller-scope check: caller_team_ids must include team_id unless unit_admin.
@@ -22,6 +24,7 @@
 
 import { canonicalizeRoleTag } from '../../helpers/role-tag.js'; // eslint-disable-line no-unused-vars
 import { pickNextColor, PALETTE } from '../../helpers/palette.js'; // eslint-disable-line no-unused-vars
+import { withTenantTx } from 'shifty-auth/hooks/with-tenant-tx';
 
 async function CreateMembership({ request, connection }) {
   const { soldier_id, team_id, role } = request.properties || {};
@@ -62,78 +65,70 @@ async function CreateMembership({ request, connection }) {
     throw new Error('CreateMembership: access denied — team not in caller scope');
   }
 
-  const { default: knex } = await import('knex');
-  const db = knex(connection);
-  try {
-    const result = await db.transaction(async (trx) => {
-      // Step 1: SELECT-driven safe INSERT. Emits a row only when soldier AND org_unit
-      // both live in `tenant_id`. ON CONFLICT keeps the call idempotent on retry.
-      // `s.status = 'active'` blocks adding archived soldiers (ROST-05).
-      const insertRes = await trx.raw(
-        `INSERT INTO membership (tenant_id, soldier_id, org_unit_id, role)
-         SELECT s.tenant_id, s.id, ou.id, :role
-           FROM soldier s, org_unit ou
-          WHERE s.id = :soldier_id
-            AND ou.id = :team_id
-            AND s.tenant_id = :tenant_id
-            AND ou.tenant_id = :tenant_id
-            AND s.status = 'active'
-         ON CONFLICT (soldier_id, org_unit_id) DO NOTHING
-         RETURNING id, tenant_id, soldier_id, org_unit_id`,
-        { role: effectiveRole, soldier_id, team_id, tenant_id }
+  return await withTenantTx(connection, tenant_id, async (trx) => {
+    // Step 1: SELECT-driven safe INSERT. Emits a row only when soldier AND org_unit
+    // both live in `tenant_id`. ON CONFLICT keeps the call idempotent on retry.
+    // `s.status = 'active'` blocks adding archived soldiers (ROST-05).
+    const insertRes = await trx.raw(
+      `INSERT INTO membership (tenant_id, soldier_id, org_unit_id, role)
+       SELECT s.tenant_id, s.id, ou.id, :role
+         FROM soldier s, org_unit ou
+        WHERE s.id = :soldier_id
+          AND ou.id = :team_id
+          AND s.tenant_id = :tenant_id
+          AND ou.tenant_id = :tenant_id
+          AND s.status = 'active'
+       ON CONFLICT (soldier_id, org_unit_id) DO NOTHING
+       RETURNING id, tenant_id, soldier_id, org_unit_id`,
+      { role: effectiveRole, soldier_id, team_id, tenant_id }
+    );
+
+    const rows = insertRes?.rows || [];
+
+    if (rows.length === 0) {
+      // Distinguish "already a member" (idempotent success) from "soldier or team
+      // not found in tenant scope" (real error). One extra round-trip; cheap.
+      const existsRes = await trx.raw(
+        `SELECT EXISTS (
+           SELECT 1 FROM membership
+            WHERE soldier_id = :soldier_id
+              AND org_unit_id = :team_id
+              AND tenant_id = :tenant_id
+         ) AS already_member`,
+        { soldier_id, team_id, tenant_id }
       );
-
-      const rows = insertRes?.rows || [];
-
-      if (rows.length === 0) {
-        // Distinguish "already a member" (idempotent success) from "soldier or team
-        // not found in tenant scope" (real error). One extra round-trip; cheap.
-        const existsRes = await trx.raw(
-          `SELECT EXISTS (
-             SELECT 1 FROM membership
-              WHERE soldier_id = :soldier_id
-                AND org_unit_id = :team_id
-                AND tenant_id = :tenant_id
-           ) AS already_member`,
-          { soldier_id, team_id, tenant_id }
-        );
-        const already_member = existsRes?.rows?.[0]?.already_member === true;
-        if (already_member) {
-          // Idempotent no-op: do NOT write an audit row for a no-op retry.
-          return { success: true, already_member: true, membership_id: null };
-        }
-        throw new Error('CreateMembership: soldier or team not found in tenant scope');
+      const already_member = existsRes?.rows?.[0]?.already_member === true;
+      if (already_member) {
+        // Idempotent no-op: do NOT write an audit row for a no-op retry.
+        return { success: true, already_member: true, membership_id: null };
       }
+      throw new Error('CreateMembership: soldier or team not found in tenant scope');
+    }
 
-      const newRow = rows[0];
+    const newRow = rows[0];
 
-      // Step 2: schedule_audit row (matches shifty-audit-writer payload shape).
-      await trx('schedule_audit').insert({
-        tenant_id,
-        planning_window_id: null,
-        from_state: null,
-        to_state: 'membership_added',
-        actor_user_id,
-        actor_kind: 'user',
-        payload: JSON.stringify({
-          membership_id: newRow.id,
-          soldier_id: newRow.soldier_id,
-          team_id: newRow.org_unit_id,
-          role: effectiveRole,
-        }),
-      });
-
-      return {
-        success: true,
-        already_member: false,
+    // Step 2: schedule_audit row (matches shifty-audit-writer payload shape).
+    await trx('schedule_audit').insert({
+      tenant_id,
+      planning_window_id: null,
+      from_state: null,
+      to_state: 'membership_added',
+      actor_user_id,
+      actor_kind: 'user',
+      payload: JSON.stringify({
         membership_id: newRow.id,
-      };
+        soldier_id: newRow.soldier_id,
+        team_id: newRow.org_unit_id,
+        role: effectiveRole,
+      }),
     });
 
-    return result;
-  } finally {
-    await db.destroy();
-  }
+    return {
+      success: true,
+      already_member: false,
+      membership_id: newRow.id,
+    };
+  });
 }
 
 CreateMembership.schema = {

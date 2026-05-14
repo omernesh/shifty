@@ -12,6 +12,7 @@
   "dependencies": {
     "knex": "*",
     "papaparse": "^5.5.3",
-    "resend": "*"
+    "resend": "*",
+    "shifty-auth": "file:../shifty-auth"
   }
 }

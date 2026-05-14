@@ -9,6 +9,7 @@
     "./connections": "./src/connections.js",
     "./types": "./src/types.js",
     "./hooks/knex-tenant": "./src/hooks/knex-tenant.js",
+    "./hooks/with-tenant-tx": "./src/hooks/with-tenant-tx.js",
     "./middleware/log-redact": "./src/middleware/log-redact.js"
   },
   "dependencies": {

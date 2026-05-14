@@ -2,9 +2,11 @@
 // Lowdefy custom request: update an existing soldier row.
 // Tenant ID from request.user (session) — NEVER from request.properties. Layer-4 defense.
 //
-// knex imported dynamically inside the function body so unit tests can import
-// this module without requiring 'knex' to be installed in the test environment.
-// In the Lowdefy Docker image, knex is available via @lowdefy/connection-knex.
+// Layer 5 (RLS) wireup: the transaction is opened via withTenantTx, which issues
+// SET LOCAL app.current_tenant before any DB activity.
+//
+// knex is loaded indirectly via withTenantTx (dynamic import). Unit tests that exercise
+// only the guard clauses can still import this module without knex installed.
 //
 // Implementation (Plan 02-06 Task 1, replaces plan 02-02 stub):
 // - canonicalizeText(display_name) at WRITE time (D-12; Pitfall P2)
@@ -18,6 +20,7 @@
 
 import { canonicalizeText } from '../../helpers/canonicalize.js';
 import { canonicalizeRoleTag } from '../../helpers/role-tag.js';
+import { withTenantTx } from 'shifty-auth/hooks/with-tenant-tx';
 
 async function UpdateSoldier({ request, connection }) {
   const { soldier_id, display_name, seniority, role_tags, phone_e164, notes, status, color } =
@@ -48,98 +51,92 @@ async function UpdateSoldier({ request, connection }) {
     ? Array.from(new Set(role_tags.map(canonicalizeRoleTag).filter(Boolean)))
     : undefined;
 
-  const { default: knex } = await import('knex');
-  const db = knex(connection);
-  try {
-    const result = await db.transaction(async (trx) => {
-      // Upsert any new role-tag keys for this tenant (mirrors CreateSoldier step 1).
-      if (canonicalRoleTags && canonicalRoleTags.length > 0) {
-        await trx('role_tag')
-          .insert(canonicalRoleTags.map((key) => ({ tenant_id, key })))
-          .onConflict(['tenant_id', 'key'])
-          .ignore();
-      }
+  const result = await withTenantTx(connection, tenant_id, async (trx) => {
+    // Upsert any new role-tag keys for this tenant (mirrors CreateSoldier step 1).
+    if (canonicalRoleTags && canonicalRoleTags.length > 0) {
+      await trx('role_tag')
+        .insert(canonicalRoleTags.map((key) => ({ tenant_id, key })))
+        .onConflict(['tenant_id', 'key'])
+        .ignore();
+    }
 
-      // Single parameterized UPDATE with Layer-4 scope check.
-      // RETURNING id lets us detect "not found OR access denied" → 0 rows.
-      //
-      // Notes column is gated by CASE WHEN :is_manager_or_admin so even if a non-manager
-      // POSTs a `notes` field, the SQL refuses to write it (defense-in-depth on top of
-      // safeNotes guard which already nulls it before binding).
-      const safeNotes = (typeof notes === 'string' && is_manager_or_admin) ? notes : null;
+    // Single parameterized UPDATE with Layer-4 scope check.
+    // RETURNING id lets us detect "not found OR access denied" → 0 rows.
+    //
+    // Notes column is gated by CASE WHEN :is_manager_or_admin so even if a non-manager
+    // POSTs a `notes` field, the SQL refuses to write it (defense-in-depth on top of
+    // safeNotes guard which already nulls it before binding).
+    const safeNotes = (typeof notes === 'string' && is_manager_or_admin) ? notes : null;
 
-      const updateRows = await trx.raw(
-        `UPDATE soldier
-            SET display_name = COALESCE(:display_name, display_name),
-                seniority    = COALESCE(:seniority, seniority),
-                role_tags    = COALESCE(:role_tags, role_tags),
-                phone_e164   = COALESCE(:phone_e164, phone_e164),
-                notes        = CASE WHEN :is_manager_or_admin THEN COALESCE(:notes, notes) ELSE notes END,
-                color        = COALESCE(:color, color),
-                status       = COALESCE(:status, status),
-                updated_at   = now()
-          WHERE id = :soldier_id
-            AND tenant_id = :tenant_id
-            AND (
-              :is_admin
-              OR EXISTS (
-                SELECT 1 FROM membership m
-                 WHERE m.soldier_id = :soldier_id
-                   AND m.org_unit_id = ANY(:caller_team_ids)
-              )
+    const updateRows = await trx.raw(
+      `UPDATE soldier
+          SET display_name = COALESCE(:display_name, display_name),
+              seniority    = COALESCE(:seniority, seniority),
+              role_tags    = COALESCE(:role_tags, role_tags),
+              phone_e164   = COALESCE(:phone_e164, phone_e164),
+              notes        = CASE WHEN :is_manager_or_admin THEN COALESCE(:notes, notes) ELSE notes END,
+              color        = COALESCE(:color, color),
+              status       = COALESCE(:status, status),
+              updated_at   = now()
+        WHERE id = :soldier_id
+          AND tenant_id = :tenant_id
+          AND (
+            :is_admin
+            OR EXISTS (
+              SELECT 1 FROM membership m
+               WHERE m.soldier_id = :soldier_id
+                 AND m.org_unit_id = ANY(:caller_team_ids)
             )
-        RETURNING id`,
-        {
-          display_name: canonicalDisplayName ?? null,
-          seniority: typeof seniority === 'number' ? seniority : null,
-          role_tags: canonicalRoleTags ?? null,
-          phone_e164: phone_e164 ?? null,
-          notes: safeNotes,
-          color: color ?? null,
-          status: status ?? null,
-          is_manager_or_admin,
-          is_admin,
-          soldier_id,
-          tenant_id,
-          caller_team_ids,
-        }
-      );
-
-      // pg returns { rows: [...] }; some knex dialects return the array directly.
-      const rows = updateRows?.rows ?? updateRows;
-      if (!rows || rows.length === 0) {
-        throw new Error('UpdateSoldier: soldier not found or access denied');
-      }
-
-      // Audit row.
-      await trx('schedule_audit').insert({
+          )
+      RETURNING id`,
+      {
+        display_name: canonicalDisplayName ?? null,
+        seniority: typeof seniority === 'number' ? seniority : null,
+        role_tags: canonicalRoleTags ?? null,
+        phone_e164: phone_e164 ?? null,
+        notes: safeNotes,
+        color: color ?? null,
+        status: status ?? null,
+        is_manager_or_admin,
+        is_admin,
+        soldier_id,
         tenant_id,
-        planning_window_id: null,
-        from_state: 'soldier_pre_update',
-        to_state: 'soldier_updated',
-        actor_user_id,
-        actor_kind: 'user',
-        payload: JSON.stringify({
-          soldier_id,
-          changed_fields: {
-            display_name: canonicalDisplayName ?? undefined,
-            seniority: typeof seniority === 'number' ? seniority : undefined,
-            role_tags: canonicalRoleTags ?? undefined,
-            phone_e164: phone_e164 ?? undefined,
-            notes_changed: safeNotes != null,
-            color: color ?? undefined,
-            status: status ?? undefined,
-          },
-        }),
-      });
+        caller_team_ids,
+      }
+    );
 
-      return { soldier_id };
+    // pg returns { rows: [...] }; some knex dialects return the array directly.
+    const rows = updateRows?.rows ?? updateRows;
+    if (!rows || rows.length === 0) {
+      throw new Error('UpdateSoldier: soldier not found or access denied');
+    }
+
+    // Audit row.
+    await trx('schedule_audit').insert({
+      tenant_id,
+      planning_window_id: null,
+      from_state: 'soldier_pre_update',
+      to_state: 'soldier_updated',
+      actor_user_id,
+      actor_kind: 'user',
+      payload: JSON.stringify({
+        soldier_id,
+        changed_fields: {
+          display_name: canonicalDisplayName ?? undefined,
+          seniority: typeof seniority === 'number' ? seniority : undefined,
+          role_tags: canonicalRoleTags ?? undefined,
+          phone_e164: phone_e164 ?? undefined,
+          notes_changed: safeNotes != null,
+          color: color ?? undefined,
+          status: status ?? undefined,
+        },
+      }),
     });
 
-    return { success: true, soldier_id: result.soldier_id };
-  } finally {
-    await db.destroy();
-  }
+    return { soldier_id };
+  });
+
+  return { success: true, soldier_id: result.soldier_id };
 }
 
 UpdateSoldier.schema = {

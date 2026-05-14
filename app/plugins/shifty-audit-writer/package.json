@@ -7,6 +7,7 @@
     "./types": "./src/types.js"
   },
   "dependencies": {
-    "knex": "*"
+    "knex": "*",
+    "shifty-auth": "file:../shifty-auth"
   }
 }
