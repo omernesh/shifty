@@ -55,10 +55,13 @@ Every page contains a tree of blocks. Each block has `id`, `type`, and most have
 
 ```yaml
 - id: my_box
-  type: Box
-  layout:
-    span: 12
-    contentJustify: center
+  type: Flex
+  # 5.3: prefer Flex block for actual flex layout — Box.layout.contentJustify/
+  # contentAlign/contentGutter are deprecated in 5.3. Box.layout is silently
+  # ignored by the Box renderer; use Flex.properties instead.
+  properties:
+    justify: center
+    gap: small
   style:
     padding: 24
   blocks:
