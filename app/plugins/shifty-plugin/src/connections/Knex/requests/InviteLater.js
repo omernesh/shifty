@@ -130,5 +130,7 @@ InviteLater.schema = {
   },
 };
 InviteLater.connectionType = 'Knex';
+// meta required by @lowdefy/api 5.3 (Phase 02-11 hotfix; match upstream KnexRaw/KnexBuilder).
+InviteLater.meta = { checkRead: false, checkWrite: false };
 
 export default InviteLater;

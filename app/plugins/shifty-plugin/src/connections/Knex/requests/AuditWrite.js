@@ -53,5 +53,7 @@ AuditWrite.schema = {
   },
 };
 AuditWrite.connectionType = 'Knex';
+// meta required by @lowdefy/api 5.3 (Phase 02-11 hotfix; match upstream KnexRaw/KnexBuilder).
+AuditWrite.meta = { checkRead: false, checkWrite: false };
 
 export default AuditWrite;

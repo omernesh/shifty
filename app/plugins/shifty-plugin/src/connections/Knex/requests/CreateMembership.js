@@ -145,5 +145,7 @@ CreateMembership.schema = {
   },
 };
 CreateMembership.connectionType = 'Knex';
+// meta required by @lowdefy/api 5.3 (Phase 02-11 hotfix; match upstream KnexRaw/KnexBuilder).
+CreateMembership.meta = { checkRead: false, checkWrite: false };
 
 export default CreateMembership;

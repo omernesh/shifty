@@ -205,5 +205,7 @@ CreateSoldier.schema = {
   },
 };
 CreateSoldier.connectionType = 'Knex';
+// meta required by @lowdefy/api 5.3 (Phase 02-11 hotfix; match upstream KnexRaw/KnexBuilder).
+CreateSoldier.meta = { checkRead: false, checkWrite: false };
 
 export default CreateSoldier;

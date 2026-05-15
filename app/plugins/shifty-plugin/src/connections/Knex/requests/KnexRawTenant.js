@@ -62,4 +62,10 @@ KnexRawTenant.schema = {
 // (defined by @lowdefy/connection-knex). KnexRawTenant rides the same connection schema.
 KnexRawTenant.connectionType = 'Knex';
 
+// meta = { checkRead, checkWrite } is required by @lowdefy/api 5.3's checkConnectionRead /
+// checkConnectionWrite (otherwise `requestResolver.meta.checkRead` throws TypeError on
+// undefined). Match the upstream KnexRaw/KnexBuilder defaults — connection-level read/write
+// controls are opt-in per-handler; we don't restrict here. Phase 02-11 hotfix.
+KnexRawTenant.meta = { checkRead: false, checkWrite: false };
+
 export default KnexRawTenant;

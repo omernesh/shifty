@@ -154,5 +154,7 @@ UpdateSoldier.schema = {
   },
 };
 UpdateSoldier.connectionType = 'Knex';
+// meta required by @lowdefy/api 5.3 (Phase 02-11 hotfix; match upstream KnexRaw/KnexBuilder).
+UpdateSoldier.meta = { checkRead: false, checkWrite: false };
 
 export default UpdateSoldier;

@@ -347,5 +347,7 @@ CommitRosterImport.schema = {
   },
 };
 CommitRosterImport.connectionType = 'Knex';
+// meta required by @lowdefy/api 5.3 (Phase 02-11 hotfix; match upstream KnexRaw/KnexBuilder).
+CommitRosterImport.meta = { checkRead: false, checkWrite: false };
 
 export default CommitRosterImport;
