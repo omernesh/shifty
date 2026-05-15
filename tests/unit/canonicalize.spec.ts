@@ -2,17 +2,16 @@
 // B1 fix — VALIDATION Wave 0 requires a separate tests/unit/ surface for the
 // smart-quote + bidi-mark canonicalizer (ROST-11, D-12).
 //
-// These tests thinly delegate to app/plugins/shifty-roster/src/helpers/canonicalize.js
-// and cover the same fixtures as the plugin-colocated node:test file
-// (app/plugins/shifty-roster/tests/canonicalize.test.mjs) but from a separate
-// test surface so that Validation's explicit file-path checklist passes independently.
+// These tests thinly delegate to app/plugins/shifty-plugin/src/helpers/canonicalize.js
+// (the merged Phase-2 plugin — see .planning/phases/02-org-people/02-11-PLAN.md;
+// helper moved from shifty-roster as part of the plugin-registration hotfix).
 //
 // Run: node --test --experimental-strip-types tests/unit/canonicalize.spec.ts
 // Or via root package.json: npm run test:unit
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { canonicalizeText } from '../../app/plugins/shifty-roster/src/helpers/canonicalize.js';
+import { canonicalizeText } from '../../app/plugins/shifty-plugin/src/helpers/canonicalize.js';
 
 // ─── Kibbutz canary (ROST-11 load-bearing assertion) ─────────────────────────
 // The middle character in the input is U+2019 (RIGHT SINGLE QUOTATION MARK).

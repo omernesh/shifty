@@ -2,17 +2,16 @@
 // B1 fix — VALIDATION Wave 0 requires a separate tests/unit/ surface for the
 // 24-color Glasbey-style palette and the round-robin picker (D-14, D-15, ROST-06).
 //
-// These tests thinly delegate to app/plugins/shifty-roster/src/helpers/palette.js
-// and cover the same fixtures as the plugin-colocated node:test file
-// (app/plugins/shifty-roster/tests/palette.test.mjs) but from a separate
-// test surface so that Validation's explicit file-path checklist passes independently.
+// These tests thinly delegate to app/plugins/shifty-plugin/src/helpers/palette.js
+// (the merged Phase-2 plugin — see .planning/phases/02-org-people/02-11-PLAN.md;
+// helper moved from shifty-roster as part of the plugin-registration hotfix).
 //
 // Run: node --test --experimental-strip-types tests/unit/color-palette.spec.ts
 // Or via root package.json: npm run test:unit
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { PALETTE, pickNextColor } from '../../app/plugins/shifty-roster/src/helpers/palette.js';
+import { PALETTE, pickNextColor } from '../../app/plugins/shifty-plugin/src/helpers/palette.js';
 
 // ─── Palette size and uniqueness ──────────────────────────────────────────────
 test('palette: PALETTE has 24 unique hex entries', () => {

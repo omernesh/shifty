@@ -2,17 +2,16 @@
 // B1 fix — VALIDATION Wave 0 requires a separate tests/unit/ surface for the
 // role-tag kebab-case canonicalizer (D-13, ROST-07).
 //
-// These tests thinly delegate to app/plugins/shifty-roster/src/helpers/role-tag.js
-// and cover the same fixtures as the plugin-colocated node:test file
-// (app/plugins/shifty-roster/tests/role-tag.test.mjs) but from a separate
-// test surface so that Validation's explicit file-path checklist passes independently.
+// These tests thinly delegate to app/plugins/shifty-plugin/src/helpers/role-tag.js
+// (the merged Phase-2 plugin — see .planning/phases/02-org-people/02-11-PLAN.md;
+// helper moved from shifty-roster as part of the plugin-registration hotfix).
 //
 // Run: node --test --experimental-strip-types tests/unit/role-tag-canonical.spec.ts
 // Or via root package.json: npm run test:unit
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { canonicalizeRoleTag } from '../../app/plugins/shifty-roster/src/helpers/role-tag.js';
+import { canonicalizeRoleTag } from '../../app/plugins/shifty-plugin/src/helpers/role-tag.js';
 
 // ─── Basic lowercase kebab-case ───────────────────────────────────────────────
 test('role-tag: lowercase kebab-case proof — "Driving" → "driving"', () => {
