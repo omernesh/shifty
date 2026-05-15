@@ -1,0 +1,195 @@
+// app/plugins/shifty-plugin/src/connections/Knex/requests/ParseCsvAndValidate.js
+// Lowdefy custom request: parse CSV text (pasted by admin) and produce a per-row
+// preview state for the import wizard (ok / warn / error per row).
+// Tenant ID from request.user (session) — NEVER from request.properties. Layer-4 defense.
+//
+// Layer 5 (RLS) wireup: ParseCsvAndValidate is READ-ONLY (it only SELECTs from app_user,
+// org_unit, role_tag) but the queries still need RLS context. We wrap the three SELECTs
+// in withTenantTx so SET LOCAL app.current_tenant is established before any read. A
+// read-only transaction is essentially free in Postgres.
+//
+// I-1 round 2: Upload block (non-existent in Lowdefy 5.3) replaced with TextArea paste.
+// Handler now receives csv_text (UTF-8 string) directly instead of base64-encoded file bytes.
+//
+// knex is loaded indirectly via withTenantTx (dynamic import). Unit tests that exercise
+// only the guard clauses can still import this module without knex installed.
+//
+// Implementation (Plan 02-08 Task 2 — replaces plan 02-02 stub):
+// 1. receive csv_text (UTF-8 string) directly — no base64 decode step
+// 2. Papa.parse({ header: true, skipEmptyLines: true })
+// 3. Required-header gate: display_name, email, role_tags, seniority, team_id
+// 4. Per-tenant pre-flight SELECTs (all WHERE tenant_id = :tenant_id):
+//      - existing app_user emails (duplicate detection scoped to THIS tenant only —
+//        cross-tenant duplicates are NOT flagged; T-02-02 mitigation)
+//      - valid team_ids
+//      - valid role_tag keys
+// 5. Per-row map: canonicalizeText(display_name), canonicalizeRoleTag(each tag),
+//    validate email format, seniority range, team_id membership, unknown tag warnings,
+//    duplicate detection. Status: error (unfixable) | warn (recoverable) | ok.
+// 6. Return { rows, total } — caller renders the editable AgGrid preview.
+
+import Papa from 'papaparse';
+import { canonicalizeText } from '../../../helpers/canonicalize.js';
+import { canonicalizeRoleTag } from '../../../helpers/role-tag.js';
+import { withTenantTx } from '../../../hooks/with-tenant-tx.js';
+
+// Required CSV headers — aligned with the soldier table column names so no translation
+// step lives between the CSV and the handler. PRD §7.3.1 names the column `display_name`.
+const REQUIRED_HEADERS = ['display_name', 'email', 'role_tags', 'seniority', 'team_id'];
+
+// RFC 5322-lite — sufficient to flag malformed pastes without false-rejecting valid edge
+// addresses. CSV import is a Hebrew-first form; admins fix borderline cases in the preview.
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+async function ParseCsvAndValidate({ request, connection }) {
+  const { csv_text } = request.properties || {};
+
+  // Layer-4 tenant / actor guards (BEFORE any DB interaction).
+  const tenant_id = request.user?.tenant_id;
+  if (!tenant_id) {
+    throw new Error('ParseCsvAndValidate: tenant_id missing from session');
+  }
+  const actor_user_id = request.user?.user_id;
+  if (!actor_user_id) {
+    throw new Error('ParseCsvAndValidate: actor_user_id missing from session — unauthenticated request');
+  }
+
+  if (!csv_text || typeof csv_text !== 'string' || !csv_text.trim()) {
+    throw new Error('ParseCsvAndValidate: csv_text is required — paste CSV content into the text area');
+  }
+
+  // I-1 round 2: csv_text is received as a plain UTF-8 string (pasted by admin).
+  // No base64 decode needed. Use it directly.
+  const csvText = csv_text;
+
+  // STEP 2 — parse with papaparse (header mode; empty lines skipped).
+  const parsed = Papa.parse(csvText, { header: true, skipEmptyLines: true });
+
+  // STEP 3 — required-header gate. Hebrew error so the UI can surface the
+  // exact list of missing columns to the admin.
+  const headerFields = (parsed.meta && parsed.meta.fields) || [];
+  const missingHeaders = REQUIRED_HEADERS.filter((h) => !headerFields.includes(h));
+  if (missingHeaders.length) {
+    throw new Error(`חסרות עמודות: ${missingHeaders.join(', ')}`);
+  }
+
+  // Lowercase + trim all candidate emails up front so pre-flight + per-row use the
+  // SAME canonical form. Duplicate detection compares against canonical app_user.email.
+  const candidateEmails = (parsed.data || [])
+    .map((r) => (r && typeof r.email === 'string' ? r.email.trim().toLowerCase() : ''))
+    .filter(Boolean);
+
+  // STEP 4 — pre-flight SELECTs, all scoped to tenant_id (T-02-01 / T-02-02).
+  // Wrapped in withTenantTx so RLS context is set before any SELECT runs.
+  const { existingEmails, validTeamIds, validRoleTagKeys } = await withTenantTx(
+    connection,
+    tenant_id,
+    async (trx) => {
+      let existingEmailsSet = new Set();
+      if (candidateEmails.length) {
+        const emailRows = await trx.raw(
+          `SELECT email FROM app_user WHERE tenant_id = :tenant_id AND email = ANY(:emails)`,
+          { tenant_id, emails: candidateEmails }
+        );
+        const rows = emailRows.rows || emailRows;
+        existingEmailsSet = new Set((rows || []).map((r) => String(r.email).toLowerCase()));
+      }
+
+      const teamRows = await trx.raw(
+        `SELECT id FROM org_unit WHERE tenant_id = :tenant_id`,
+        { tenant_id }
+      );
+      const validTeamIdsSet = new Set(((teamRows.rows || teamRows) || []).map((r) => String(r.id)));
+
+      const tagRows = await trx.raw(
+        `SELECT key FROM role_tag WHERE tenant_id = :tenant_id`,
+        { tenant_id }
+      );
+      const validRoleTagKeysSet = new Set(((tagRows.rows || tagRows) || []).map((r) => String(r.key)));
+
+      return {
+        existingEmails: existingEmailsSet,
+        validTeamIds: validTeamIdsSet,
+        validRoleTagKeys: validRoleTagKeysSet,
+      };
+    }
+  );
+
+  // STEP 5 — per-row validation map (pure JS; no DB calls here).
+  const rows = (parsed.data || []).map((raw, idx) => {
+    const errors = [];
+    const warnings = [];
+
+    const displayNameRaw = raw && typeof raw.display_name === 'string' ? raw.display_name : '';
+    // canonicalizeText invoked here at parse time (D-12 / ROST-11 / Pitfall P2 first
+    // belt-and-braces layer). CommitRosterImport canonicalizes AGAIN at write time
+    // (second layer) so a preview row edited in the AgGrid without re-validation
+    // still canonicalizes correctly before INSERT.
+    const display_name = canonicalizeText(displayNameRaw);
+
+    const email = raw && typeof raw.email === 'string' ? raw.email.trim().toLowerCase() : '';
+
+    const seniorityRaw = raw && raw.seniority !== undefined ? String(raw.seniority) : '0';
+    const seniority = parseInt(seniorityRaw, 10);
+
+    const tagsRaw = raw && typeof raw.role_tags === 'string'
+      ? raw.role_tags.split('|').map((s) => s.trim()).filter(Boolean)
+      : [];
+    const role_tags = Array.from(new Set(tagsRaw.map(canonicalizeRoleTag).filter(Boolean)));
+
+    const team_id = raw && typeof raw.team_id === 'string' ? raw.team_id.trim() : '';
+    const phone_e164 = raw && typeof raw.phone_e164 === 'string' ? raw.phone_e164.trim() : null;
+
+    // Errors — unfixable inline. Preview will block the Confirm button.
+    if (!display_name) errors.push('שם חסר');
+    if (email && !EMAIL_RE.test(email)) errors.push('כתובת אימייל לא תקפה');
+    if (Number.isNaN(seniority) || seniority < 0 || seniority > 10) {
+      errors.push('ותק חייב להיות בין 0 ל-10');
+    }
+    if (team_id && !validTeamIds.has(team_id)) errors.push('יחידה לא קיימת');
+
+    // Warnings — recoverable. Duplicate emails default to skip; re-invite checkbox
+    // (D-11) lets the admin opt-in to re-send. Unknown tags will be auto-inserted by
+    // CommitRosterImport via ON CONFLICT DO NOTHING (D-13).
+    const is_duplicate = email !== '' && existingEmails.has(email);
+    if (is_duplicate) warnings.push('כפילות אימייל');
+
+    const unknown_tags = role_tags.filter((t) => !validRoleTagKeys.has(t));
+    if (unknown_tags.length) warnings.push(`תגיות חדשות: ${unknown_tags.join(', ')}`);
+
+    const rowStatus = errors.length ? 'error' : (warnings.length ? 'warn' : 'ok');
+
+    return {
+      row_index: idx,
+      display_name_raw: displayNameRaw,
+      display_name,
+      email,
+      seniority,
+      role_tags,
+      team_id: team_id || null,
+      phone_e164,
+      is_duplicate,
+      unknown_tags,
+      status: rowStatus,
+      errors,
+      warnings,
+      re_invite: false,
+    };
+  });
+
+  return {
+    rows,
+    total: rows.length,
+  };
+}
+
+ParseCsvAndValidate.schema = {
+  type: 'object',
+  required: ['csv_text'],
+  properties: {
+    csv_text: { type: 'string', minLength: 1 },
+  },
+};
+ParseCsvAndValidate.connectionType = 'Knex';
+
+export default ParseCsvAndValidate;
