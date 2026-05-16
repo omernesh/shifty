@@ -194,6 +194,137 @@ export async function signInAs(email: string): Promise<SignInResult> {
   }
 }
 
+/**
+ * Plan 03-05 — populated planning_window fixture for availability-declare tests.
+ *
+ * Creates a complete window: N shift_slot rows (default 2, headcount=1 each) +
+ * 1 planning_window with state='open' + the cross-product shift_instance rows
+ * via INSERT…SELECT (mirrors OpenPlanningWindow's CROSS JOIN LATERAL pattern).
+ *
+ * Uses SET ROLE NONE to bypass RLS for seeding (same pattern as seedOne above).
+ *
+ * @param tenantId  Tenant id to seed into.
+ * @param teamId    Team (leaf org_unit) under tenantId.
+ * @param options   Optional overrides:
+ *                  - startDate / endDate: ISO YYYY-MM-DD (default: today → today+13)
+ *                  - lockTs:    ISO TIMESTAMPTZ for constraint_lock_at
+ *                               (default: start − 3 days at 23:59 Asia/Jerusalem)
+ *                  - slotCount: number of shift_slot rows (default 2)
+ *                  - headcount: per-slot headcount (default 1)
+ *                  - state:     planning_window state (default 'open')
+ *
+ * Returns:
+ *   { planningWindowId, slotIds: string[], instanceIds: string[] }
+ *
+ * Test usage:
+ *   const { planningWindowId, slotIds, instanceIds } =
+ *     await seedFullWindow(tenantA.tenantId, tenantA.teamId);
+ *
+ * REPLACES the ad-hoc seedShiftSlots+planning_window inline inserts in
+ * planning-window-open.spec.ts (Plan 03-04). That spec's helpers are kept as
+ * a more narrow tool (no shift_instance cross-product); availability tests
+ * need the cross-product because their assertions hit per-instance rows.
+ */
+export interface SeedFullWindowResult {
+  planningWindowId: string;
+  slotIds: string[];
+  instanceIds: string[];
+  startDate: string;
+  endDate: string;
+}
+
+export async function seedFullWindow(
+  tenantId: string,
+  teamId: string,
+  options?: {
+    startDate?: string;
+    endDate?: string;
+    lockTs?: string | null;
+    slotCount?: number;
+    headcount?: number;
+    state?: string;
+  },
+): Promise<SeedFullWindowResult> {
+  const client = new Client({ connectionString: PG_URL });
+  await client.connect();
+  try {
+    await client.query('SET ROLE NONE');
+    await client.query(`SELECT set_config('app.current_tenant', $1, false)`, [tenantId]);
+
+    const slotCount = options?.slotCount ?? 2;
+    const headcount = options?.headcount ?? 1;
+    const state = options?.state ?? 'open';
+
+    // Default dates: today → today + 13 days (14-day inclusive window).
+    const today = new Date();
+    const isoDate = (offset: number): string => {
+      const d = new Date(today);
+      d.setUTCDate(d.getUTCDate() + offset);
+      return d.toISOString().slice(0, 10);
+    };
+    const startDate = options?.startDate ?? isoDate(0);
+    const endDate = options?.endDate ?? isoDate(13);
+
+    // Seed N shift_slot rows with headcount=1 each (display_order = i).
+    const slotIds: string[] = [];
+    for (let i = 0; i < slotCount; i++) {
+      const slotId = randomUUID();
+      slotIds.push(slotId);
+      await client.query(
+        `INSERT INTO shift_slot
+           (id, tenant_id, team_id, name, start_time, end_time, headcount, display_order)
+         VALUES ($1, $2, $3, $4, '06:00', '18:00', $5, $6)
+         ON CONFLICT DO NOTHING`,
+        [slotId, tenantId, teamId, `Slot ${i + 1}`, headcount, i],
+      );
+    }
+
+    // Seed planning_window. lock_at default: (start - 3d) at 23:59 Asia/Jerusalem.
+    const planningWindowId = randomUUID();
+    if (options?.lockTs === undefined) {
+      // Default: server-side computed expression.
+      await client.query(
+        `INSERT INTO planning_window
+           (id, tenant_id, team_id, start_date, end_date, constraint_lock_at, state)
+         VALUES ($1, $2, $3, $4::date, $5::date,
+                 ($4::date - INTERVAL '3 days')::date + TIME '23:59:00' AT TIME ZONE 'Asia/Jerusalem',
+                 $6)
+         ON CONFLICT DO NOTHING`,
+        [planningWindowId, tenantId, teamId, startDate, endDate, state],
+      );
+    } else {
+      // Explicit lock_ts (may be null for no lock or a past timestamp for tests).
+      await client.query(
+        `INSERT INTO planning_window
+           (id, tenant_id, team_id, start_date, end_date, constraint_lock_at, state)
+         VALUES ($1, $2, $3, $4::date, $5::date, $6::timestamptz, $7)
+         ON CONFLICT DO NOTHING`,
+        [planningWindowId, tenantId, teamId, startDate, endDate, options.lockTs, state],
+      );
+    }
+
+    // Materialize the cross-product. Same pattern as OpenPlanningWindow.
+    const xpRes = await client.query<{ id: string }>(
+      `INSERT INTO shift_instance
+         (tenant_id, shift_slot_id, planning_window_id, date, headcount_index)
+       SELECT s.tenant_id, s.id, $1::uuid, d.date::date, h.idx
+         FROM shift_slot s
+         CROSS JOIN generate_series($2::date, $3::date, INTERVAL '1 day') AS d(date)
+         CROSS JOIN LATERAL generate_series(0, s.headcount - 1) AS h(idx)
+        WHERE s.tenant_id = $4
+          AND s.team_id = $5
+          AND s.id = ANY($6::uuid[])
+       RETURNING id`,
+      [planningWindowId, startDate, endDate, tenantId, teamId, slotIds],
+    );
+    const instanceIds = xpRes.rows.map((r) => r.id);
+
+    return { planningWindowId, slotIds, instanceIds, startDate, endDate };
+  } finally {
+    await client.end();
+  }
+}
+
 export function getTenantBIds(tenantB: TenantFixture): {
   soldiers: string[];
   windows: string[];    // empty in Phase 1 (no planning_window seeded)
