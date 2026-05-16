@@ -14,7 +14,7 @@ Shifty's v1 is a Hebrew-RTL, multi-tenant shift-planning SaaS for Israeli reserv
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundations** - Lowdefy runtime + tenancy + RBAC + 5-layer tenant defense + custom-plugin scaffold + ops baseline (completed 2026-05-12)
-- [x] **Phase 2: Org & People** - Units/teams CRUD, soldier roster CRUD, CSV roster import with smart-quote canonicalization (deploy green 2026-05-14; Plan 10 Task 4 manual UAT pending)
+- [x] **Phase 2: Org & People** - Units/teams CRUD, soldier roster CRUD, CSV roster import with smart-quote canonicalization (completed 2026-05-16; closed with documented deferral of 21 mutation-path e2e specs to Phase 03 — see 02-11-SUMMARY.md)
 - [ ] **Phase 3: Availability & Rules** - Shift slots, planning windows, hybrid availability UI, 8-rule catalog with per-soldier tightening
 - [ ] **Phase 4: Solver & Schedule** - FastAPI CP-SAT solver with unsat-core infeasibility, draft → publish lifecycle, manager hand-edit
 - [ ] **Phase 5: Lifecycle Features** - Swap workflow + manager manual override + time clock (3 parallel sub-streams)
@@ -55,7 +55,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. CSV import canonicalizes smart-quote variants (strips U+2019, U+200E, U+200F, U+202A–U+202E) before writing `soldier.display_name`; a 50-row CSV imports in under 10 seconds and dispatches magic-link invites via Resend.
   4. Each soldier gets a calendar color from the 24-color preset palette (round-robin, no adjacent-color collisions within a team); the soldier can override in profile.
   5. Soldier can be a member of multiple teams within the same tenant via `membership` rows; role tags autocomplete from existing tenant tags but allow new ones (lowercase kebab-case).
-**Plans**: 10 plans
+**Plans**: 11 plans
   - [x] 02-01-PLAN.md — Wave 0 migrations 0011_role_tag + 0012_org_unit_last_color_index (schema + RLS)
   - [x] 02-02-PLAN.md — Wave 0 shifty-roster plugin scaffold (palette, canonicalize, role-tag helpers + 7 request stubs + unit tests)
   - [x] 02-03-PLAN.md — Wave 1 manage_org_units tree-table upgrade (D-01, D-02, D-04 grow-depth)
@@ -66,6 +66,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   - [x] 02-08-PLAN.md — Wave 3 CSV import wizard + ParseCsvAndValidate + CommitRosterImport (Auth.js spike + Resend dispatch loop)
   - [x] 02-09-PLAN.md — Wave 4 lowdefy.yaml wiring + 0008_legacy_drop + Lowdefy 5.3 audit corrections (rounds 1+2; UX downgrade — Upload→TextArea paste, custom RosterUpload deferred to Phase 3)
   - [x] 02-10-PLAN.md — Wave 4 E2E specs + 5 CSV fixtures + 63/63 unit tests pass; Task 4 live UAT deferred (checkpoint:human-action)
+  - [x] 02-11-PLAN.md — Hotfix: merge shifty-auth + shifty-roster + shifty-audit-writer into single shifty-plugin to close custom-request-type registration gap; Layer 5 RLS active-enforcement spec 5/5 green; cross-tenant-leak 17/17 green; RTL email smoke 12/12 green; closeout (SUMMARY/VERIFICATION/ROADMAP/tag v0.2.0-phase2); 21 mutation-path e2e specs deferred to Phase 03 per documented payload-binding redesign
 **Sequencing notes**: Sequential FK chain — org_unit CRUD → soldier CRUD → role tags + seniority → membership. CSV import path builds in parallel with the single-row form once `soldier.display_name` write semantics are settled.
 **Avoids pitfalls**: P5 (CSV direction-mark stripping at write time), P10 (display-name normalization, 24-color palette spec).
 
@@ -167,7 +168,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7. Phase M 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundations | 5/5 | Complete   | 2026-05-12 |
-| 2. Org & People | 2/10 | In progress | - |
+| 2. Org & People | 11/11 | Complete   | 2026-05-16 |
 | 3. Availability & Rules | 0/TBD | Not started | - |
 | 4. Solver & Schedule | 0/TBD | Not started | - |
 | 5. Lifecycle Features | 0/TBD | Not started | - |

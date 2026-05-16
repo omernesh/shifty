@@ -196,3 +196,61 @@ The VALIDATION.md Wave 0 checklist initially said "Vitest" (`tests/unit/vitest.c
 - The Layer-4 in-SQL scope check (`WHERE id = :id AND tenant_id = session.tenant_id`) returns ZERO rows as the access-denied signal — never a 403 from the SQL layer itself
 - The canonicalize-at-write rule (two-stage: parse preview + commit handler both run canonicalizeText) is the belt-and-braces contract for any user-supplied text field
 - skip-on-stack-down is the canonical pattern for all e2e specs: `try { res = await request.post(...) } catch { test.skip(true, 'stack not reachable') }`
+
+---
+
+## Task 4 — RESOLVED via 02-11-PLAN.md hotfix
+
+**Plan 02-11 executed 2026-05-16.** This section closes the original "Task 4 live UAT deferred (checkpoint:human-action)" hold by documenting what the hotfix landed and the residual deferral.
+
+### Plugin-registration root cause (one-sentence summary)
+
+`@lowdefy/build`'s `writePluginImports/` directory has writers for blocks/actions/agents/auth/connections/icons/operators but **no `writeRequestImports`** — so the three prior plugins' `requests: [9 names]` declarations in their `types.js` files were tracked for schema validation but never emitted into any runtime artifact, leaving every Phase-2 custom request type (`ParseCsvAndValidate`, `CreateSoldier`, `AuditWrite`, `KnexRawTenant`, …) unregistered with Lowdefy 5.3's runtime. See `02-UAT-FINDINGS.md` §3 for the original discovery and `02-11-SUMMARY.md` "Load-bearing structural change" for the fix.
+
+### Test outcomes (post-hotfix, hpg5)
+
+| Suite | Pre-Plan-02-11 | Post-Plan-02-11 |
+|-------|----------------|-----------------|
+| `tests/e2e/layer5-rls-activation.spec.ts` (NEW) | — | **5/5 green** ✅ |
+| `tests/e2e/cross-tenant-leak.spec.ts` | broken (resolver-not-found) | **17/17 green** ✅ |
+| Phase-1 specs (audit, auth-cookies, hebrew, invite, log-redact, role-gate, rls, session, tenant-bootstrap) | broken (resolver-not-found) | **all green** ✅ |
+| Phase-2 mutation specs (soldier-crud, roster-csv-import, org-unit-crud, tenant-isolation, ui-smoke-phase2) | broken (resolver-not-found) | **21 failures DEFERRED to Phase 03** — see below |
+| `tests/unit/invite-email-rtl.spec.ts` (Task 7, NEW) | — | **12/12 green** ✅ |
+| Full unit suite (3 helper specs + RTL spec) | 21/21 | **33/33 green** ✅ |
+
+### Plugin-registration fix verified end-to-end
+
+- BUILD-EMITTED `/build/.lowdefy/server/build/plugins/connections.js` (inside the running hpg5 container) post-rebuild reads:
+  ```js
+  import { Knex as Knex } from 'shifty-plugin/connections';
+  export default { Knex };
+  ```
+  Pre-fix it read `from '@lowdefy/connection-knex/connections'` only — proving the merged plugin's Knex displaces the upstream one (last-wins via `buildTypeClass`'s `store[typeName] = ...`), and the upstream's `KnexBuilder`/`KnexRaw` handlers are preserved because we spread `upstream.Knex.requests` into the merged map.
+- Runtime error class changed from `Request type "X" can not be found.` (resolver missing) to `Request "X" required property "Y" is missing.` (schema validator firing AFTER the resolver is found) — proves the resolver chain is now intact.
+- Layer 5 RLS: tenantA session executing a `SELECT` against a tenantB row returns ZERO rows at the DB level (forge test, `runAsTenant` helper simulates exactly what the registered `KnexRawTenant` resolver does at runtime).
+
+### Task 7 RTL email smoke outcome
+
+**Automated unit spec.** `tests/unit/invite-email-rtl.spec.ts` (12 tests) asserts the RTL markers on the OUTPUT of `buildInviteHtml` and `buildInviteText` (newly named-exported from `app/plugins/shifty-plugin/src/dispatch/resend.js`). Resend test-mode webhook inspection of rendered HTML would require a publicly-reachable webhook listener — beyond unit-test scope. The unit assertions cover:
+
+- `<html dir="rtl" lang="he">` on root (Hebrew locale)
+- Inline `direction:rtl; text-align:right` on the wrapping container (Outlook-variant defense)
+- Hebrew subject + greeting + CTA copy round-trip
+- Magic-link URL embedded verbatim
+- English (`en`) locale flips to `dir="ltr" lang="en"` + `text-align:left`
+- Plaintext fallback prefixes lines with U+200F RLM (PRD §"Outlook RTL email + plaintext U+200F prefix")
+- Display-name-optional bare-greeting paths (he html + plaintext)
+- Locale fallback to `he` when undefined
+
+12/12 pass locally (`node --test --experimental-strip-types tests/unit/invite-email-rtl.spec.ts`).
+
+### Residual deferral — 21 mutation-path e2e specs
+
+The 21 failures across `soldier-crud.spec.ts`, `roster-csv-import.spec.ts`, `org-unit-crud.spec.ts`, `tenant-isolation.spec.ts`, and `ui-smoke-phase2.spec.ts` are a **pre-existing test-harness design issue**, not a Plan-02-11 regression. Every failing test POSTs raw `{ payload: { ... } }` directly to the Lowdefy request endpoint, but every Phase-2 page YAML resolves its `payload:` block via UI `_state:` operators (e.g., `display_name: { _state: new_soldier_form.display_name }`). Direct API callers don't have UI state → `_state.<form>.<field>` resolves to `undefined` → handler's schema validator rejects.
+
+Three alternatives the user/orchestrator considered:
+1. **Accept the deferred gap** (chosen). Layer 5 RLS + cross-tenant-leak + Phase-1 specs all green; tag `v0.2.0-phase2` based on those; open Phase-3 follow-up plan.
+2. Rewrite as Playwright UI flows (`page.fill` + `page.click`). 3–5h.
+3. Add a dual-source operator (`_payload_first: ['form_input', { _state: ... }]`) to every Phase-2 page YAML. More invasive.
+
+**Tracked as P02-HF-05 in project backlog.** First Phase 03 plan to address.
