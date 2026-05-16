@@ -8,7 +8,8 @@
     "test:e2e": "playwright test",
     "test:unit": "node --test --experimental-strip-types tests/unit/*.spec.ts",
     "test:check-queries": "node tools/check-queries.mjs",
-    "test:invite-code": "node --test tools/test/invite-code.test.mjs"
+    "test:invite-code": "node --test tools/test/invite-code.test.mjs",
+    "check:handler-registration": "node tools/check-handler-registration.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.0",
