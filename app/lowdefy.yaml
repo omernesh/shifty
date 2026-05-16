@@ -43,6 +43,7 @@ auth:
         - my_profile
         - manager_dashboard
         - my_dashboard
+        - my_availability
       team_manager:
         - manage_org_units
         - manage_soldiers
@@ -54,9 +55,11 @@ auth:
         - my_profile
         - manager_dashboard
         - my_dashboard
+        - my_availability
       member:
         - my_profile
         - my_dashboard
+        - my_availability
       viewer:
         - my_profile
         - my_dashboard
@@ -201,3 +204,7 @@ pages:
   - _ref: pages/my_profile.yaml
   - _ref: pages/dashboards/my_dashboard.yaml
   - _ref: pages/dashboards/manager_dashboard.yaml
+  # Plan 03-05 — soldier-facing availability declaration page (UI-SPEC Surface 8).
+  # Parameterized via ?planning_window_id=<uuid>&soldier_id=<uuid?>.
+  # No top-level menu link — reached from my_dashboard / planning_windows surfaces.
+  - _ref: pages/my_availability.yaml

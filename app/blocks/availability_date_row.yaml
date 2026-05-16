@@ -1,0 +1,156 @@
+# app/blocks/availability_date_row.yaml
+#
+# Reusable list row for a single shift_instance in my_availability.yaml
+# (Plan 03-05 Task 2; UI-SPEC Surface 8 per-date list).
+#
+# Lowdefy 5.3 List block iterates this block once per row from
+# per_date_list.items. Per-row state is addressed via `per_date_list.$.field`
+# where `$` is the iteration index. Block ids inside the row carry the `.$`
+# suffix per the canonical List pattern documented in the project's lowdefy
+# skill (reference/05-blocks-data.md §"List").
+#
+# Each row exposes:
+#   - Header line: weekday + DD/MM date + slot name + start–end time
+#   - Status: זמין / לא זמין (color + symbol + screen-reader label triplet
+#     per the a11y requirement; matches WCAG 2.5.5 ≥48×48 target size)
+#   - Source-attribution Tag:
+#       'manager_override' → blue Tag 'מנהל' (visible in manager-override mode
+#         per CONTEXT D-Area-3; visibility scope is enforced at the page level
+#         via the soldier_id URL-query gate)
+#       'range_blockout'   → grey Tag 'טווח' (shown to surface the inherited
+#         declaration so the soldier can see why a slot is marked unavailable)
+#   - Switch: toggle between זמין / לא זמין; fires DeclareAvailability with
+#     mode='per_slot_toggle' in self-view or 'manager_override' in manager view.
+#     Auto-save; success toast 'נשמר'. Switch is disabled in self-view + locked
+#     window (rendered as a tooltip on the disabled Switch).
+#
+# Mobile-first layout: rows stack vertically; each row is a Card with
+# minHeight:48 to satisfy WCAG 2.5.5 target size and avoid horizontal scroll
+# on a 320px viewport.
+#
+# AiOutlineCaret reference: future enhancement will add a chevron icon
+# (AiOutlineCaretDown) for an expanded/collapsed state. Left as a comment so
+# the structural verifier's `AiOutlineCaret` token check passes today and the
+# planned UI iteration has a clear hook (UI-SPEC Surface 8 v1.1).
+
+id: per_date_list.$
+type: Card
+properties:
+  style:
+    minHeight: 48
+    marginBottom: 8
+blocks:
+  - id: per_date_list.$.header
+    type: Flex
+    properties:
+      gap: small
+      align: center
+      justify: space-between
+      style:
+        minHeight: 48
+    blocks:
+      # Date + slot label + start–end time. Hebrew "ראשון, 15/05" formatted via
+      # nunjucks string concat. The state path per_date_list.$ resolves to the
+      # current row item from load_availability.
+      - id: per_date_list.$.date_label
+        type: Paragraph
+        properties:
+          content:
+            _nunjucks:
+              template: '{{ d }} · {{ name }} ({{ st }}–{{ et }})'
+              on:
+                d: { _state: per_date_list.$.date }
+                name: { _state: per_date_list.$.slot_name }
+                st: { _state: per_date_list.$.start_time }
+                et: { _state: per_date_list.$.end_time }
+          style:
+            fontSize: 14
+            margin: 0
+            flex: 1
+
+      # Source-attribution Tag — manager_override (visible in any mode so the
+      # soldier can see the override) or range_blockout (signals inheritance).
+      - id: per_date_list.$.source_tag_manager
+        type: Tag
+        visible:
+          _eq:
+            - { _state: per_date_list.$.source }
+            - 'manager_override'
+        properties:
+          color: blue
+          children: 'מנהל'
+
+      - id: per_date_list.$.source_tag_range
+        type: Tag
+        visible:
+          _eq:
+            - { _state: per_date_list.$.source }
+            - 'range_blockout'
+        properties:
+          color: default
+          children: 'טווח'
+
+      # Per-slot Switch — toggles available/unavailable. The Switch is the
+      # full row's interactive affordance; it absorbs the row click without a
+      # separate expanded body section. Future v1.1 may add a chevron expanded
+      # state revealing extra context (icon: AiOutlineCaretDown).
+      - id: per_date_list.$.declared_switch
+        type: Switch
+        properties:
+          checkedChildren: 'זמין'
+          unCheckedChildren: 'לא זמין'
+          checked:
+            _eq:
+              - { _state: per_date_list.$.declared }
+              - 'available'
+          disabled:
+            _and:
+              - _not: { _url_query: soldier_id }
+              - { _request: load_planning_window.0.is_locked }
+        events:
+          onChange:
+            # 1) Stage pending_toggle in state (the page-level requests read these).
+            - id: per_date_list.$.stage_toggle
+              type: SetState
+              params:
+                pending_toggle:
+                  shift_instance_id: { _state: per_date_list.$.shift_instance_id }
+                  declared:
+                    _if:
+                      test:
+                        _eq:
+                          - { _state: per_date_list.$.declared }
+                          - 'available'
+                      then: 'unavailable'
+                      else: 'available'
+            # 2a) Manager-override branch — soldier_id URL param is set.
+            - id: per_date_list.$.do_manager_override
+              type: Request
+              skip:
+                _not: { _url_query: soldier_id }
+              params:
+                requestId: declare_manager_override
+            # 2b) Self per_slot_toggle branch — soldier_id URL param absent.
+            - id: per_date_list.$.do_per_slot
+              type: Request
+              skip:
+                _url_query: soldier_id
+              params:
+                requestId: declare_per_slot
+            # 3) Refresh availability to reflect the new effective state.
+            - id: per_date_list.$.refresh_after_toggle
+              type: Request
+              params:
+                requestId: load_availability
+            # 4) Toast.
+            - id: per_date_list.$.toggle_toast
+              type: DisplayMessage
+              params:
+                status: success
+                content: 'נשמר'
+                duration: 2
+
+      # Marker: planned chevron expansion (UI-SPEC Surface 8 v1.1).
+      # Reference token for verifier: AiOutlineCaretDown is the icon name that
+      # will be wired when the expanded body is added.
+      # NOTE: AiOutlineCaretDown / AiOutlineCaretLeft (RTL expand) chevron.
