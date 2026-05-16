@@ -1,5 +1,5 @@
 // app/plugins/shifty-plugin/src/auth/callbacks.js
-// ShiftySessionCallback: hydrates session with {tenant_id, roles, team_ids, locale}
+// ShiftySessionCallback: hydrates session with {tenant_id, user_id, soldier_id, roles, team_ids, locale}
 //
 // Lowdefy auth callback interface (from @lowdefy/api createCallbackPlugins.js):
 //   - Exported function receives { properties, session, token, user }
@@ -16,7 +16,17 @@
 // (the bootstrap SUPERUSER per migration 0013 header) which bypasses RLS. Safe because:
 //   - This is server-side only; the email is the session principal (verified by Auth.js).
 //   - The query is a narrow lookup by email; no user-controlled SQL.
-//   - The Knex instance is short-lived (one query + one membership join, then destroy).
+//   - The Knex instance is short-lived (one query + one membership join + one
+//     soldier_id lookup, then destroy).
+//
+// soldier_id semantics (Phase 03 extension; closes RESEARCH Pitfall 4):
+//   `soldier_id` is the `soldier.id` row whose `user_id = app_user.id` AND
+//   `tenant_id = app_user.tenant_id`. NULL is acceptable and expected for users
+//   who are admins-only (not on any roster), or for fresh app_user rows before a
+//   roster import has added them as a soldier. The Phase 03 my_availability page
+//   binds `_user: soldier_id` to scope availability queries to the authenticated
+//   soldier; downstream handlers MUST guard against null `soldier_id` (e.g., by
+//   returning an empty result set rather than 500).
 
 import { createRequire } from 'module';
 
@@ -87,18 +97,30 @@ export function makeShiftySessionCallback(knexFactory) {
           .join('soldier as s', 's.id', 'm.soldier_id')
           .where('s.user_id', result.user_id);
 
-        session.user.user_id   = result.user_id;
-        session.user.tenant_id = result.tenant_id;
-        session.user.locale    = result.locale || 'he';
-        session.user.roles     = [...new Set(memberships.map(m => m.role))];
-        session.user.team_ids  = memberships.map(m => m.org_unit_id);
+        // Phase 03: look up soldier.id for the authenticated user inside the same
+        // SET ROLE NONE block. NULL is acceptable — see header doc on soldier_id.
+        const soldierRow = await db('soldier')
+          .select('id')
+          .where({
+            user_id: result.user_id,
+            tenant_id: result.tenant_id,
+          })
+          .first();
+
+        session.user.user_id    = result.user_id;
+        session.user.tenant_id  = result.tenant_id;
+        session.user.soldier_id = soldierRow ? soldierRow.id : null;
+        session.user.locale     = result.locale || 'he';
+        session.user.roles      = [...new Set(memberships.map(m => m.role))];
+        session.user.team_ids   = memberships.map(m => m.org_unit_id);
       } else {
         // New email; no app_user row yet → unauthenticated for tenant purposes
-        session.user.user_id   = null;
-        session.user.tenant_id = null;
-        session.user.locale    = 'he';
-        session.user.roles     = [];
-        session.user.team_ids  = [];
+        session.user.user_id    = null;
+        session.user.tenant_id  = null;
+        session.user.soldier_id = null;
+        session.user.locale     = 'he';
+        session.user.roles      = [];
+        session.user.team_ids   = [];
       }
     } finally {
       await db.destroy();
