@@ -35,36 +35,43 @@ blocks:
       size: large
 
   # ── זמן התחלה ─────────────────────────────────────────────────────────────
-  # NOTE: Lowdefy 5.3's @lowdefy/blocks-antd ships TimeSelector (not TimePicker —
-  # the UI-SPEC Recipe 10 / RESEARCH-driven naming is a doc drift). Properties
-  # `format`, `showSecond`, `use12Hours` are all supported on TimeSelector and
-  # control the underlying Ant TimePicker's display the same way.
-  # Form-handler shape note: TimeSelector state is an ISO datetime string. The
-  # backend CreateShiftSlot handler accepts HH:MM via the schema; the Modal's
-  # onOk action chain takes the raw _state.shift_slot_form.start_time value and
-  # the handler treats the string as a TIME literal (Postgres parses both
-  # 'HH:MM' and 'HH:MM:SS' as TIME values).
+  # NOTE on TimePicker → TextInput substitution:
+  # The UI-SPEC Recipe 10 / RESEARCH-driven naming is `TimePicker`. The Lowdefy
+  # skill `reference/04-blocks-core.md` proposed `TimeSelector` as the 5.3 name,
+  # but neither block is in the actual @lowdefy/blocks-antd@5.3.0 registry
+  # (verified by listing /build/node_modules/.pnpm/.../blocks-antd/dist/blocks/
+  # on hpg5 during plan 03-03 deploy; the registry has DateSelector / DateTimeSelector
+  # / DateRangeSelector / MonthSelector / WeekSelector but NO time-only picker).
+  # Pragmatic substitution for v1: a TextInput with the placeholder "HH:mm" and
+  # the validation pattern `^([01]\d|2[0-3]):[0-5]\d$`. Postgres TIME accepts
+  # 'HH:MM' verbatim. The cross-midnight hint still works (string compare on
+  # zero-padded HH:mm sorts identically to numeric compare). A v1.1 plan can
+  # revisit by introducing a custom TimePicker block via a Lowdefy npm plugin.
   - id: shift_slot_form.start_time
-    type: TimeSelector
+    type: TextInput
     required: true
+    validate:
+      - type: pattern
+        pattern: '^([01]\d|2[0-3]):[0-5]\d$'
+        message: 'יש להזין שעה בפורמט HH:mm (למשל 06:00)'
     properties:
       # i18n: shifts.form.start_time
-      label: זמן התחלה
-      format: HH:mm
-      showSecond: false
-      use12Hours: false
+      label: 'זמן התחלה (HH:mm)'
+      placeholder: '06:00'
       size: large
 
   # ── זמן סיום ──────────────────────────────────────────────────────────────
   - id: shift_slot_form.end_time
-    type: TimeSelector
+    type: TextInput
     required: true
+    validate:
+      - type: pattern
+        pattern: '^([01]\d|2[0-3]):[0-5]\d$'
+        message: 'יש להזין שעה בפורמט HH:mm (למשל 18:00)'
     properties:
       # i18n: shifts.form.end_time
-      label: זמן סיום
-      format: HH:mm
-      showSecond: false
-      use12Hours: false
+      label: 'זמן סיום (HH:mm)'
+      placeholder: '18:00'
       size: large
 
   # ── Cross-midnight hint (visible only when end < start) ───────────────────
