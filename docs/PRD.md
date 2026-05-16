@@ -1,5 +1,13 @@
 # Shifty — Product Requirements Document
 
+> **STACK PIVOT NOTE — 2026-05-16**
+>
+> Lowdefy was killed and replaced with **Budibase 3.38.4** as the UI/thin-business-logic layer. Most product decisions in this PRD are stack-agnostic and remain in force. Stack-specific sections that may contain stale Lowdefy references (notably §1 Tech Stack, §7's plugin-architecture notes, §11 Architecture) are pending a v1.1 audit pass but are NOT actively contradicting deployment. Authoritative current-state references:
+>
+> - `CLAUDE.md` "Budibase Deployment on hpg5" — service topology + ops
+> - `docs/BUDIBASE-CONVENTIONS.md` — source-of-truth, layer map, plan shape, backups
+> - **§8.3 below has a formal amendment** — Layer 5 RLS is inactive for Budibase clients
+
 **Status**: Draft v1
 **Last updated**: 2026-05-12
 **Audience**: Engineering (build), Product (review), Future contributors (onboard)
@@ -768,6 +776,23 @@ Four roles. Permission shorthand: `C`=create, `R`=read, `U`=update, `D`=delete; 
 | Audit | `schedule_audit` (read) | R | R within team scope | R own (rows where the soldier is affected) | none | Append-only; no delete or update for any role |
 
 **Enforcement**: a `tenant_id` filter is mandatory on every server-side query — derived from the authenticated session, never from request input. Lowdefy pages set a top-level `auth` block declaring the minimum role required to render the page; pages that mix roles (e.g., a soldier-readable view that hides manager-only controls) gate controls via conditional visibility on the same role check. Every request that mutates data re-checks the role on the server (Lowdefy `requests` block `properties.auth`) — never trust the client. The four-layer defense is: (1) session has a tenant_id; (2) query has a tenant_id filter; (3) page has an auth block; (4) request has a server-side role check. Missing any one of these is a release-blocking bug.
+
+**AMENDMENT — 2026-05-17 (post-Budibase pivot):**
+
+The defense above remains the design target. A fifth layer — Postgres Row-Level Security (`FORCE ROW LEVEL SECURITY` + tenant-scoped policies) — was added to the schema during Phase 02 (migration 0014) as the planned "second layer" originally flagged in §17 R4. Empirical spike testing against Budibase 3.38.4 on 2026-05-17 (results documented in `docs/BUDIBASE-CONVENTIONS.md` §2) established that **Layer 5 (Postgres RLS) cannot be actively enforced against Budibase-mediated queries** without writing custom code we have chosen not to maintain. Concrete blockers:
+
+1. Budibase's Postgres integration cannot wrap user Queries in transactions, so `SET LOCAL app.current_tenant = …` is silently discarded (auto-commit, no `BEGIN`/`COMMIT`).
+2. Multi-statement query bodies crash the integration's JS layer (`Cannot convert undefined or null to object` — code assumes single result, multi-statement returns array).
+3. `{{ Current User.tenantId }}` template bindings are parameterized (extended protocol bound params), not textual substitution; `SET LOCAL` does not accept bound parameters.
+4. The Budibase Postgres connection uses the `shifts` superuser, which bypasses RLS unconditionally per PostgreSQL's `pg_authid.rolsuper` semantics — so RLS policies have been silently bypassed since the moment Budibase connected on 2026-05-16. This is the de facto state, not a regression introduced by the amendment.
+
+**Effective layer map for Budibase-mediated queries (post-amendment):**
+
+- Layers 1, 3, 4 — unchanged (session-derived tenant_id, page-auth, request-role).
+- **Layer 2 — newly load-bearing as the top defense.** Every domain-table Query must include `WHERE tenant_id = '{{ Current User.tenantId }}'::uuid`. Enforced by CI gate at `tools/check-bb-queries.mjs` (Phase 03 Wave 0 deliverable).
+- Layer 5 — policies remain in schema for future direct-DB consumers (e.g., the FastAPI solver service, when introduced in Phase 04, will connect as a non-superuser and DOES benefit from active RLS). Inactive for Budibase clients.
+
+"Missing any layer is release-blocking" applies to the effective layer map above. Layer 5 inactivity is the explicit framework constraint, not a missing layer.
 
 ### 8.4 Test strategy
 

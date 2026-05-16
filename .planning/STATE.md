@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: milestone
-status: stack-pivot-in-progress
-stopped_at: Phase 03 paused mid-execution (Plans 01-04 done, 05-08 deleted). Lowdefy killed 2026-05-16; preserved business logic at legacy/shifty-handlers/. Next, choose new stack and replan Phase 03.
-last_updated: "2026-05-16T22:30:00.000Z"
-last_activity: 2026-05-16
+status: ready-for-autonomous-execution
+stopped_at: Stack pivot to Budibase 3.38.4 complete (2026-05-16). Post-pivot planning landed 2026-05-17 — ROADMAP revised with 9 Phase-03 plans (5 Wave-0 + 4 Wave 1–4), PROJECT.md reflects new stack, PRD §8.3 amendment recorded, docs/BUDIBASE-CONVENTIONS.md authored, dead Lowdefy-era Phase-03 planning artifacts archived at .planning/phases/03-availability-rules/_archive-lowdefy-era/. Ready to run /gsd-autonomous post-/clear.
+last_updated: "2026-05-17T01:00:00.000Z"
+last_activity: 2026-05-17
 progress:
   total_phases: 8
   completed_phases: 2
-  total_plans: 24
+  total_plans: 25
   completed_plans: 16
   percent: 25
 ---
@@ -25,13 +25,13 @@ See: .planning/PROJECT.md (updated 2026-05-12)
 
 ## Current Position
 
-Phase: 03 (availability-rules) — EXECUTING
-Plan: 1 of 8
-Status: Executing Phase 03
-Last activity: 2026-05-16 -- Phase 03 execution started
-Next phase: 03 — Availability & Rules
+Phase: 03 (availability-rules) — READY FOR AUTONOMOUS START (Wave 0)
+Plan: 0 of 9 (Wave 0 has 5 plans, Wave 1–4 has 4 plans)
+Status: Post-pivot planning complete; awaiting /gsd-autonomous invocation
+Last activity: 2026-05-17 — stack-pivot planning landed (ROADMAP/PROJECT/PRD §8.3 amendment/BUDIBASE-CONVENTIONS.md/STATE)
+Next phase: 03 — Availability & Rules (executes on Budibase 3.38.4)
 
-Progress: [██████████] 100% (automated)
+Progress: 03-W0-01 → 03-W0-05 → 03-W1-01 → 03-W2-01 → 03-W3-01 → 03-W4-01
 
 ## Performance Metrics
 
@@ -134,7 +134,10 @@ None yet.
 
 ### Blockers/Concerns
 
-- **Phase 1**: Lowdefy runtime smoke test must pass first — `ERR_MODULE_NOT_FOUND` on hash-suffixed `@lowdefy/helpers-*` packages may already be resolved at commit `b8afba1`; if smoke test fails, 5-day timebox with documented escape hatch (switch to npm, or escalate Lowdefy-lock re-open).
+- **Phase 03 Wave 0 — Budibase user-schema custom field flow**: Builder UI exposure of custom user fields needs verification during W0-02 planning; if rejected, fallback to JOIN-per-query on the `app_user` table (heavier but framework-aligned).
+- **Phase 03 Wave 0 — JS code block helper bundling pattern**: How `legacy/shifty-handlers/helpers/*.js` are made consumable inside Budibase JS code blocks is undecided (single-file bundle vs. inline-copy vs. NPM package in snapshot tarball); resolve during W0-03 execution.
+- **Phase 03 Wave 0 — Layer-2 CI gate must ship BEFORE W1**: any domain-table Query landing without the canonical `WHERE tenant_id = '{{ Current User.tenantId }}'::uuid` filter is a silent tenant-isolation regression. W0-04 is a hard dependency for W1+.
+- **Phases 4–7**: still have `Plans: TBD` in ROADMAP. /gsd-autonomous will need to re-plan them with the post-pivot Builder UI shape as it reaches each. Phase 4 (FastAPI solver) is the first one where Layer 5 RLS becomes active again (solver connects to Postgres as a non-superuser).
 - **Phase 4**: Solver infeasibility-report unsat-core technique extends PRD §7.8 schema and needs deeper research during planning; budget extra time.
 - **Phase 6**: WAHA webhook depth (`message-status` events, retries config) needs research during planning; dedicated SIM is an OPS prerequisite before WhatsApp channel goes live.
 
@@ -148,6 +151,7 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-05-13T19:51:19.554Z
-Stopped at: Completed 02-08-PLAN.md (CSV import wizard + handlers + Wave-3 re-confirmation)
+Last session: 2026-05-17T01:00:00.000Z
+Stopped at: Post-pivot planning complete — Lowdefy retired, Budibase 3.38.4 deployed + connected to Postgres, planning artifacts refreshed (ROADMAP/PROJECT/PRD §8.3 amendment/STATE/BUDIBASE-CONVENTIONS.md), Phase 03 Wave 0 has 5 plans queued (W0-01 through W0-05) followed by Wave 1–4 with 4 plans (W1-01 through W4-01). Memory updated: budibase_api_key_reference.md + feedback_test_autonomously.md.
 Resume file: None
+Next action: in a new session post-/clear, run `/gsd-autonomous` to begin Phase 03 Wave 0.

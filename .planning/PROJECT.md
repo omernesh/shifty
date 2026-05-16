@@ -16,8 +16,8 @@ Shifty is a multi-tenant SaaS for Israeli reserve soldiers (miluim) and their co
 
 <!-- Existing infrastructure only — product surface is all greenfield. -->
 
-- ✓ Docker Compose stack scaffolded (Lowdefy + Postgres 16) — existing on hpg5
-- ✓ v1 bootstrap schema applied (`employees`, `shifts`, `assignments`, `availability`, `time_clock_entries`) — superseded by v2 multi-tenant schema in PRD §10, kept for compatibility until tenant tables ship
+- ✓ Docker Compose stack on hpg5 (post-pivot 2026-05-16: Budibase 3.38.4 + Postgres 16; Lowdefy killed)
+- ✓ Full v2 multi-tenant schema applied (all 14 migrations including Layer-5 RLS at migration 0014); Lowdefy-era helpers + tests preserved at `legacy/shifty-handlers/`
 - ✓ Public reachability via Cloudflare Tunnel (`apps.nesher.co` → hpg5:8080) — existing
 - ✓ hpg5 deployment path: PsExec wrapping for `docker compose build`/`pull`, Sysinternals Autologon, Docker Desktop autostart — existing (documented in `CLAUDE.md`)
 - ✓ Git repo at `github.com/omernesh/shifty` — existing
@@ -65,19 +65,19 @@ From PRD §14 — explicit deferrals with reasoning:
 
 **Critical prior-art bug to prevent recurring**: Smart-quote variants (`'` U+0027 vs `'` U+2019) in soldier display names broke spreadsheet `COUNTIF` lookups and silently dropped counters. **Hard rule**: every domain table uses UUID PKs; display names are mutable and NEVER used as join keys. The "kibbutz fixture" (`tools/fixtures/kibbutz.sql`) intentionally seeds a smart-quoted soldier to enforce this rule in tests.
 
-**Stack pivot history**: Started with Appsmith CE, then learned the "Powered by Appsmith" branding is gated behind paid Business plan; same paywall on Budibase and ToolJet. Landed on Lowdefy (Apache-2.0, config-as-code, no paywall) as the only no-branding self-host option that's still a free-form builder. Appsmith export preserved at `archive/appsmith-export/` for reference.
+**Stack pivot history**: (1) Appsmith CE — abandoned; "Powered by Appsmith" branding paywall (preserved at `archive/appsmith-export/`). (2) Lowdefy 5.3 — chosen as the only Apache-2.0 free-form builder without branding paywall; Phase 1 + 2 shipped on it (v0.2.0-phase2 tag). (3) **Lowdefy killed 2026-05-16** — friction accumulated past the point of diminishing returns (silent plugin-registration bug, `_state:` UI-only testing trap, missing antd block exports, build-time FATAL on Link to not-yet-existent pageIds, ECharts no native RTL). **Budibase 3.38.4 deployed same day** as replacement (Apache-2.0 CE, self-hosted, no branding paywall on CE). Business logic preserved at `legacy/shifty-handlers/`.
 
 **Deployment reality**: Lives on hpg5 — a Windows 11 Pro desktop in the user's home, Tailscale IP `100.92.65.46`, public via Cloudflare Tunnel at `https://apps.nesher.co`. Single-host single-tenant infrastructure operationally; multi-tenant in software. This is acceptable for v1 (R6 documented as known risk); v1.1 considers cloud move.
 
-**Active blocker (Lowdefy runtime)**: `docker compose build lowdefy` succeeds but the Next.js SSR fails with `ERR_MODULE_NOT_FOUND` on hash-suffixed `@lowdefy/helpers-<hash>` packages. Cause: Lowdefy + pnpm symlink layout doesn't survive the COPY between Docker build stages. Three potential fixes catalogued in `CLAUDE.md` open questions. This is the first thing the Foundations phase must un-stick.
+**Post-pivot state (2026-05-17)**: Budibase stack running (8 containers); schema fully migrated; Builder UI authoring model replaces YAML-as-code; Layer-5 RLS inactive for Budibase clients (superuser bypass — see `docs/BUDIBASE-CONVENTIONS.md` §2 + PRD §8.3 amendment). Layer 2 (query-level `WHERE tenant_id = '{{ Current User.tenantId }}'::uuid`) is the new top defense, enforced by a CI gate that ships in Phase 03 Wave 0. Phase 3 is the first phase to execute on Budibase.
 
 **Personas (PRD §4)**: P1 unit admin (מפקד יחידה, medium tech savvy), P2 team manager (מפקד צוות, medium-low), P3 soldier (חייל/חיילת, low/mobile-first), P4 auditor (משקיף, no login — email only).
 
 ## Constraints
 
-- **Tech stack (locked, PRD §1)**: Lowdefy 5.3 on Postgres 16, FastAPI+OR-Tools CP-SAT solver, Docker Compose on hpg5, Auth.js (NextAuth EmailProvider via Resend magic links), WAHA for WhatsApp, Web Push for browser push, Cloudflare Tunnel for public reachability. Not under review.
+- **Tech stack (post-pivot 2026-05-16)**: **Budibase 3.38.4 CE** on Postgres 16 (Lowdefy retired; see Context); FastAPI+OR-Tools CP-SAT solver (Phase 04, not yet built), Docker Compose on hpg5, Budibase built-in auth (Auth.js / KnexAdapter retired with Lowdefy), WAHA for WhatsApp, Web Push for browser push, Cloudflare Tunnel for public reachability. PRD §1 reflects the Lowdefy era; see CLAUDE.md "Budibase Deployment on hpg5" + `docs/BUDIBASE-CONVENTIONS.md` for current canonical stack.
 - **Language**: Hebrew RTL default, English LTR alternative. ICU MessageFormat. Asia/Jerusalem timezone everywhere. DD/MM/YYYY in he, YYYY-MM-DD in en, 24h time in both.
-- **Tenant isolation**: every domain table has `tenant_id`; every query filters by session-derived tenant_id (never request input); four-layer defense (session → query filter → page auth → server-side request role check). Missing any layer is a release-blocking bug. Goal G5: zero cross-tenant data leaks, integration test suite + manual penetration.
+- **Tenant isolation (post-pivot effective layer map)**: every domain table has `tenant_id`; every Budibase Query filters by session-derived tenant_id via `'{{ Current User.tenantId }}'::uuid` (never request input); four active layers (session → query filter → page auth → request-role); Layer 5 RLS preserved in schema for future non-Budibase direct-DB clients (e.g., the FastAPI solver) but INACTIVE for Budibase clients (Postgres superuser bypass — framework constraint). Layer 2 is the new top defense, enforced by `tools/check-bb-queries.mjs` (Phase 03 Wave 0). Goal G5 unchanged: zero cross-tenant data leaks.
 - **Solver SLO**: <10s p95 for 30 soldiers × 30 days × 4 active rules. Stateless. Same seed = same output.
 - **Notification SLOs**: Email <60s, WhatsApp <30s best-effort, Push <5s, in-app instant.
 - **Hardware**: single hpg5 desktop (Windows 11 Pro + Docker Desktop + WSL2). PsExec required for any docker command that needs the credential helper (pull, build).
@@ -88,7 +88,8 @@ From PRD §14 — explicit deferrals with reasoning:
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Lowdefy over Appsmith/Budibase/ToolJet | Only Apache-2.0 free-form builder without "Powered by" branding paywall (PRD §1) | ✓ Good — chosen pre-build |
+| Lowdefy over Appsmith/Budibase/ToolJet | Only Apache-2.0 free-form builder without "Powered by" branding paywall (PRD §1) | ⚠ Superseded 2026-05-16 — see next row |
+| **Stack pivot: Budibase 3.38.4 over Lowdefy 5.3 (2026-05-16)** | Lowdefy friction accumulated past breakeven (silent plugin-registration bug, `_state:` testing trap, missing antd blocks, build-time FATAL on stub Links, ECharts no native RTL). Budibase CE self-hosted has no branding paywall, more mature data-source/automation/permission model, and a credible Builder UI. Trade-offs accepted: (a) source-of-truth shifts from git-YAML to CouchDB, (b) Layer 5 RLS inactive for Budibase clients (framework constraint). | ✓ Good — chosen mid-build; Phase 1 + 2 outputs at `legacy/`; Phase 3+ executes on Budibase |
 | Single source of truth = `docs/PRD.md` | One contract for product intent; PROJECT.md is a summary, ROADMAP.md is execution | ✓ Good — established at init |
 | UUID PKs everywhere; display names never as join keys | Prior-art smart-quote bug broke spreadsheet COUNTIFs silently | ✓ Good — encoded in `tools/fixtures/kibbutz.sql` |
 | Solver is stateless; Lowdefy owns persistence and dispatch | Clean failure isolation; solver can be restarted/replaced independently | — Pending |
@@ -118,4 +119,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-12 after initialization*
+*Last updated: 2026-05-17 (stack pivot reflected); original 2026-05-12 (Lowdefy era)*

@@ -1,12 +1,15 @@
 # Roadmap: Shifty — Miluim Shift Planning SaaS
 
-> **STACK PIVOT — 2026-05-16**
+> **STACK PIVOT — 2026-05-16: Lowdefy killed; Budibase 3.38.4 (self-hosted CE) deployed as replacement same day.**
 >
-> Lowdefy killed; Phase 03 paused at Plan 03-04 (4/8 done). Plans 03-05..03-08 deleted. Phase 03 will be replanned once the new stack is chosen. See CLAUDE.md banner.
+> - **Phases 1 + 2 completed under Lowdefy.** Products preserved: schema (all 14 migrations including Layer-5 RLS), pure-function helpers + 26 unit tests, RTL email template, Playwright test patterns. Outputs (YAML pages, blocks, custom plugins, `lowdefy build` pipeline) are DEAD and preserved at `legacy/shifty-handlers/` for porting reference only — they will never run again.
+> - **Phase 3+ will execute on Budibase** per `docs/BUDIBASE-CONVENTIONS.md` (the authoritative conventions reference for source-of-truth boundaries, plan shape, tenant_id plumbing, and snapshot/backup tooling). Phase 3 begins with a Wave 0 that resolves the 5 open items called out in BUDIBASE-CONVENTIONS.md §10.
+> - **Tenant-isolation layer map has shifted.** Layer 5 (Postgres RLS) is INACTIVE for Budibase-mediated queries (Budibase connects as superuser; RLS bypassed by Postgres design). RLS policies remain in the schema for future direct-DB clients (e.g., the FastAPI solver). **Layer 2 (query-level `WHERE tenant_id = '{{ Current User.tenantId }}'::uuid` filter) is now the top defense**, enforced by a new CI gate (`tools/check-bb-queries.mjs`, built in Phase 03 Wave 0).
+> - **PRD §8.3 amendment** recording the L5→L2 framework constraint is a Wave-0 deliverable (03-W0-01).
 
 ## Overview
 
-Shifty's v1 is a Hebrew-RTL, multi-tenant shift-planning SaaS for Israeli reserve units, self-hosted on a single Windows desktop via Docker Compose. The journey runs from a hard-locked **Foundations** phase (Lowdefy runtime + tenancy + RBAC + 5-layer tenant defense + custom-plugin scaffold) through a sequential build of the schedule-producing core (Org & People → Availability & Rules → Solver & Schedule), then fans out into parallel sub-streams for **Lifecycle features**, **Notifications & Reports**, and **Polish & Exports**. A **parallel migration track** for tenant #1's Google Sheet runs alongside the platform build without blocking the critical path. Phase shape follows PRD §13.1 (locked) with architecture-research amendments (Postgres RLS as 5th defense layer; custom Lowdefy request plugin as a Foundations prerequisite; assumption-based unsat-core for solver infeasibility; dedicated SIM as a Phase-6 OPS prerequisite).
+Shifty's v1 is a Hebrew-RTL, multi-tenant shift-planning SaaS for Israeli reserve units, self-hosted on a single Windows desktop via Docker Compose. The journey runs from a hard-locked **Foundations** phase (tenancy + RBAC + multi-layer tenant defense + ops baseline — delivered under Lowdefy in Phase 1) through a sequential build of the schedule-producing core (Org & People → Availability & Rules → Solver & Schedule — Phase 2 delivered under Lowdefy, Phase 3 onward executes on Budibase), then fans out into parallel sub-streams for **Lifecycle features**, **Notifications & Reports**, and **Polish & Exports**. A **parallel migration track** for tenant #1's Google Sheet runs alongside the platform build without blocking the critical path. Phase shape follows PRD §13.1 (locked) with architecture-research amendments (Postgres RLS as 5th defense layer for direct-DB clients; assumption-based unsat-core for solver infeasibility; dedicated SIM as a Phase-6 OPS prerequisite). **Post-pivot:** UI + thin business logic is authored in the Budibase Builder UI (CouchDB-backed, snapshot-tarball-tracked at PR time per BUDIBASE-CONVENTIONS.md §5); schema + helpers + tests remain git-tracked and reviewable.
 
 ## Phases
 
@@ -29,6 +32,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 ## Phase Details
 
 ### Phase 1: Foundations
+> **Post-pivot note (2026-05-16):** Delivered under Lowdefy. Products survive: all migrations 0001–0010 (including 0009 RLS policies), the `app_user` / `schedule_audit` schema, ops baseline (backup scripts, Task Scheduler, OPERATIONS.md). Dead outputs: `shifty-audit-writer` custom Lowdefy plugin, Lowdefy auth pages, `check-queries.mjs` Layer-2 gate (Lowdefy-YAML-shaped — replaced in Phase 3 W0 by `check-bb-queries.mjs` against Budibase Public API). Phase stays `[x]` — schema + ops products are correct and current; only the UI-framework shell changed.
+
 **Goal**: Tenancy, auth, and the 5-layer cross-tenant defense are end-to-end correct — a new user can sign up via magic link, see an empty dashboard scoped to their tenant, and every cross-tenant probe returns 403.
 **Depends on**: Nothing (first phase)
 **Requirements**: TEN-01, TEN-02, TEN-03, TEN-04, TEN-05, AUTH-01, AUTH-02, AUTH-03, AUTH-04, AUTH-05, AUTH-06, AUTH-07, SEC-01, SEC-02, SEC-03, SEC-04, SEC-05, SEC-06, SEC-07, SEC-08, SEC-09, SEC-10, OPS-01, OPS-02, OPS-03, OPS-04, OPS-05, OPS-06, OPS-07, OPS-08, OPS-09, OPS-10, I18N-07, PERF-04
@@ -50,6 +55,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Research flag**: SMOKE-TEST Lowdefy runtime FIRST — CLAUDE.md open question may already be resolved at commit `b8afba1`.
 
 ### Phase 2: Org & People
+> **Post-pivot note (2026-05-16):** Delivered under Lowdefy and tagged `v0.2.0-phase2`. Products survive: migrations 0011 (`role_tag`) + 0012 (`org_unit.last_color_index`); 4 pure-function helpers (`canonicalize`, `palette`, `role-tag`, `availability-source`) with 26 unit tests at `legacy/shifty-handlers/helpers/` — these port verbatim into a Budibase JS code block (pattern resolved in Phase 03 W0-03); RTL email template at `legacy/dispatch/resend.js` (12 unit tests passing); 21 mutation-path e2e specs documented as deferred per 02-11-SUMMARY.md. Dead outputs: all `app/pages/*.yaml`, `app/blocks/*.yaml`, the merged `shifty-plugin`. Phase stays `[x]` — schema + helpers + tests are correct and current; the deferred 21 e2e specs naturally fold into Phase 03 W1+ Playwright coverage against the Budibase runtime.
+
 **Goal**: Admins and team managers can populate the roster end-to-end — single-row CRUD for small adds and CSV import for bootstrapping a 50-soldier unit in under 10 seconds, with smart-quote bug defenses baked in.
 **Depends on**: Phase 1
 **Requirements**: ROST-01, ROST-02, ROST-03, ROST-04, ROST-05, ROST-06, ROST-07, ROST-08, ROST-09, ROST-10, ROST-11, ROST-12, ROST-13
@@ -75,6 +82,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Avoids pitfalls**: P5 (CSV direction-mark stripping at write time), P10 (display-name normalization, 24-color palette spec).
 
 ### Phase 3: Availability & Rules
+> **Post-pivot scope (2026-05-17):** First phase executing on Budibase. Authored per `docs/BUDIBASE-CONVENTIONS.md` (Builder UI is source of truth for screens/queries/automations; PR-time snapshot tarballs at `budibase-exports/`; schema + helpers + Layer-2 gate stay git-tracked). Wave 0 resolves the 5 open items from BUDIBASE-CONVENTIONS.md §10 (CI gate, helper-bundling pattern, user-schema `tenantId` field, snapshot tooling, PRD §8.3 amendment) before any user-facing feature ships in W1+.
+
 **Goal**: Managers and soldiers can fully specify a planning window's inputs — shift slots configured, the window opened with auto-generated shift instances, soldiers declaring availability via the hybrid range-blockout + per-slot UI, and the 8-rule catalog tuned with per-soldier tightenings — so the solver has everything it needs to run.
 **Depends on**: Phase 2
 **Requirements**: SHFT-01, SHFT-02, SHFT-03, SHFT-04, SHFT-05, SHFT-06, SHFT-07, AVAL-01, AVAL-02, AVAL-03, AVAL-04, AVAL-05, AVAL-06, AVAL-07, AVAL-08, RULE-01, RULE-02, RULE-03, RULE-04, RULE-05, RULE-06, RULE-07
@@ -84,9 +93,18 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Constraint lock prevents writes by non-managers after the lock time; manager writes after lock produce `schedule_audit` rows with `to_state=availability_manager_override`; soldiers joining mid-window default to "available" and can declare up to the lock.
   4. Manager toggles all 8 rules with numeric limits via UI form (changes immediately consumed by next solver run); per-soldier overrides can ONLY tighten (boolean false→true and integer-lower); loosening is silently ignored with a UI warning showing team baseline alongside the soldier's tightening.
   5. Rule semantics are encoded (not just documented): "Weekend" hardcoded to Friday+Saturday for `weekend_separation`; `fairness_objective` defaults to `count_variance` and acts as the solver's minimization target, with hard rules as constraints.
-**Plans**: TBD
-**Sequencing notes**: Sequential within phase — shift_slot CRUD → planning_window + shift_instance generation → availability UI → rules config UI. The 24h-pre-lock notification (AVAL-09) is wired in Phase 6 since it requires the dispatcher.
-**Avoids pitfalls**: P10 (preserve prior-art beloved feature — availability declaration must be fast).
+**Plans**: 9 plans (5 Wave 0 + 4 Wave 1–4)
+  - [ ] 03-W0-01-PLAN.md — PRD §8.3 amendment + ROADMAP cross-link: doc-only plan formalizing the L5→L2 framework constraint (Budibase superuser bypass of RLS; Layer 2 becomes top defense; Layer 5 preserved in schema for future direct-DB clients like the FastAPI solver). Updates PRD §8.3 "Enforcement" paragraph + cross-links BUDIBASE-CONVENTIONS.md §2.
+  - [ ] 03-W0-02-PLAN.md — Budibase user-schema `tenantId` custom field: verify Builder UI exposure of the custom-field mechanism, document the add procedure step-by-step, capture in the inaugural snapshot tarball. Includes a Budibase Automation that populates the field on invite-redemption (write to `app_user` table + patch Budibase user row in the same Automation). Fallback if Builder UI rejects custom fields: JOIN to `app_user` per query.
+  - [ ] 03-W0-03-PLAN.md — JS code block + helper integration pattern: port `legacy/shifty-handlers/helpers/{canonicalize,palette,role-tag,availability-source}.js` into a form consumable by Budibase JS code blocks (bundle approach TBD during execution — single-file bundle vs. inline-copy vs. NPM package committed to snapshot tarball); preserve all 26 unit tests; document the chosen bundling pattern as the canonical reference for downstream phases.
+  - [ ] 03-W0-04-PLAN.md — Layer-2 CI gate (`tools/check-bb-queries.mjs`): pulls all queries from Budibase Public API (`POST /api/public/v1/queries/search`), parses `fields.sql`, asserts the canonical `WHERE tenant_id = '{{ Current User.tenantId }}'::uuid` filter pattern on every domain-table query (domain tables enumerated from `db/migrations/`); whitelist mechanism for legitimate exceptions (e.g., `app_user` provisioning). Wire into CI and pre-commit.
+  - [ ] 03-W0-05-PLAN.md — PR snapshot tooling (`tools/snapshot-budibase.ps1`): wraps `budi backups --export` (executed against the running `shifty-budibase-app` container on hpg5), produces a dated tarball, commits to `budibase-exports/YYYY-MM-DD-<feature>.tar.gz`. Used at every PR open during Phase 03+ so reviewers can extract + grep to spot-check Builder UI changes.
+  - [ ] 03-W1-01-PLAN.md — `shift_slot` CRUD on Budibase: schema (no changes — tables exist from migrations 0003+); Builder UI screens for slot creation using 2x12h / 3x8h / Custom templates; required-role-tag binding (multiselect from `role_tag`); min-seniority + headcount fields; midnight-spanning time inputs. Every read Query carries the Layer-2 tenant filter; CI gate runs green.
+  - [ ] 03-W2-01-PLAN.md — `planning_window` open + `shift_instance` auto-generation: Builder UI screen + Automation that on window-open computes the cross-product (slot × date × headcount_index) of shift_instance rows and bulk-inserts; `constraint_lock_at` field UI; window state transitions; post-lock write-gate enforced in Automation conditional (Layer-4).
+  - [ ] 03-W3-01-PLAN.md — Hybrid availability declaration UI: manager + soldier flows for range blockouts + per-slot toggles; precedence rules (`manager_override > per_slot > range_blockout`) enforced via the ported `availability-source.js` helper in a JS code block; mobile-first layout (no horizontal scroll on iPhone SE viewport); soldier post-lock writes blocked, manager post-lock writes audited with `to_state=availability_manager_override`.
+  - [ ] 03-W4-01-PLAN.md — 8-rule catalog configuration UI: manager-facing toggle form for all 8 rules with numeric limits; per-soldier override UI with tighten-only enforcement (boolean false→true; integer lower-only); UI warning showing team baseline alongside the soldier's tightening; rule semantics are encoded in solver service config (not Phase 3 scope — Phase 3 ships only the storage + UI; solver consumes in Phase 4).
+**Sequencing notes**: Wave 0 (W0-01..W0-05) executes first as a tight loop — these unlock everything downstream and resolve the open items in BUDIBASE-CONVENTIONS.md §10. W0-01 is doc-only and can ship immediately (no Builder UI work); W0-02..W0-05 are tooling/infra. Once W0 is green, W1→W2→W3→W4 is the user-functional sequence: shift_slot CRUD → planning_window + shift_instance generation → availability UI → rules config UI. The 24h-pre-lock notification (AVAL-09) is wired in Phase 6 since it requires the dispatcher.
+**Avoids pitfalls**: P10 (preserve prior-art beloved feature — availability declaration must be fast); new post-pivot risk — Layer-2 gate must run BEFORE any W1+ Query ships, otherwise tenant-isolation regressions land silently.
 
 ### Phase 4: Solver & Schedule
 **Goal**: A manager triggers the solver from an `open` planning window and gets back a draft schedule that respects all 8 active rules — or, if infeasible, an actionable Hebrew report naming affected soldiers and dates. The manager can hand-edit the draft (rule violations highlighted but non-blocking) and publish it, locking the schedule as the source of truth for swap proposals.
@@ -99,7 +117,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. Solver authenticates with `Bearer SOLVER_SHARED_SECRET`, is bound to the internal docker network only (no host port), returns HTTP 504 `TIMEOUT` / 400 `INVALID_INPUT` / 413 `WINDOW_TOO_LARGE` envelopes correctly; Playwright renders each of the 4 statuses × 4 error codes distinctly in the UI.
   5. Manager hand-edits draft via drag-drop or row-edit (rule violations highlighted but non-blocking); publish transition (`draft → published`) writes `schedule_audit` row and stages `schedule.published` notifications (actually fired in Phase 6); assignment table becomes the source of truth.
 **Plans**: TBD
-**Sequencing notes**: Sequential — stateless `/solve` + kibbutz-fixture CI test → Lowdefy wiring + `solver_run` persistence → draft page → manager hand-edit → publish transition. The solver service itself is the highest-risk single milestone.
+**Sequencing notes**: Sequential — stateless `/solve` + kibbutz-fixture CI test → Builder UI integration with solver REST endpoint + `solver_run` persistence → draft page → manager hand-edit → publish transition. The solver service itself is the highest-risk single milestone. **Post-pivot note:** Layer-5 RLS IS active for the solver service (it connects as a non-superuser direct DB client, not via Budibase) — `withTenantTx`-equivalent SET LOCAL pattern stays load-bearing for this service alone.
 **Avoids pitfalls**: P3 (solver determinism + infeasibility actionability + scaling), P7 (Lowdefy ↔ solver contract drift).
 **Research flag**: Needs deeper research during planning — unsat-core technique extending PRD §7.8 schema (`SufficientAssumptionsForInfeasibility()`); CP-SAT encoding for `min_rest_hours_between_shifts` perf-pre-filter; rule-defaults feasibility-tuning against kibbutz fixture. Budget extra time.
 
@@ -122,13 +140,13 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Depends on**: Phase 4 (publish events to notify); Phase 5 (swap + override events to notify)
 **Requirements**: NOTF-01, NOTF-02, NOTF-03, NOTF-04, NOTF-05, NOTF-06, NOTF-07, NOTF-08, NOTF-09, NOTF-10, NOTF-11, NOTF-12, RPT-01, RPT-02, RPT-03, RPT-04, RPT-05, RPT-06, AVAL-09, LIFE-08
 **Success Criteria** (what must be TRUE):
-  1. The `shifty-notification-dispatcher` custom Lowdefy request plugin loads per-user preferences and locale, fans out to Email (Resend) / WhatsApp (WAHA NOWEB) / Web Push (VAPID) / in-app inbox per `notification_pref`, retries failures with exponential backoff (1s, 4s, 16s), and meets SLOs (Email <60s, WhatsApp <30s best-effort, Push <5s, in-app instant).
+  1. A Budibase Automation chain (triggered per PRD §7.11 event) loads per-user preferences and locale, fans out via HTTP steps to Email (Resend) / WhatsApp (WAHA NOWEB) / Web Push (VAPID) / in-app inbox per `notification_pref`, retries failures with exponential backoff (1s, 4s, 16s), and meets SLOs (Email <60s, WhatsApp <30s best-effort, Push <5s, in-app instant).
   2. `notification_log.status` transitions through webhooks (Resend Svix-verified, WAHA HMAC-SHA512) — `queued → sent → delivered → bounced`; never declared "sent" on HTTP 200 alone.
   3. Hebrew email template renders with `dir="rtl"` on body, plaintext fallback prefixes lines with U+200F; Litmus snapshots cover Outlook 2013/2016/2019 + Mac; service worker at `app/public/sw.js` registers on first load; 410 Gone from push service deletes the subscription row; WAHA dashboard UI is bound to Tailscale only (never the public tunnel) with a dedicated SIM separate from the user's personal number.
   4. Cron compose service fires daily report at 07:00 Israel, weekly Monday digest at 08:00, hourly lock-reminder check that fires `availability.lock_approaching` 24h before `constraint_lock_at`, and 00:05 window archiver that auto-closes windows on `end_date + 1 day`; daily-report make-up logic backfills missed fires after a Windows Update reboot.
   5. Each recipient (including login-less P4 auditor recipients in `report_recipient`) gets messages in their stored locale at send time; daily-email layout preserves prior-art "Hebrew daily email" shape (RTL header, today's assignments grouped by team/slot, soldiers-not-assigned list, link to today's calendar view).
 **Plans**: TBD
-**Parallelism**: PARTIALLY PARALLEL — Sequential phase 1 (dispatcher plugin + Email channel + Svix webhook + bounce-rate monitoring) → PARALLEL phase 2 (3 sub-streams: WhatsApp + Web Push + in-app inbox) → Sequential phase 3 (webhook receivers for sent → delivered → bounced) → Sequential phase 4 (cron service + daily/weekly/lock-reminder/window-archiver with make-up logic).
+**Parallelism**: PARTIALLY PARALLEL — Sequential phase 1 (dispatcher Automation skeleton + Email HTTP step + Svix webhook + bounce-rate monitoring) → PARALLEL phase 2 (3 sub-streams: WhatsApp HTTP step + Web Push HTTP step + in-app inbox table writes) → Sequential phase 3 (webhook receivers for sent → delivered → bounced — Budibase REST endpoints or a thin sidecar; decision deferred to planning) → Sequential phase 4 (cron service + daily/weekly/lock-reminder/window-archiver with make-up logic).
 **OPS prerequisite (call out at planning time)**: WAHA needs a dedicated SIM separate from the user's personal number — the personal-number-drop cycle is daily-frequency once the user does anything on WhatsApp Web. Document in `docs/OPERATIONS.md` before WAHA goes live.
 **Avoids pitfalls**: P4 (WAHA session drops + rate limits + sent-vs-delivered), P5 (Outlook RTL email + plaintext U+200F prefix), P8 (per-channel atomic logging + dispatcher recovery + locale resolution at event-time), P10 (daily email layout preserves prior art).
 **Research flag**: Needs research during planning — WAHA webhook depth (`message-status` events beyond `session-status`; WAHA-side retries config); dispatcher backpressure/queueing semantics under fan-out; Outlook RTL email Litmus testing harness.
@@ -142,7 +160,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. Four analytical chart views render: Unit-level (active-window totals, coverage %, slot distribution, swap counts, top-swapped soldiers), Team-level (same scoped to team — Gantt **DEFERRED to v1.1** per ECharts RTL limitation), Per-soldier (current+cumulative shifts, slot-type breakdown, swap history, punctuality, monthly sparkline), Leaderboard (ASCII bars paired with LTR accessible bar chart).
   3. iCal export — one-shot download generates `.ics` with `VEVENT` per assignment, `Asia/Jerusalem` baked in; per-soldier signed subscription URL backed by `ical_subscription_token` (HMAC, revocable from soldier profile, rate-limited 5/min, access-logged, `X-Robots-Tag: noindex`); opens in Google Calendar / Apple Calendar / Outlook without warnings.
   4. CSV export is UTF-8 with BOM (opens in Excel-on-Windows with Hebrew names intact); PDF export is Puppeteer-rendered Hebrew RTL calendar grid with `fonts-noto-core` / `fonts-noto-cjk` / `fontconfig` (CI test page asserts no tofu glyphs), DD/MM/YYYY dates, A4 default + A3 option, prints without clipping; each export generates in under 5 seconds for a 30-soldier × 30-day window.
-  5. English locale (`en.json`) is at parity with Hebrew (`he.json`) — CI gate `tools/check-locales.mjs` fails the build on any missing key in either direction; Lowdefy `config.theme.direction` flips per-request based on `app_user.locale`; dates format from locale (he → DD/MM/YYYY, en → YYYY-MM-DD); Latin numerals in both locales; WCAG 2.1 AA on interactive elements with keyboard navigation and color never being the only signifier (uncovered slots flagged with both red and a warning icon).
+  5. English locale (`en.json`) is at parity with Hebrew (`he.json`) — CI gate `tools/check-locales.mjs` fails the build on any missing key in either direction; Budibase per-screen direction config flips based on `app_user.locale` (mechanism resolved during Phase 7 planning — Budibase has no Lowdefy-equivalent `config.theme.direction`); dates format from locale (he → DD/MM/YYYY, en → YYYY-MM-DD); Latin numerals in both locales; WCAG 2.1 AA on interactive elements with keyboard navigation and color never being the only signifier (uncovered slots flagged with both red and a warning icon).
 **Plans**: TBD
 **Parallelism**: 4 PARALLEL SUB-STREAMS + LOCALE — Dashboard charts, iCal export, CSV+PDF exports, English locale parity. All depend only on published-schedule data being present.
 **Deliberate v1.1 deferrals** (out of this phase's scope): Gantt-style team timeline (ECharts RTL pain — replace with `vis-timeline` in v1.1 or drop), FullCalendar Lowdefy npm plugin (v1 uses simpler day-list view), Mobile PWA install prompt (iOS Safari supports add-to-home-screen natively).
@@ -171,16 +189,18 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7. Phase M 
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundations | 5/5 | Complete   | 2026-05-12 |
-| 2. Org & People | 11/11 | Complete   | 2026-05-16 |
-| 3. Availability & Rules | 4/8 | Paused (stack pivot) | - |
+| 1. Foundations | 5/5 | Complete (Lowdefy era; products survive pivot) | 2026-05-12 |
+| 2. Org & People | 11/11 | Complete (Lowdefy era; products survive pivot) | 2026-05-16 |
+| 3. Availability & Rules | 0/9 | Planning paused; Budibase-shaped Plans to be created at Wave 0 | - |
 | 4. Solver & Schedule | 0/TBD | Not started | - |
 | 5. Lifecycle Features | 0/TBD | Not started | - |
 | 6. Notifications & Reports | 0/TBD | Not started | - |
 | 7. Polish & Exports | 0/TBD | Not started | - |
 | M. Tenant #1 Migration | 0/TBD | Not started | - |
 
+> **Note on Phase 3 counter:** The legacy Lowdefy-era Plans 03-01..03-04 (4/8 done) are no longer counted — their outputs (Lowdefy YAML pages) are dead. The 9 plans listed above are the post-pivot Budibase-shaped re-scope. Migration 0013 + 0014 (introduced during the legacy 03-01..03-04 work) ARE applied on hpg5 and Phase 3 W1+ schemas build on them — see CLAUDE.md and BUDIBASE-CONVENTIONS.md for the schema-survives-pivot guarantee.
+
 ---
-*Roadmap created: 2026-05-12*
-*Source: PRD §13.1 (locked) + research/SUMMARY.md amendments + REQUIREMENTS.md v1 scope*
+*Roadmap revised: 2026-05-17 (stack pivot to Budibase); original 2026-05-12 (Lowdefy era)*
+*Source: PRD §13.1 (locked) + research/SUMMARY.md amendments + REQUIREMENTS.md v1 scope + docs/BUDIBASE-CONVENTIONS.md (post-pivot conventions)*
 *Granularity: standard; Parallelization: enabled*

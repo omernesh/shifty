@@ -14,6 +14,8 @@
 
 **Stack today:** Budibase 3.38.4 (UI + thin business logic) + Postgres 16 (Shifty business data) + one-shot `migrate` runner. FastAPI solver joins later (Phase 04). All services live in `docker-compose.yml` at the repo root.
 
+**Working with Budibase:** see `docs/BUDIBASE-CONVENTIONS.md` for source-of-truth boundaries, the post-pivot tenant-isolation layer map (Layer 5 RLS is inactive for Budibase clients — Layer 2 is the new top defense with a CI gate), tenant_id plumbing, GSD plan shape on Budibase, backup/disaster-recovery, and what's preserved vs. dead from the Lowdefy era. Load-bearing for all Phase 03+ planning.
+
 ### Service topology
 
 6 Budibase services + 2 Shifty services = 8 containers total:
