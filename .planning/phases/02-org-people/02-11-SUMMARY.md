@@ -284,8 +284,81 @@ Verified via `docker ps --filter name=pg-tunnel` returns nothing and `Get-NetFir
 - cross-tenant-leak: **17/17 pass** ✅
 - Plan 02-11 acceptance gate: PARTIAL (Layer 5 + cross-tenant green; Phase 2 mutation specs deferred — see "Remaining failures and root cause" above)
 
-## CHECKPOINT — Tasks 7 + 8 deferred pending orchestrator decision
+## CHECKPOINT — Tasks 7 + 8 deferred pending orchestrator decision (RESOLVED — see Closeout below)
 
 The plugin-registration root cause from UAT-FINDINGS §3 is FIXED. Layer 5 RLS active-enforcement is proven end-to-end. But the Phase 2 mutation e2e suite has a deeper pre-existing payload-binding issue (21 failures across 5 specs) that surfaced now that the unregistered-requests gap is cleared. This is a Rule 4 (architectural change) decision — the user/orchestrator picks between accepting the deferred gap and tagging v0.2.0-phase2 anyway, rewriting the 21 tests as Playwright UI flows, or restructuring the page YAML payload bindings.
 
 Task 7 (manual RTL email smoke) and Task 8 (Phase 2 closeout, v0.2.0-phase2 tag) are gated on this decision. Returning to orchestrator with full state.
+
+---
+
+## Closeout (2026-05-16)
+
+User and orchestrator selected **Option 1: accept the deferred gap** and close Phase 02 with documented deferral. Tasks 7 + 8 executed as a closeout-only scope (Tasks 1–6 already committed and pushed in the prior session; not re-run).
+
+### Task 7 outcome — RTL email smoke (AUTOMATED unit fallback)
+
+Resend's test API key path (`re_test_...`) accepts SDK calls and fires webhook events but does NOT expose rendered-HTML body inspection inline via the SDK response. The only path to inspect rendered HTML through Resend test mode is to run a publicly-reachable webhook listener and parse the `email.sent` event payload — beyond unit-test scope. The plan explicitly authorized a unit-fallback in this case.
+
+**Spec:** `tests/unit/invite-email-rtl.spec.ts` (12 tests, all green) — `node --test --experimental-strip-types tests/unit/invite-email-rtl.spec.ts` exits 0 in ~275 ms.
+
+**Helpers exported from `app/plugins/shifty-plugin/src/dispatch/resend.js`:** `buildInviteHtml` and `buildInviteText` are now named exports (additive; existing `sendInvite` / `bulkDispatchWithBackoff` continue to call the helpers internally). The template-generator output IS what Resend dispatches, so asserting on the helpers' return values is a true RTL-correctness gate, not a proxy.
+
+**Markers asserted (per CLAUDE.md §"Hebrew RTL email template — the canonical pattern" + PRD §"Outlook RTL email + plaintext U+200F prefix"):**
+
+| Marker | Hebrew (he) | English (en) |
+|--------|-------------|--------------|
+| `<html dir="…" lang="…">` | `dir="rtl" lang="he"` ✅ | `dir="ltr" lang="en"` ✅ |
+| Inline `direction:` on wrapping container | `direction:rtl` ✅ | `direction:ltr` ✅ |
+| Inline `text-align:` on wrapping container | `text-align:right` ✅ | `text-align:left` ✅ |
+| Hebrew subject in `<title>` | `הזמנה לשיפטי` ✅ | `Invitation to Shifty` ✅ |
+| Personalized greeting | `שלום נועם גלאל` ✅ | n/a (test asserts Hebrew path only) |
+| CTA copy | `היכנס לשיפטי` ✅ | n/a |
+| Magic-link URL embedded verbatim | ✅ | ✅ |
+| Plaintext fallback U+200F RLM prefix | ✅ (first char is U+200F) | n/a (PRD requires only Hebrew lines) |
+| displayName-optional bare-greeting | `<p>שלום,</p>` ✅ | n/a |
+
+**Commit:** `92e44e9` — `test(02-11): RTL email smoke — automated unit spec via buildInviteHtml/buildInviteText named exports`
+
+**Unit-suite roll-up:** 33/33 pass (was 21 pre-Task-7; +12 from invite-email-rtl.spec.ts).
+
+### Task 8 outcome — Phase 02 closeout
+
+Single closeout commit `c370fe4` (`docs(02): close phase 02 — 02-VERIFICATION passed, deferred specs noted, .continue-here.md removed`) covers all four updates per the plan:
+
+1. **`02-VERIFICATION.md`** flipped: `status: blocked` → `status: passed`; `uat_rerun: 2026-05-16T00:00:00Z`; `score:` updated to 13/13 must-haves verified (12 static + 1 dynamic); `deferred[]` block names the 21 mutation-path e2e specs with reason + Phase-03 tracking (P02-HF-05). New "Re-Verification (Plan 02-11 hotfix)" section in body documents the hotfix outcome.
+2. **`02-10-SUMMARY.md`** appended "Task 4 — RESOLVED via 02-11-PLAN.md hotfix" section: plugin-registration root cause, test-outcomes table, build-emitted-artifact verification, Task 7 RTL outcome, residual deferral explanation.
+3. **`.continue-here.md`** removed via `git rm` (Plan 02-11 must-have #13: "stale 02-UAT pending state must NOT remain").
+4. **`ROADMAP.md`** Phase 02 row in progress table flipped from `2/10 In progress` → `11/11 Complete 2026-05-16`; top phase bullet reframed; 02-11-PLAN.md entry flipped from `[ ]` to `[x]` with full outcome summary.
+
+`.planning/STATE.md` and `.planning/config.json` were left unstaged (orchestrator-owned per executor safety rules).
+
+### Tag created + pushed
+
+```
+git tag -a v0.2.0-phase2 -m "Phase 02 (Org & People) — closed 2026-05-16. Plugin-registration hotfix landed (Plan 02-11); Layer 5 RLS actively enforced; 21 mutation e2e specs deferred to Phase 03 for payload-binding redesign."
+```
+
+**Tag SHA:** `3b64210e8a59508433c5582e2e58f3c369b371f9` (annotated tag object)
+**Tag points at commit:** `c370fe4` (the closeout commit; HEAD of `origin/main`)
+**Pushed:** `origin/main` advanced from `fabdad6` → `c370fe4`; new tag `v0.2.0-phase2` on origin.
+
+### hpg5 sync
+
+```
+plink -ssh -l claude … hpg5 "powershell -c \"cd C:\shifts-manager; git fetch origin main; git reset --hard origin/main; git log -1 --oneline\""
+```
+
+Output: `HEAD is now at c370fe4 docs(02): close phase 02 …` — hpg5 working tree is byte-equal to `origin/main`. No Docker rebuild needed (the closeout commits touch only `.planning/` docs and `tests/unit/`; no app/ runtime code changed).
+
+### What's deferred to Phase 03 (one-line summary)
+
+**21 Phase-2 mutation-path e2e specs** (5 spec files: `soldier-crud`, `roster-csv-import`, `org-unit-crud`, `tenant-isolation`, `ui-smoke-phase2`) fail due to a pre-existing test-design issue where specs POST raw `{ payload: { ... } }` directly while page YAMLs resolve `payload:` via UI `_state:` operators — Phase 03 first-plan candidate, tracked as **P02-HF-05**, three implementation alternatives documented in this SUMMARY's "Remaining failures and root cause" section above.
+
+### Commits this closeout session (in order)
+
+| Hash | Subject |
+|------|---------|
+| `92e44e9` | test(02-11): RTL email smoke — automated unit spec via buildInviteHtml/buildInviteText named exports |
+| `c370fe4` | docs(02): close phase 02 — 02-VERIFICATION passed, deferred specs noted, .continue-here.md removed |
+| (this commit) | docs(02-11): finalize SUMMARY with closeout outcome |
