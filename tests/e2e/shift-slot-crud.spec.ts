@@ -127,7 +127,7 @@ test.describe('Shift slot CRUD + template wizard (SHFT-01..04) — UI-driven', (
     await setSessionCookie(page.context(), managerSignIn.sessionToken, BASE_URL);
 
     try {
-      await page.goto(`${BASE_URL}/admin/team_detail?id=${tenantA.teamId}`, {
+      await page.goto(`${BASE_URL}/team_detail?id=${tenantA.teamId}`, {
         waitUntil: 'networkidle',
         timeout: 15_000,
       });
@@ -171,7 +171,7 @@ test.describe('Shift slot CRUD + template wizard (SHFT-01..04) — UI-driven', (
     await setSessionCookie(page.context(), managerSignIn.sessionToken, BASE_URL);
 
     try {
-      await page.goto(`${BASE_URL}/admin/team_detail?id=${tenantA.teamId}`, {
+      await page.goto(`${BASE_URL}/team_detail?id=${tenantA.teamId}`, {
         waitUntil: 'networkidle',
         timeout: 15_000,
       });
@@ -222,7 +222,7 @@ test.describe('Shift slot CRUD + template wizard (SHFT-01..04) — UI-driven', (
     await setSessionCookie(page.context(), managerSignIn.sessionToken, BASE_URL);
 
     try {
-      await page.goto(`${BASE_URL}/admin/team_detail?id=${tenantA.teamId}`, {
+      await page.goto(`${BASE_URL}/team_detail?id=${tenantA.teamId}`, {
         waitUntil: 'networkidle',
         timeout: 15_000,
       });
@@ -290,7 +290,7 @@ test.describe('Shift slot CRUD + template wizard (SHFT-01..04) — UI-driven', (
     } finally { await c0.end(); }
 
     try {
-      await page.goto(`${BASE_URL}/admin/team_detail?id=${freshTeamId}`, {
+      await page.goto(`${BASE_URL}/team_detail?id=${freshTeamId}`, {
         waitUntil: 'networkidle',
         timeout: 15_000,
       });
@@ -340,7 +340,7 @@ test.describe('Shift slot CRUD + template wizard (SHFT-01..04) — UI-driven', (
     // Reuse a team that already has slots — use the canonical tenantA.teamId
     // (Test 1+2+3 left at least one slot row in it).
     try {
-      await page.goto(`${BASE_URL}/admin/team_detail?id=${tenantA.teamId}`, {
+      await page.goto(`${BASE_URL}/team_detail?id=${tenantA.teamId}`, {
         waitUntil: 'networkidle',
         timeout: 15_000,
       });
@@ -404,7 +404,7 @@ test.describe('Shift slot CRUD + template wizard (SHFT-01..04) — UI-driven', (
     } finally { await c0.end(); }
 
     try {
-      await page.goto(`${BASE_URL}/admin/team_detail?id=${blockedTeamId}`, {
+      await page.goto(`${BASE_URL}/team_detail?id=${blockedTeamId}`, {
         waitUntil: 'networkidle',
         timeout: 15_000,
       });
