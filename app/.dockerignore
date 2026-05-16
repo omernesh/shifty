@@ -1,7 +1,0 @@
-node_modules
-.lowdefy
-.git
-.env
-*.log
-README.md
-pnpm-workspace.yaml

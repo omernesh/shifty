@@ -3,17 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Repo-root dev tooling (Playwright, pg). Application code lives in app/.",
+  "description": "Repo-root dev tooling (Playwright, pg). App code lives in legacy/shifty-handlers/ (preserved Lowdefy business logic, awaiting port to next stack).",
   "scripts": {
     "test:e2e": "playwright test",
     "test:unit": "node --test --experimental-strip-types tests/unit/*.spec.ts",
     "test:check-queries": "node tools/check-queries.mjs",
-    "test:invite-code": "node --test tools/test/invite-code.test.mjs",
-    "check:handler-registration": "node tools/check-handler-registration.mjs"
+    "test:invite-code": "node --test tools/test/invite-code.test.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.0",
-    "pg": "^8.13.1",
-    "yaml": "^2.6.1"
+    "pg": "^8.13.1"
   }
 }

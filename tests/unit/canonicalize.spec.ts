@@ -11,7 +11,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { canonicalizeText } from '../../app/plugins/shifty-plugin/src/helpers/canonicalize.js';
+import { canonicalizeText } from '../../legacy/shifty-handlers/helpers/canonicalize.js';
 
 // ─── Kibbutz canary (ROST-11 load-bearing assertion) ─────────────────────────
 // The middle character in the input is U+2019 (RIGHT SINGLE QUOTATION MARK).

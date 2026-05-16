@@ -11,7 +11,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { canonicalizeRoleTag } from '../../app/plugins/shifty-plugin/src/helpers/role-tag.js';
+import { canonicalizeRoleTag } from '../../legacy/shifty-handlers/helpers/role-tag.js';
 
 // ─── Basic lowercase kebab-case ───────────────────────────────────────────────
 test('role-tag: lowercase kebab-case proof — "Driving" → "driving"', () => {

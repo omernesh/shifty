@@ -31,7 +31,7 @@ import assert from 'node:assert/strict';
 import {
   buildInviteHtml,
   buildInviteText,
-} from '../../app/plugins/shifty-plugin/src/dispatch/resend.js';
+} from '../../legacy/shifty-handlers/dispatch/resend.js';
 
 const HE_SAMPLE = {
   inviteUrl: 'https://apps.nesher.co/api/auth/callback/email?token=abc',

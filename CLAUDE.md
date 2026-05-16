@@ -1,8 +1,20 @@
 # CLAUDE.md
 
+> # STACK PIVOT — 2026-05-16
+>
+> **Lowdefy was killed.** Friction accumulated to the point where we were spending more time on framework workarounds than product code. Killed: plugin registration silently dropping `requests:` arrays (Plan 02-11 hotfix), `_state:` operator forcing UI-only testing (P02-HF-05), missing antd block exports (TimePicker/DatePicker/TimeSelector), build-time FATAL on Links to not-yet-existent pageIds, ECharts no native RTL.
+>
+> **Status as of pivot:** Phase 02 closed (v0.2.0-phase2 tag), Phase 03 paused mid-execution (Plans 03-01..03-04 done, 03-05..03-08 deleted from scope). Business logic preserved at `legacy/shifty-handlers/` for porting to the next stack (TBD — likely Next.js 15 + shadcn/ui + direct Auth.js).
+>
+> **What survives the pivot:** Postgres schema + migrations (all 14 migrations including Layer-5 RLS), FastAPI solver (not yet built — Phase 04), Playwright test patterns + helpers, GSD planning artifacts (`.planning/`).
+>
+> **All sections below that reference Lowdefy specifics, `app/lowdefy.yaml`, PsExec rebuild flow, etc., are outdated.** They will be rewritten when the new stack is chosen. See the "Stack Pivot Notes (2026-05-16)" section near the bottom for the post-pivot operating context.
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Status
+
+<!-- SUPERSEDED 2026-05-16 by stack pivot — see banner above. Original Lowdefy status text retained for historical context only. -->
 
 Active build as of 2026-05-12. Stack pivoted from Appsmith to Lowdefy (see below for why).
 
@@ -17,6 +29,8 @@ Active build as of 2026-05-12. Stack pivoted from Appsmith to Lowdefy (see below
 
 The repo is git-tracked at `https://github.com/omernesh/shifty.git`. Local checkout is `C:\Projects\shifts manager\`.
 
+<!-- SUPERSEDED 2026-05-16 by stack pivot — see banner at top. Retained for historical context. -->
+
 ## Why Lowdefy
 
 We started with Appsmith CE, deployed it on hpg5, applied the schema, made it reachable over Cloudflare Tunnel, then discovered the "Powered by Appsmith" branding is locked behind their paid Business plan. Same paywall on **Budibase** and **ToolJet**. The only no-branding self-host options are:
@@ -25,6 +39,9 @@ We started with Appsmith CE, deployed it on hpg5, applied the schema, made it re
 - **Lowdefy** (Apache-2.0, config-as-code, no paywall) — chosen.
 
 The Appsmith export from the experimental session is preserved at `archive/appsmith-export/` for reference if we ever want to consult what was tried.
+
+<!-- END SUPERSEDED -->
+
 
 ## Architecture
 
@@ -52,13 +69,19 @@ Remote default shell is **cmd**. For non-trivial scripts use `powershell -NoProf
 
 File upload uses `pscp` (same auth/hostkey shape).
 
+<!-- SUPERSEDED 2026-05-16 by stack pivot — networking decision remains valid for postgres but is no longer Lowdefy-driven. Retained for historical context. -->
+
 ### Why Docker Desktop (and not native WSL2 dockerd)
 We initially tried native `dockerd` in an Ubuntu-24.04 WSL2 distro with `networkingMode=mirrored`. The credential helper / pull worked, but **mirrored networking doesn't forward inbound LAN traffic to WSL bindings** — peers on the same physical LAN (e.g., the Synology NAS at `192.168.1.121`) couldn't reach `192.168.1.133:8080` even though TCP probes for ports 22/445 worked (those are native Windows listeners). We moved to **Docker Desktop**, which publishes ports as real Windows-host listeners, and LAN inbound works the standard way. Trade-off: Docker Desktop needs an interactive user session, which we solved with auto-login (see below). The Ubuntu-24.04 WSL distro has been deleted.
+
+<!-- END SUPERSEDED -->
 
 ### Auto-login + autostart
 - **Sysinternals Autologon** stores the `claude` user's password in an LSA secret. After a reboot, Windows auto-logs `claude` in at the console. Reconfigure with `autologon claude DESKTOP-09VPJKQ <password>`.
 - **Docker Desktop autostart** is enabled via the `HKCU:\...\Run\Docker Desktop` registry entry pointing at `C:\Program Files\Docker\Docker\Docker Desktop.exe`. Boots when claude logs in.
 - End result: after any reboot, `claude` is automatically logged in within ~30s, Docker Desktop starts within another ~30-60s, the compose stack comes up via `restart: unless-stopped`.
+
+<!-- SUPERSEDED 2026-05-16 by stack pivot — there is no longer a Lowdefy container to build on hpg5. PsExec is still relevant the next time we need `docker compose build` for any service (postgres pull doesn't need it; future Next.js / solver builds will). Retained for reference. -->
 
 ### Why PsExec for SSH-side docker commands
 **Docker Desktop on Windows requires an interactive user session for its credential helper** (`docker-credential-desktop.exe` needs to access Windows Credential Manager). SSH sessions are Windows logon type 3 (network), which doesn't qualify — every `docker pull` / `docker compose build` from SSH fails with `error getting credentials - A specified logon session does not exist`.
@@ -72,6 +95,8 @@ Then read `out.txt` for output (PsExec's `-i` sends stdout to the interactive se
 Operations that DON'T need PsExec (no credential helper): `docker ps`, `docker logs`, `docker compose exec`, `docker inspect`, `docker compose up -d` (when images are already cached locally), `docker compose stop`, etc.
 
 Operations that DO need PsExec: anything pulling images from a registry, `docker compose build`, `docker compose pull`, `docker pull`.
+
+<!-- END SUPERSEDED -->
 
 ### Networking
 - Windows Defender Firewall rule `Appsmith 8080 (shifts-manager)` allows inbound TCP/8080 on any profile (name predates the Lowdefy pivot; left for continuity).
@@ -174,6 +199,35 @@ plink ... hpg5 "powershell -c \"docker compose -f C:\shifts-manager\docker-compo
 - The user works in **orchestrator mode** (see global CLAUDE.md) — delegate multi-file work to sub-agents; do not silently scaffold.
 - Commands like `npm test` / `dotnet build` do not apply — no JS test suite, no .NET. The build sequence is `docker compose build && docker compose up -d` (with PsExec wrapping when on SSH).
 - For UI iteration: edit `app/*.yaml` locally, commit, push, `pscp` the changed files to `C:\shifts-manager\app\` on hpg5, then rebuild + restart the `lowdefy` service. (We can wire git pull on hpg5 later if it becomes painful.)
+
+## Stack Pivot Notes (2026-05-16)
+
+### What we learned about Lowdefy that informs the next pick
+
+- **Silent failure modes are not acceptable in a config-as-code framework.** The plugin-registration bug (Plan 02-11 hotfix) — where Lowdefy would silently drop a plugin's `requests:` array if any sibling export was malformed — cost more than a day to diagnose. Whichever framework comes next must surface registration errors at startup, not at the first runtime request.
+- **`_state:` UI-only state was a testing trap.** Several Phase-2 forms used `_state:` for form-local state (a Lowdefy operator that has no equivalent in unit tests). The result: any field whose value flowed through `_state:` could only be tested via Playwright UI. The next stack's mutation pattern should be testable without a browser (Server Actions + a Node test runner work; in-component-only state does not).
+- **Antd block coverage was incomplete.** Lowdefy's `@lowdefy/blocks-antd` did not expose `TimePicker`, `DatePicker`, or `TimeSelector` despite the underlying antd library shipping them. The next stack's UI library should expose the full surface of its underlying components.
+- **Build-time FATAL on Link → not-yet-existent pageId.** Lowdefy refused to build if any `Link.pageId` pointed at a page that didn't exist in `pages/`. This makes incremental development painful — you can't merge a button that links to a page you haven't built yet. The next stack must allow stub routes / 404 pages by default.
+- **ECharts has no native RTL.** Phase 07 (Dashboards) would have compounded the workaround pile. Whichever charting library the next stack picks must either (a) support `dir=rtl` natively, or (b) be flexible enough (e.g., Recharts + raw SVG control) that we can RTL-wrap it without fighting the library.
+
+### What's reusable from the preserved business logic
+
+`legacy/shifty-handlers/` (see `legacy/README.md`) holds 28 files:
+
+- **17 mutation handlers** (`requests/`) — class scaffolding goes away; the validation `schema` + the `resolve()` body port to the new stack's mutation pattern (Server Action / `/api/route` / RPC).
+- **4 pure-function helpers** (`helpers/canonicalize.js`, `palette.js`, `role-tag.js`, `availability-source.js`) — port verbatim. 26 unit tests pin behavior.
+- **3 Auth.js wiring files** (`auth/adapters.js`, `callbacks.js`, `providers.js`) — KnexAdapter + ShiftySessionCallback (tenant/role/soldier_id propagation) + EmailProvider+Resend. Auth.js itself isn't Lowdefy-coupled; these port with minimal change to a direct Auth.js setup.
+- **2 RLS hooks** (`hooks/with-tenant-tx.js`, `knex-tenant.js`) — the `withTenantTx` primitive that opens a transaction and `SET LOCAL app.current_tenant = $1` is framework-independent; every mutation in the new stack wraps itself in it.
+- **1 secret redaction middleware** (`middleware/log-redact.js`) — pure function, port verbatim.
+- **1 RTL email template** (`dispatch/resend.js`) — pure function, 12 unit tests still passing. The single most reusable artifact in this pile.
+
+### hpg5 deployment story
+
+- **The `shifty-lowdefy` container was stopped and removed** as part of the pivot (2026-05-16). Postgres + the one-shot `migrate` runner continue running.
+- **Migration 0014 IS applied on hpg5** (`db/migrations/0014_*.sql`). Don't re-run it. The schema is current; the next stack inherits a fully migrated database.
+- **The git working tree at `C:\shifts-manager\` on hpg5 still tracks `origin/main`.** `git fetch + reset --hard origin/main` continues to be the deploy-sync mechanism. After this commit lands, the hpg5 mirror will reflect the post-pivot tree (no `app/` directory).
+- **Cloudflare Tunnel is still up**, pointing at `http://192.168.1.133:8080`. Until a replacement service binds 8080, public requests will 502. That's expected and not blocking — the tunnel will be repointed when the next stack ships its first deployable app.
+- **The Windows Defender Firewall rule `Appsmith 8080 (shifts-manager)`** is still in place (name predates both the Appsmith→Lowdefy and Lowdefy→TBD pivots; not worth renaming until we know the final stack).
 
 <!-- GSD:project-start source:PROJECT.md -->
 ## Project

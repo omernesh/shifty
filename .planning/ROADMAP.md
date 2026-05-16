@@ -1,5 +1,9 @@
 # Roadmap: Shifty — Miluim Shift Planning SaaS
 
+> **STACK PIVOT — 2026-05-16**
+>
+> Lowdefy killed; Phase 03 paused at Plan 03-04 (4/8 done). Plans 03-05..03-08 deleted. Phase 03 will be replanned once the new stack is chosen. See CLAUDE.md banner.
+
 ## Overview
 
 Shifty's v1 is a Hebrew-RTL, multi-tenant shift-planning SaaS for Israeli reserve units, self-hosted on a single Windows desktop via Docker Compose. The journey runs from a hard-locked **Foundations** phase (Lowdefy runtime + tenancy + RBAC + 5-layer tenant defense + custom-plugin scaffold) through a sequential build of the schedule-producing core (Org & People → Availability & Rules → Solver & Schedule), then fans out into parallel sub-streams for **Lifecycle features**, **Notifications & Reports**, and **Polish & Exports**. A **parallel migration track** for tenant #1's Google Sheet runs alongside the platform build without blocking the critical path. Phase shape follows PRD §13.1 (locked) with architecture-research amendments (Postgres RLS as 5th defense layer; custom Lowdefy request plugin as a Foundations prerequisite; assumption-based unsat-core for solver infeasibility; dedicated SIM as a Phase-6 OPS prerequisite).
@@ -169,7 +173,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7. Phase M 
 |-------|----------------|--------|-----------|
 | 1. Foundations | 5/5 | Complete   | 2026-05-12 |
 | 2. Org & People | 11/11 | Complete   | 2026-05-16 |
-| 3. Availability & Rules | 0/TBD | Not started | - |
+| 3. Availability & Rules | 4/8 | Paused (stack pivot) | - |
 | 4. Solver & Schedule | 0/TBD | Not started | - |
 | 5. Lifecycle Features | 0/TBD | Not started | - |
 | 6. Notifications & Reports | 0/TBD | Not started | - |

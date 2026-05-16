@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: milestone
-status: phase-complete-with-caveat
-stopped_at: Completed 02-09 r2 (Lowdefy 5.3 audit + corrections) + 02-10 (Tasks 1-3); deploy GREEN on hpg5 at HEAD a7911d1; migration 0008 applied; 5/5 W2 verification outputs satisfied. Plan 10 Task 4 (live Playwright + 6-scenario UI smoke + RTL email) is checkpoint:human-action and deferred to user.
-last_updated: "2026-05-14T11:32:00.000Z"
-last_activity: 2026-05-14
+status: stack-pivot-in-progress
+stopped_at: Phase 03 paused mid-execution (Plans 01-04 done, 05-08 deleted). Lowdefy killed 2026-05-16; preserved business logic at legacy/shifty-handlers/. Next, choose new stack and replan Phase 03.
+last_updated: "2026-05-16T22:30:00.000Z"
+last_activity: 2026-05-16
 progress:
   total_phases: 8
   completed_phases: 2
-  total_plans: 15
-  completed_plans: 15
-  percent: 100
+  total_plans: 24
+  completed_plans: 16
+  percent: 25
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-12)
 
 **Core value:** Manager spends 30 minutes per planning window instead of 4 hours, with zero cross-tenant data leaks, in a Hebrew-first RTL UI.
-**Current focus:** Phase 02 — org-people (DEPLOY GREEN; Plan 10 Task 4 manual UAT pending)
+**Current focus:** Phase 03 — availability-rules
 
 ## Current Position
 
-Phase: 02 (org-people) — VERIFIED (READY-WITH-CAVEATS per .planning/phases/02-org-people/02-VERIFICATION.md)
-Plan: 10 of 10 (automated execution complete; Plan 10 Task 4 is checkpoint:human-action)
-Status: Awaiting user UAT before phase close + git tag (candidate: v0.2.0-phase2)
-Last activity: 2026-05-14
+Phase: 03 (availability-rules) — EXECUTING
+Plan: 1 of 8
+Status: Executing Phase 03
+Last activity: 2026-05-16 -- Phase 03 execution started
 Next phase: 03 — Availability & Rules
 
 Progress: [██████████] 100% (automated)

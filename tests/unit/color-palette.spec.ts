@@ -11,7 +11,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { PALETTE, pickNextColor } from '../../app/plugins/shifty-plugin/src/helpers/palette.js';
+import { PALETTE, pickNextColor } from '../../legacy/shifty-handlers/helpers/palette.js';
 
 // ─── Palette size and uniqueness ──────────────────────────────────────────────
 test('palette: PALETTE has 24 unique hex entries', () => {
