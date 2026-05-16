@@ -55,7 +55,7 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function buildInviteHtml({ inviteUrl, displayName, locale }) {
+export function buildInviteHtml({ inviteUrl, displayName, locale }) {
   // RTL Hebrew template per 02-RESEARCH §"Magic-Link Invites".
   // Belt-and-braces: dir + lang attributes on <html>; inline dir + text-align on the
   // wrapping container as well (some Outlook variants drop top-level dir).
@@ -76,7 +76,7 @@ function buildInviteHtml({ inviteUrl, displayName, locale }) {
 </body></html>`;
 }
 
-function buildInviteText({ inviteUrl, displayName, locale }) {
+export function buildInviteText({ inviteUrl, displayName, locale }) {
   // Plaintext fallback begins with U+200F RLM to force Hebrew display direction
   // in clients that do not honor HTML dir attributes (per RESEARCH §"Magic-Link Invites").
   const RLM = '‏';
@@ -209,4 +209,4 @@ export async function bulkDispatchWithBackoff(rows, onProgress) {
   return results;
 }
 
-export default { sendInvite, bulkDispatchWithBackoff };
+export default { sendInvite, bulkDispatchWithBackoff, buildInviteHtml, buildInviteText };
