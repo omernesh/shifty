@@ -84,7 +84,7 @@ Managers can fully specify a planning window's inputs end-to-end — define a te
 <specifics>
 ## Specific Ideas
 
-- **PRD §7.4 shift slot Hebrew names:** Use exactly the names from the PRD table — `בוקר 06:00–18:00`, `לילה 18:00–06:00` for 2x12h; `בוקר 06:00–14:00`, `צהריים 14:00–22:00`, `לילה 22:00–06:00` for 3x8h. Don't paraphrase.
+- **PRD §7.4 shift slot Hebrew names:** Use exactly the names from the PRD table — `בוקר 06:00–18:00`, `לילה 18:00–06:00` for 2x12h; `בוקר 06:00–14:00`, `ערב 14:00–22:00`, `לילה 22:00–06:00` for 3x8h. Don't paraphrase. (Authoritative source: docs/PRD.md §7.4; UI-checker flagged a prior draft used `צהריים` — corrected here.)
 - **PRD §7.5 availability defaults:** Soldiers default to "available for all" — `availability` row absent = available. Only explicit unavailability stored.
 - **PRD §7.6 rule key catalog:** Frozen — `no_same_day_double`, `no_consecutive_shift2_then_shift1`, `max_consecutive_nights`, `weekend_separation`, `max_weekly_hours`, `min_rest_hours_between_shifts`, `max_shifts_per_period`, `fairness_objective`. Don't add or rename in Phase 03.
 - **P02-HF-05 first-plan placement:** The 5 deferred mutation spec rebuilds are `03-01-PLAN.md`. Phase 03 product work starts at `03-02-PLAN.md`. This gives Phase 03's later plans (which add new mutation flows) a working UI-flow spec template to copy from.
