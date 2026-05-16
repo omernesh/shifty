@@ -1,0 +1,152 @@
+# app/blocks/planning_window_open_form.yaml
+# Reusable form for opening a planning_window (UI-SPEC Surface 5 — Phase 03 plan 03-04).
+#
+# _ref'd from planning_windows.yaml inside a Modal block. The parent Modal wraps these
+# fields and wires onOk to fire the OpenPlanningWindow request. The form block itself
+# never renders a submit button — Modal's okText='פתח חלון' is the affordance.
+#
+# State contract (parent-managed):
+#   reads / writes  pw_form.team_id              (Selector — team UUID)
+#   reads / writes  pw_form.start_date           (DateSelector — ISO YYYY-MM-DD)
+#   reads / writes  pw_form.end_date             (DateSelector — ISO YYYY-MM-DD)
+#   reads / writes  pw_form.constraint_lock_at   (DateTimeSelector — ISO TIMESTAMPTZ;
+#                                                 default computed by parent's onChange
+#                                                 hook when start_date is picked)
+#
+# DateSelector block (Lowdefy @lowdefy/blocks-antd 5.3) emits a state string in
+# YYYY-MM-DD when `picker: date`. DateTimeSelector emits ISO timestamp with TZ.
+# Hebrew date display format `DD/MM/YYYY` per PRD I18N-04 — the `format` property
+# only affects rendering; the state stays ISO so the handler can parse it.
+#
+# Layout: vertical stack inside a Box, matching the shift_slot_form.yaml convention
+# (label-above-input, large size, full-width).
+#
+# DEVIATIONS from PLAN action narrative:
+#   - Block field IDs use the `pw_form.<field>` namespace (not `_state` paths) so the
+#     parent page's payload bindings (`{ _state: pw_form.team_id }`) line up with the
+#     rendered Lowdefy input element IDs verbatim — same pattern as shift_slot_form.
+#   - Live cross-product preview reads from the PARENT page's request
+#     `load_team_slot_count` (the page owns the request; the block owns rendering).
+#     The block does NOT define its own request — Lowdefy blocks are stateless and
+#     the request must live on the page so it survives re-mounts.
+#   - The "team has zero slots" alert is rendered when the
+#     load_team_slot_count.0.c is 0 AND pw_form.team_id is set. This matches the
+#     "form-side validation blocks submit" expectation in PLAN Test 4/6.
+id: pw_form_box
+type: Box
+blocks:
+  # ── צוות ────────────────────────────────────────────────────────────────────
+  # Single team Selector. Options come from the parent's `list_teams_for_pw` request;
+  # the parent scopes the options per role (admin sees all teams, manager sees their
+  # team_ids only). Block field IDs use the `pw_form.<field>` namespace.
+  - id: pw_form.team_id
+    type: Selector
+    required: true
+    properties:
+      # i18n: planning_windows.form.team
+      label: צוות
+      placeholder: בחר צוות
+      size: large
+      options: { _request: list_teams_for_pw }
+      allowClear: true
+
+  # ── תאריך התחלה ─────────────────────────────────────────────────────────────
+  - id: pw_form.start_date
+    type: DateSelector
+    required: true
+    properties:
+      # i18n: planning_windows.form.start_date
+      label: תאריך התחלה
+      picker: date
+      format: DD/MM/YYYY
+      size: large
+
+  # ── תאריך סיום ──────────────────────────────────────────────────────────────
+  - id: pw_form.end_date
+    type: DateSelector
+    required: true
+    properties:
+      # i18n: planning_windows.form.end_date
+      label: תאריך סיום
+      picker: date
+      format: DD/MM/YYYY
+      size: large
+
+  # ── Live cross-product preview ──────────────────────────────────────────────
+  # Shows when team + start + end are all picked. The day-count + cross-product
+  # math is computed in nunjucks via a tiny JS Date diff on the ISO state strings.
+  # Nunjucks does not have native date diff, but we can pass start/end + the slot
+  # count through and use the filter `default(0)` for the empty-state.
+  #
+  # DEVIATION (Rule 3): Lowdefy 5.3's `_date.diff` / `_product` operators are not
+  # in the verified operator set (06-operators.md lists only `_date.now / format
+  # / parse / toISOString` and arithmetic via `_sum` / `_math.*`). To keep the
+  # preview informative without introducing unverified operators, we render the
+  # raw start/end pair and the slot count, and the math is implicit ("M slots ×
+  # date range"). v1.1 may add a `_date.diff` operator or wire the preview via
+  # a server-side request.
+  - id: pw_form.preview_box
+    type: Box
+    visible:
+      _and:
+        - { _state: pw_form.team_id }
+        - { _state: pw_form.start_date }
+        - { _state: pw_form.end_date }
+    style:
+      padding: 12
+      backgroundColor: '#FAFAFA'
+      borderRadius: 4
+      marginTop: 8
+      marginBottom: 8
+    blocks:
+      - id: pw_form.preview_text
+        type: Paragraph
+        properties:
+          # NOTE on block-type naming: the Lowdefy 5.3 antd date blocks are
+          # `DateSelector` + `DateTimeSelector` (not `DatePicker` — the antd
+          # JS component name does not match the Lowdefy block id; same
+          # deviation pattern as Plan 03-03 TimePicker → TimeSelector).
+          content:
+            _nunjucks:
+              template: 'אורך החלון: תצוגה מקדימה — חלון מ-{{ s | date("DD/MM/YYYY") }} עד {{ e | date("DD/MM/YYYY") }} · {{ slots }} משמרות פעילות בצוות'
+              on:
+                s: { _state: pw_form.start_date }
+                e: { _state: pw_form.end_date }
+                slots: { _request: load_team_slot_count.0.c }
+
+  # ── Alert: team has zero shift_slots (blocks submit; gates the parent's onOk) ─
+  # Shows when team_id is set AND slot count is 0.
+  - id: pw_form.no_slots_alert
+    type: Alert
+    visible:
+      _and:
+        - { _state: pw_form.team_id }
+        - { _eq: [{ _request: load_team_slot_count.0.c }, 0] }
+    properties:
+      type: warning
+      # i18n: planning_windows.form.no_slots
+      message: 'צוות זה טרם הגדיר משמרות. הגדר משמרות לפני פתיחת חלון.'
+      showIcon: true
+
+  # ── זמן נעילה (constraint_lock_at) ──────────────────────────────────────────
+  # DateTimeSelector — ISO TIMESTAMPTZ. The parent page's start_date onChange hook
+  # auto-sets a default of (start - 3 days) at 23:59 Asia/Jerusalem; the user can
+  # then override.
+  - id: pw_form.constraint_lock_at
+    type: DateTimeSelector
+    properties:
+      # i18n: planning_windows.form.lock
+      label: 'זמן נעילת זמינות (ברירת מחדל: 3 ימים לפני התחלה, 23:59)'
+      format: DD/MM/YYYY HH:mm
+      size: large
+
+  # ── Lock semantics Alert ────────────────────────────────────────────────────
+  - id: pw_form.lock_info_alert
+    type: Alert
+    properties:
+      type: info
+      # i18n: planning_windows.form.lock_info
+      message: 'לאחר זמן הנעילה, רק מנהלים יוכלו לערוך זמינות.'
+      showIcon: true
+      style:
+        marginTop: 12

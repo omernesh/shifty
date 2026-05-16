@@ -39,6 +39,7 @@ auth:
         - team_detail
         - roster_import
         - roster_import_result
+        - planning_windows
         - my_profile
         - manager_dashboard
         - my_dashboard
@@ -49,6 +50,7 @@ auth:
         - team_detail
         - roster_import
         - roster_import_result
+        - planning_windows
         - my_profile
         - manager_dashboard
         - my_dashboard
@@ -129,6 +131,21 @@ menus:
           title: ייבוא חיילים
         visible:
           _user: tenant_id
+      # Plan 03-04: planning_window index page. Visible to unit_admin + team_manager
+      # via _array.includes on _user:roles (soldier + viewer roles do not see it).
+      - id: planning_windows_link
+        type: MenuLink
+        pageId: planning_windows
+        properties:
+          title: חלונות תכנון
+        visible:
+          _or:
+            - _array.includes:
+                on: { _user: roles }
+                value: unit_admin
+            - _array.includes:
+                on: { _user: roles }
+                value: team_manager
       - id: manage_role_tags_link
         type: MenuLink
         pageId: manage_role_tags
@@ -180,6 +197,7 @@ pages:
   - _ref: pages/admin/roster_import.yaml
   - _ref: pages/admin/roster_import_result.yaml
   - _ref: pages/admin/manage_role_tags.yaml
+  - _ref: pages/admin/planning_windows.yaml
   - _ref: pages/my_profile.yaml
   - _ref: pages/dashboards/my_dashboard.yaml
   - _ref: pages/dashboards/manager_dashboard.yaml
