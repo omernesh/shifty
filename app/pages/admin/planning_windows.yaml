@@ -220,17 +220,23 @@ blocks:
           width: 110
           type: numericColumn
     events:
-      # Row click → navigate to the (yet-to-be-built) planning_window_detail
-      # page (Plan 03-07 wires it). For Plan 03-04 the click target exists but
-      # 404s gracefully until 03-07 lands — same forward-reference pattern as
-      # team_detail's Phase 3 surfaces.
+      # Row click — placeholder until Plan 03-07 lands planning_window_detail.
+      #
+      # DEVIATION [Rule 3 - Blocking]: the plan narrative said "navigate to
+      # planning_window_detail (Plan 03-07 will provide); for now it 404s
+      # gracefully". In Lowdefy 5.3 a Link action whose `pageId` does NOT exist
+      # in pages: causes a build-time FATAL (not a 404 at runtime) —
+      # `[ConfigWarning] Page "X" not found. Link references non-existent page.`
+      # is escalated to an error. Workaround: emit a placeholder DisplayMessage
+      # ("בקרוב — תצוגת חלון תכנון מפורטת") on row-click until Plan 03-07
+      # introduces the page. The forward-reference will be wired in 03-07.
       onCellClick:
-        - id: open_detail
-          type: Link
+        - id: row_click_placeholder
+          type: DisplayMessage
           params:
-            pageId: planning_window_detail
-            urlQuery:
-              id: { _event: row.id }
+            status: info
+            content: 'בקרוב — תצוגת חלון תכנון מפורטת (יושלם בתוכנית 03-07)'
+            duration: 3
 
   # ── Empty state ─────────────────────────────────────────────────────────────
   - id: planning_windows_empty_state
