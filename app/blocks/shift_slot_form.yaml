@@ -35,8 +35,17 @@ blocks:
       size: large
 
   # ── זמן התחלה ─────────────────────────────────────────────────────────────
+  # NOTE: Lowdefy 5.3's @lowdefy/blocks-antd ships TimeSelector (not TimePicker —
+  # the UI-SPEC Recipe 10 / RESEARCH-driven naming is a doc drift). Properties
+  # `format`, `showSecond`, `use12Hours` are all supported on TimeSelector and
+  # control the underlying Ant TimePicker's display the same way.
+  # Form-handler shape note: TimeSelector state is an ISO datetime string. The
+  # backend CreateShiftSlot handler accepts HH:MM via the schema; the Modal's
+  # onOk action chain takes the raw _state.shift_slot_form.start_time value and
+  # the handler treats the string as a TIME literal (Postgres parses both
+  # 'HH:MM' and 'HH:MM:SS' as TIME values).
   - id: shift_slot_form.start_time
-    type: TimePicker
+    type: TimeSelector
     required: true
     properties:
       # i18n: shifts.form.start_time
@@ -48,7 +57,7 @@ blocks:
 
   # ── זמן סיום ──────────────────────────────────────────────────────────────
   - id: shift_slot_form.end_time
-    type: TimePicker
+    type: TimeSelector
     required: true
     properties:
       # i18n: shifts.form.end_time
