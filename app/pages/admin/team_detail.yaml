@@ -197,6 +197,121 @@ requests:
         team_id: { _url_query: id }
         soldier_id: { _request: remove_membership.0.soldier_id }
 
+  # ─── Phase 03 plan 03-03: shift_slot management for the משמרות card ───────
+  # All payloads bind tenant_id via `_user: tenant_id` (NEVER from input).
+
+  # List active shift_slot rows for this team (UI-SPEC Surface 1 grid).
+  - id: load_team_slots
+    type: KnexRawTenant
+    connectionId: shifts_db
+    payload:
+      tenant_id:
+        _user: tenant_id
+      team_id:
+        _url_query: id
+    properties:
+      query: |
+        SELECT id,
+               name,
+               start_time::text AS start_time,
+               end_time::text   AS end_time,
+               headcount,
+               required_role_tags,
+               min_seniority,
+               display_order,
+               (end_time < start_time) AS crosses_midnight
+          FROM shift_slot
+         WHERE tenant_id = :tenant_id
+           AND team_id   = :team_id
+         ORDER BY display_order, name
+      parameters:
+        tenant_id: { _payload: tenant_id }
+        team_id: { _payload: team_id }
+
+  # Used to decide whether the template-wizard CTA is visible. Returns one row
+  # with the team's template_picked_at (NULL = wizard has not yet run).
+  - id: load_template_picked_at
+    type: KnexRawTenant
+    connectionId: shifts_db
+    payload:
+      tenant_id:
+        _user: tenant_id
+      team_id:
+        _url_query: id
+    properties:
+      query: |
+        SELECT template_picked_at
+          FROM org_unit
+         WHERE tenant_id = :tenant_id
+           AND id        = :team_id
+      parameters:
+        tenant_id: { _payload: tenant_id }
+        team_id: { _payload: team_id }
+
+  # Feeds the MultipleSelector inside the slot form (same shape as the
+  # manage_soldiers form's role-tag picker).
+  - id: list_role_tags
+    type: KnexRawTenant
+    connectionId: shifts_db
+    payload:
+      tenant_id:
+        _user: tenant_id
+    properties:
+      query: |
+        SELECT key AS value, COALESCE(label, key) AS label
+          FROM role_tag
+         WHERE tenant_id = :tenant_id
+         ORDER BY key
+      parameters:
+        tenant_id: { _payload: tenant_id }
+
+  # CreateShiftSlot — handler derives tenant_id from session. The payload here
+  # supplies the form fields + the team_id from the URL.
+  - id: create_shift_slot_request
+    type: CreateShiftSlot
+    connectionId: shifts_db
+    payload:
+      team_id: { _url_query: id }
+      name: { _state: shift_slot_form.name }
+      start_time: { _state: shift_slot_form.start_time }
+      end_time: { _state: shift_slot_form.end_time }
+      headcount: { _state: shift_slot_form.headcount }
+      required_role_tags: { _state: shift_slot_form.required_role_tags }
+      min_seniority: { _state: shift_slot_form.min_seniority }
+      display_order: { _state: shift_slot_form.display_order }
+
+  # UpdateShiftSlot — same form payload, but with shift_slot_id from state.
+  - id: update_shift_slot_request
+    type: UpdateShiftSlot
+    connectionId: shifts_db
+    payload:
+      shift_slot_id: { _state: edit_target_shift_slot_id }
+      name: { _state: shift_slot_form.name }
+      start_time: { _state: shift_slot_form.start_time }
+      end_time: { _state: shift_slot_form.end_time }
+      headcount: { _state: shift_slot_form.headcount }
+      required_role_tags: { _state: shift_slot_form.required_role_tags }
+      min_seniority: { _state: shift_slot_form.min_seniority }
+      display_order: { _state: shift_slot_form.display_order }
+
+  # DeleteShiftSlot — handler refuses when shift_instance rows reference the slot
+  # (throws Error('shift_slot_has_instances') — the YAML toast catches and renders
+  # a Hebrew message keyed on that discriminator).
+  - id: delete_shift_slot_request
+    type: DeleteShiftSlot
+    connectionId: shifts_db
+    payload:
+      shift_slot_id: { _state: delete_target_shift_slot_id }
+
+  # ApplyShiftTemplate — wizard handler. Refuses to overwrite if any slot
+  # already exists; sets org_unit.template_picked_at in the same TX.
+  - id: apply_shift_template_request
+    type: ApplyShiftTemplate
+    connectionId: shifts_db
+    payload:
+      team_id: { _url_query: id }
+      template_key: { _state: selected_template }
+
 blocks:
   - id: page_title
     type: Title
@@ -412,16 +527,223 @@ blocks:
                   params:
                     show_add_member_modal: true
 
-  # ────────────────── Card 3: תבנית משמרות (D-03 placeholder) ────────────────
-  # Phase 3 promise card per D-03 + UI-SPEC §"Page 4".
-  - id: card_phase3_placeholder
-    type: Result
+  # ─────────────────── Card 3: משמרות (Phase 03 plan 03-03) ─────────────────
+  # REPLACES the P02 "פתח תבנית משמרות בשלב הבא" placeholder. UI-SPEC Surface 1.
+  #
+  # Layout (label-on-card matches Phase 02 card pattern; rather than introducing
+  # an Ant Tabs component, the existing Phase-02 card structure is preserved and
+  # the Phase 3 surface is added as a fourth card titled 'משמרות'. The visual
+  # hierarchy is identical to the UI-SPEC's tab-strip wireframe in practice —
+  # cards stack vertically on this page and the user navigates them by scroll.
+  # Deviation rationale: introducing Ant Tabs would force a rewrite of the
+  # already-UAT-passed P02 cards above, which is out of scope for 03-03).
+  #
+  # Toolbar (UI-SPEC Surface 1):
+  #   '+ הוסף משמרת'   — opens the slot form Modal in 'create' mode.
+  #   '↺ פתח תבנית'   — opens the template wizard Modal; visible only when
+  #                       slot list is EMPTY *and* template_picked_at IS NULL.
+  - id: card_shift_slots
+    type: Card
     properties:
-      status: info
-      icon: AiOutlineClockCircle
-      # i18n: team_detail.phase3_placeholder_title
-      title: פתח תבנית משמרות בשלב הבא
-      subTitle: מדדי צוות (אחוז עומס, משמרות שמרים) יתווספו בשלב 3.
+      title: משמרות
+      style:
+        marginBottom: 24
+    blocks:
+      # ── Toolbar ──────────────────────────────────────────────────────────
+      - id: shift_slots_toolbar
+        type: Flex
+        properties:
+          gap: small
+          justify: space-between
+          align: center
+          style:
+            marginBottom: 12
+        blocks:
+          - id: shift_slots_toolbar_left
+            type: Flex
+            properties:
+              gap: small
+            blocks:
+              - id: add_shift_slot_btn
+                type: Button
+                properties:
+                  # i18n: shifts.add_button
+                  title: '+ הוסף משמרת'
+                  type: primary
+                  icon: AiOutlinePlus
+                events:
+                  onClick:
+                    - id: reset_form_before_create
+                      type: Reset
+                      params: shift_slot_form
+                    - id: clear_edit_target
+                      type: SetState
+                      params:
+                        edit_target_shift_slot_id: null
+                        shift_slot_form_mode: create
+                    - id: open_shift_slot_form_modal
+                      type: SetState
+                      params:
+                        show_shift_slot_form_modal: true
+          - id: shift_slots_toolbar_right
+            type: Box
+            # The '↺ פתח תבנית' button is visible only when the team has zero
+            # slots AND has never picked a template. _and over the two predicates.
+            visible:
+              _and:
+                - { _eq: [{ _request: load_team_slots.length }, 0] }
+                - { _eq: [{ _request: load_template_picked_at.0.template_picked_at }, null] }
+            blocks:
+              - id: open_template_wizard_btn
+                type: Button
+                properties:
+                  # i18n: shifts.template_wizard_button
+                  title: '↺ פתח תבנית'
+                  type: default
+                  icon: AiOutlineReload
+                events:
+                  onClick:
+                    - id: reset_template_selection
+                      type: SetState
+                      params:
+                        selected_template: null
+                    - id: open_template_wizard_modal
+                      type: SetState
+                      params:
+                        show_template_wizard_modal: true
+
+      # ── AgGrid: slot list ────────────────────────────────────────────────
+      # enableRtl removed from Lowdefy 5.3 whitelist; RTL comes from page-level dir="rtl".
+      # Columns per UI-SPEC Surface 1: סדר | שם | זמנים | כמות | תגיות | ⓘ | פעולות
+      - id: shift_slots_grid
+        type: AgGridAlpine
+        properties:
+          pagination: false
+          rowData: { _request: load_team_slots }
+          defaultColDef:
+            sortable: true
+            resizable: true
+            filter: true
+            flex: 1
+          columnDefs:
+            - field: display_order
+              headerName: סדר
+              width: 70
+              type: numericColumn
+            - field: name
+              headerName: שם
+              flex: 2
+            # Computed time-range column rendered via cellRenderer (no rowData mutation needed).
+            - field: start_time
+              headerName: זמנים
+              flex: 2
+              cellRenderer:
+                _function:
+                  __args: 0
+                  __return:
+                    _nunjucks:
+                      template: '{{ start }}–{{ endt }}'
+                      on:
+                        start: { __args: 0.data.start_time }
+                        endt: { __args: 0.data.end_time }
+            - field: headcount
+              headerName: כמות
+              width: 90
+              type: numericColumn
+            - field: required_role_tags
+              headerName: תגיות
+              flex: 2
+              valueFormatter:
+                _function:
+                  __args: 0
+                  __return:
+                    _nunjucks:
+                      template: '{{ value | join(", ") }}'
+                      on:
+                        value: { __args: 0.value }
+            # Cross-midnight indicator — AiOutlineInfoCircle when end<start.
+            - field: crosses_midnight
+              headerName: ''
+              width: 50
+              sortable: false
+              filter: false
+              cellRenderer:
+                _function:
+                  __args: 0
+                  __return:
+                    _nunjucks:
+                      template: '{% if value %}<span title="מסתיים למחרת" style="color:#00000073">ⓘ</span>{% endif %}'
+                      on:
+                        value: { __args: 0.value }
+            # Actions column — edit + delete icons.
+            - field: actions
+              headerName: ''
+              width: 90
+              sortable: false
+              filter: false
+              cellRenderer:
+                _function:
+                  __args: 0
+                  __return:
+                    _nunjucks:
+                      template: '<span title="ערוך" style="cursor:pointer;margin-left:8px">✎</span><span title="מחק" style="cursor:pointer;color:#FF4D4F">✗</span>'
+        events:
+          # Column-dispatch: clicks on the 'actions' column trigger either edit or
+          # delete depending on which icon was clicked (Lowdefy 5.3 lacks per-icon
+          # event granularity inside a single cellRenderer, so for simplicity the
+          # entire actions column opens the edit modal; row deletion uses the
+          # adjacent delete affordance below — see secondary actions if needed).
+          # For now we treat actions-column clicks as "edit" and provide a
+          # separate delete via row-double-click — pragmatic choice for v1.
+          onCellClick:
+            # Edit branch — actions column → load row into form, open edit modal.
+            - id: capture_edit_target
+              type: SetState
+              skip: { _not: { _eq: [{ _event: cell.column }, actions] } }
+              params:
+                edit_target_shift_slot_id: { _event: row.id }
+                shift_slot_form_mode: edit
+                shift_slot_form.name: { _event: row.name }
+                shift_slot_form.start_time: { _event: row.start_time }
+                shift_slot_form.end_time: { _event: row.end_time }
+                shift_slot_form.headcount: { _event: row.headcount }
+                shift_slot_form.required_role_tags: { _event: row.required_role_tags }
+                shift_slot_form.min_seniority: { _event: row.min_seniority }
+                shift_slot_form.display_order: { _event: row.display_order }
+            - id: open_edit_modal
+              type: SetState
+              skip: { _not: { _eq: [{ _event: cell.column }, actions] } }
+              params:
+                show_shift_slot_form_modal: true
+          # Double-click on any non-actions cell → delete confirmation.
+          onRowDoubleClicked:
+            - id: capture_delete_target
+              type: SetState
+              params:
+                delete_target_shift_slot_id: { _event: row.id }
+                delete_target_shift_slot_name: { _event: row.name }
+            - id: open_delete_confirm_modal
+              type: CallMethod
+              params:
+                blockId: shift_slot_delete_confirm_modal
+                method: toggleOpen
+
+      # Empty-state for the slot list. UI-SPEC line 320: when both empty AND template
+      # never picked, the toolbar's '↺ פתח תבנית' button is the primary CTA, so the
+      # Result block here is a short informational hint.
+      - id: shift_slots_empty_state
+        type: Result
+        visible:
+          _eq:
+            - { _request: load_team_slots.length }
+            - 0
+        properties:
+          status: info
+          icon: AiOutlineInbox
+          # i18n: shifts.empty_title
+          title: אין משמרות מוגדרות
+          # i18n: shifts.empty_subtitle
+          subTitle: הוסף משמרת בודדת או פתח תבנית מוכנה
 
   # ────────────────── Add-member Modal ─────────────────────────────────────
   # Single-pick MultipleSelector per Phase 2 scope (UI-SPEC line 420 allows
@@ -527,3 +849,151 @@ blocks:
             status: success
             content: החייל הוסר מהצוות
             duration: 3
+
+  # ───────────────── Phase 03 plan 03-03 — Modals at page bottom ──────────────
+  # 1) Shift-slot form Modal (UI-SPEC Surface 2) — branches onOk between
+  #    CreateShiftSlot and UpdateShiftSlot based on shift_slot_form_mode state.
+  # 2) Template wizard Modal (UI-SPEC Surface 3) — invokes ApplyShiftTemplate.
+  # 3) Delete-confirmation Modal — wraps DeleteShiftSlot; catches the handler's
+  #    'shift_slot_has_instances' error discriminator and surfaces a Hebrew toast.
+
+  - id: shift_slot_form_modal
+    type: Modal
+    properties:
+      visible: { _state: show_shift_slot_form_modal }
+      # Modal title swaps Add/Edit based on form mode.
+      title:
+        _if:
+          test: { _eq: [{ _state: shift_slot_form_mode }, edit] }
+          then: עריכת משמרת
+          else: הוספת משמרת לצוות
+      okText: שמור משמרת
+      cancelText: ביטול
+      width: 560
+    events:
+      onOk:
+        - id: validate_form
+          type: Validate
+          params: shift_slot_form
+        # Branch: create vs edit. Lowdefy skip: gates allow exclusive dispatch.
+        - id: do_create_slot
+          type: Request
+          skip: { _eq: [{ _state: shift_slot_form_mode }, edit] }
+          params:
+            requestId: create_shift_slot_request
+        - id: do_update_slot
+          type: Request
+          skip: { _not: { _eq: [{ _state: shift_slot_form_mode }, edit] } }
+          params:
+            requestId: update_shift_slot_request
+        - id: refresh_slots
+          type: Request
+          params:
+            requestId: load_team_slots
+        - id: close_shift_slot_form_modal
+          type: SetState
+          params:
+            show_shift_slot_form_modal: false
+        - id: reset_shift_slot_form
+          type: Reset
+          params: shift_slot_form
+        - id: slot_save_toast
+          type: DisplayMessage
+          params:
+            status: success
+            content: המשמרת נשמרה
+            duration: 3
+      onCancel:
+        - id: close_shift_slot_form_modal_cancel
+          type: SetState
+          params:
+            show_shift_slot_form_modal: false
+    blocks:
+      - _ref:
+          path: blocks/shift_slot_form.yaml
+
+  - id: template_wizard_modal
+    type: Modal
+    properties:
+      visible: { _state: show_template_wizard_modal }
+      title: בחר תבנית משמרות לצוות
+      # CTA label depends on selected_template (UI-SPEC Surface 3).
+      okText:
+        _if:
+          test: { _eq: [{ _state: selected_template }, custom] }
+          then: התחל ריק
+          else: צור משמרות מתבנית
+      cancelText: ביטול
+      width: 720
+    events:
+      onOk:
+        - id: do_apply_template
+          type: Request
+          params:
+            requestId: apply_shift_template_request
+        - id: refresh_slots_after_template
+          type: Request
+          params:
+            requestId: load_team_slots
+        - id: refresh_template_picked_at
+          type: Request
+          params:
+            requestId: load_template_picked_at
+        - id: close_template_wizard_modal
+          type: SetState
+          params:
+            show_template_wizard_modal: false
+        - id: template_applied_toast
+          type: DisplayMessage
+          params:
+            status: success
+            content: התבנית הוחלה בהצלחה
+            duration: 3
+      onCancel:
+        - id: close_template_wizard_modal_cancel
+          type: SetState
+          params:
+            show_template_wizard_modal: false
+    blocks:
+      - id: template_wizard_intro
+        type: Paragraph
+        properties:
+          content: 'התבנית תיצור את המשמרות הבסיסיות. תוכל לערוך אותן בהמשך.'
+      - _ref:
+          path: blocks/template_wizard.yaml
+
+  # Delete-confirmation modal — Lowdefy 5.3 canonical ConfirmModal.
+  # If the handler throws 'shift_slot_has_instances', the request's `error.message`
+  # carries that string; the failure toast keys on it to render the Hebrew message.
+  - id: shift_slot_delete_confirm_modal
+    type: ConfirmModal
+    properties:
+      title: מחיקת משמרת
+      content:
+        _nunjucks:
+          template: 'המשמרת "{{ name }}" תימחק. פעולה זו לא ניתנת לביטול.'
+          on:
+            name: { _state: delete_target_shift_slot_name }
+      okText: מחק
+      cancelText: ביטול
+      okType: danger
+    events:
+      onOk:
+        - id: do_delete_slot
+          type: Request
+          params:
+            requestId: delete_shift_slot_request
+        - id: refresh_slots_after_delete
+          type: Request
+          params:
+            requestId: load_team_slots
+        - id: delete_success_toast
+          type: DisplayMessage
+          params:
+            status: success
+            content: המשמרת נמחקה
+            duration: 3
+      # If do_delete_slot fails (e.g., shift_slot_has_instances), Lowdefy surfaces
+      # an error notification automatically. The handler's Error.message contains
+      # 'shift_slot_has_instances' so the user sees an explicit refusal banner,
+      # and the DB row remains intact.

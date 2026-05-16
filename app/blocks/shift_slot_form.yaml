@@ -1,0 +1,130 @@
+# app/blocks/shift_slot_form.yaml
+# Reusable shift-slot form fields (UI-SPEC Surface 2 — Phase 03 plan 03-03).
+#
+# _ref'd from team_detail.yaml — the parent wraps these fields inside a Modal block
+# (with onOk wired to CreateShiftSlot or UpdateShiftSlot depending on state.shift_slot_form_mode).
+# State contract (parent-managed):
+#   reads / writes  shift_slot_form.name             (TextInput)
+#   reads / writes  shift_slot_form.start_time       (TimePicker — HH:mm string)
+#   reads / writes  shift_slot_form.end_time         (TimePicker — HH:mm string)
+#   reads / writes  shift_slot_form.headcount        (NumberInput, default 1)
+#   reads / writes  shift_slot_form.required_role_tags (MultipleSelector — array of role_tag keys)
+#   reads / writes  shift_slot_form.min_seniority    (NumberInput, 0..10, optional → NULL)
+#   reads / writes  shift_slot_form.display_order    (NumberInput, optional → auto-resolve)
+#
+# Form-submit affordance is owned by the parent Modal's okText='שמור משמרת'
+# (UI-SPEC Surface 2 footer). The form block itself never renders a submit
+# button — it is always wrapped in a Modal whose onOk action chain fires the
+# CreateShiftSlot or UpdateShiftSlot request.
+#
+# Cross-midnight hint shows when end_time < start_time.
+# TimePicker — Lowdefy @lowdefy/blocks-antd TimePicker; format HH:mm; no seconds; 24h.
+#
+# Layout: label-above-input (Phase 02 convention from manage_soldiers.yaml). Inputs
+# stack vertically inside the form Box.
+id: shift_slot_form
+type: Box
+blocks:
+  # ── שם המשמרת ──────────────────────────────────────────────────────────────
+  - id: shift_slot_form.name
+    type: TextInput
+    required: true
+    properties:
+      # i18n: shifts.form.name
+      label: שם המשמרת
+      size: large
+
+  # ── זמן התחלה ─────────────────────────────────────────────────────────────
+  - id: shift_slot_form.start_time
+    type: TimePicker
+    required: true
+    properties:
+      # i18n: shifts.form.start_time
+      label: זמן התחלה
+      format: HH:mm
+      showSecond: false
+      use12Hours: false
+      size: large
+
+  # ── זמן סיום ──────────────────────────────────────────────────────────────
+  - id: shift_slot_form.end_time
+    type: TimePicker
+    required: true
+    properties:
+      # i18n: shifts.form.end_time
+      label: זמן סיום
+      format: HH:mm
+      showSecond: false
+      use12Hours: false
+      size: large
+
+  # ── Cross-midnight hint (visible only when end < start) ───────────────────
+  # UI-SPEC Recipe 10 — _lt operator over the two TimePicker states.
+  - id: shift_slot_form.crosses_midnight_hint
+    type: Box
+    visible:
+      _and:
+        - { _state: shift_slot_form.start_time }
+        - { _state: shift_slot_form.end_time }
+        - { _lt: [{ _state: shift_slot_form.end_time }, { _state: shift_slot_form.start_time }] }
+    style:
+      color: '#00000073'
+      fontSize: 14
+      marginTop: 4
+      marginBottom: 12
+    blocks:
+      - id: shift_slot_form.hint_icon
+        type: Icon
+        properties:
+          name: AiOutlineInfoCircle
+          size: 14
+      - id: shift_slot_form.hint_text
+        type: Paragraph
+        properties:
+          # i18n: shifts.form.crosses_midnight
+          content: ' מסתיים למחרת'
+
+  # ── כמות נדרשת ────────────────────────────────────────────────────────────
+  - id: shift_slot_form.headcount
+    type: NumberInput
+    required: true
+    properties:
+      # i18n: shifts.form.headcount
+      label: כמות נדרשת
+      min: 1
+      defaultValue: 1
+      size: large
+
+  # ── תגיות תפקיד נדרשות (אופציונלי) ────────────────────────────────────────
+  # Bound to the parent page's list_role_tags request (the parent passes role_tag
+  # options under the canonical request id 'list_role_tags', identical to
+  # manage_soldiers' add-soldier MultipleSelector).
+  - id: shift_slot_form.required_role_tags
+    type: MultipleSelector
+    properties:
+      # i18n: shifts.form.role_tags
+      label: 'תגיות תפקיד נדרשות (אופציונלי)'
+      placeholder: בחר תגיות מהקטלוג
+      options: { _request: list_role_tags }
+      renderTags: true
+      allowClear: true
+      size: large
+
+  # ── ותק מינימלי (אופציונלי) ───────────────────────────────────────────────
+  - id: shift_slot_form.min_seniority
+    type: NumberInput
+    properties:
+      # i18n: shifts.form.min_seniority
+      label: 'ותק מינימלי (אופציונלי)'
+      min: 0
+      max: 10
+      size: large
+
+  # ── סדר תצוגה ─────────────────────────────────────────────────────────────
+  - id: shift_slot_form.display_order
+    type: NumberInput
+    properties:
+      # i18n: shifts.form.display_order
+      label: סדר תצוגה
+      min: 0
+      size: large
