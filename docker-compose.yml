@@ -1,10 +1,144 @@
 services:
-  # NOTE: The `lowdefy:` service was removed on 2026-05-16 as part of the stack
-  # pivot — see the banner at the top of CLAUDE.md. A replacement app-tier
-  # service will be added once the new stack is chosen (likely Next.js 15 +
-  # shadcn/ui + direct Auth.js). Until then, only Postgres + the one-shot
-  # migrate runner are wired up; the database keeps running and the schema
-  # stays applied on hpg5 (migration 0014 is already in place).
+  # ============================================================================
+  # Budibase self-hosted Community Edition (added 2026-05-16, replaces Lowdefy)
+  #
+  # 6 services compose the Budibase platform: app, worker, couchdb, redis, minio,
+  # proxy. The proxy is published to host port 8080 so the existing Cloudflare
+  # Tunnel passthrough at https://apps.nesher.co keeps working without
+  # tunnel-side changes (tunnel still points at hpg5:8080 in a separate Windows
+  # user account, out of scope for this compose).
+  #
+  # Image tags pinned to 3.38.4 (Budibase release 2026-05-14) — DO NOT use
+  # `latest` in production; pin to a specific release for reproducibility.
+  #
+  # Budibase metadata (apps, screens, data sources, users) lives in CouchDB;
+  # our existing Postgres (below) remains the source of truth for Shifty
+  # business data (employees/shifts/assignments/availability/etc., with
+  # Layer-5 RLS active). Add Postgres as a Budibase data source manually in
+  # the Builder UI after first admin signup.
+  #
+  # The optional litellm-service + litellm-db pair from the upstream compose
+  # is intentionally omitted — we don't need Budibase's bundled AI features
+  # for v1.
+  # ============================================================================
+
+  budibase-app:
+    image: budibase/apps:3.38.4
+    container_name: shifty-budibase-app
+    restart: unless-stopped
+    environment:
+      SELF_HOSTED: "1"
+      COUCH_DB_URL: http://${COUCH_DB_USER:?missing}:${COUCH_DB_PASSWORD:?missing}@budibase-couchdb:5984
+      WORKER_URL: http://budibase-worker:4003
+      MINIO_URL: http://budibase-minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:?missing}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?missing}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?missing}
+      BUDIBASE_ENVIRONMENT: PRODUCTION
+      PORT: "4002"
+      API_ENCRYPTION_KEY: ${API_ENCRYPTION_KEY:?missing}
+      JWT_SECRET: ${JWT_SECRET:?missing}
+      LOG_LEVEL: info
+      ENABLE_ANALYTICS: "false"
+      REDIS_URL: budibase-redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?missing}
+      REDIS_USERNAME: ""
+      OFFLINE_MODE: ""
+    depends_on:
+      - budibase-worker
+      - budibase-redis
+
+  budibase-worker:
+    image: budibase/worker:3.38.4
+    container_name: shifty-budibase-worker
+    restart: unless-stopped
+    environment:
+      SELF_HOSTED: "1"
+      PORT: "4003"
+      API_ENCRYPTION_KEY: ${API_ENCRYPTION_KEY:?missing}
+      JWT_SECRET: ${JWT_SECRET:?missing}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:?missing}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?missing}
+      MINIO_URL: http://budibase-minio:9000
+      APPS_URL: http://budibase-app:4002
+      COUCH_DB_USERNAME: ${COUCH_DB_USER:?missing}
+      COUCH_DB_PASSWORD: ${COUCH_DB_PASSWORD:?missing}
+      COUCH_DB_URL: http://${COUCH_DB_USER:?missing}:${COUCH_DB_PASSWORD:?missing}@budibase-couchdb:5984
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?missing}
+      REDIS_URL: budibase-redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?missing}
+      REDIS_USERNAME: ""
+      OFFLINE_MODE: ""
+    depends_on:
+      - budibase-redis
+      - budibase-minio
+
+  budibase-minio:
+    image: minio/minio:RELEASE.2024-12-18T13-15-44Z
+    container_name: shifty-budibase-minio
+    restart: unless-stopped
+    volumes:
+      - budibase-minio-data:/data
+    environment:
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:?missing}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?missing}
+      MINIO_BROWSER: "off"
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 5s bash -c ':> /dev/tcp/127.0.0.1/9000' || exit 1"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  budibase-proxy:
+    image: budibase/proxy:3.38.4
+    container_name: shifty-budibase-proxy
+    restart: unless-stopped
+    ports:
+      # host:container — Cloudflare Tunnel + LAN consumers reach proxy on 8080;
+      # Budibase proxy listens on 10000 inside the container.
+      - "8080:10000"
+    environment:
+      - PROXY_RATE_LIMIT_WEBHOOKS_PER_SECOND=10
+      - PROXY_RATE_LIMIT_API_PER_SECOND=50
+      - APPS_UPSTREAM_URL=http://budibase-app:4002
+      - WORKER_UPSTREAM_URL=http://budibase-worker:4003
+      - MINIO_UPSTREAM_URL=http://budibase-minio:9000
+      - COUCHDB_UPSTREAM_URL=http://budibase-couchdb:5984
+      - RESOLVER=127.0.0.11
+    depends_on:
+      - budibase-app
+      - budibase-worker
+      - budibase-minio
+      - budibase-couchdb
+
+  budibase-couchdb:
+    image: budibase/couchdb:v3.3.3
+    container_name: shifty-budibase-couchdb
+    restart: unless-stopped
+    environment:
+      - COUCHDB_PASSWORD=${COUCH_DB_PASSWORD:?missing}
+      - COUCHDB_USER=${COUCH_DB_USER:?missing}
+      - TARGETBUILD=docker-compose
+      - DATA_DIR=/data
+    volumes:
+      - budibase-couchdb-data:/data
+
+  budibase-redis:
+    image: redis:7.4.9-alpine
+    container_name: shifty-budibase-redis
+    restart: unless-stopped
+    command: redis-server --requirepass "${REDIS_PASSWORD:?missing}"
+    volumes:
+      - budibase-redis-data:/data
+
+  # ============================================================================
+  # Shifty Postgres — source of truth for tenancy, roster, shifts, assignments,
+  # availability, audit. Migrations 0001–0014 are applied; Layer-5 RLS is
+  # active (FORCE ROW LEVEL SECURITY on every domain table; `shifty_app` role).
+  # Budibase reaches this DB as a data source over the default docker network
+  # at host=postgres, port=5432 (added via the Builder UI post-signup).
+  # ============================================================================
 
   migrate:
     image: migrate/migrate:v4.18.3
@@ -44,7 +178,8 @@ services:
       retries: 5
       start_period: 30s
     # No host port exposed — internal docker network only.
-    # The new-stack app tier will reach it at host=postgres, port=5432.
+    # Budibase reaches it at host=postgres, port=5432 (added as a data source
+    # in the Builder UI after first admin signup).
 
   # solver:  # Phase 4 — FastAPI CP-SAT solver service; internal-only port; auth via Bearer SOLVER_SHARED_SECRET
   #   build: ./solver
@@ -64,3 +199,11 @@ services:
   #   ports:
   #     - "127.0.0.1:3001:3000"   # bind localhost so Tailscale-only access remains true
   #   restart: unless-stopped
+
+volumes:
+  budibase-couchdb-data:
+    driver: local
+  budibase-minio-data:
+    driver: local
+  budibase-redis-data:
+    driver: local

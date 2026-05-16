@@ -4,11 +4,85 @@
 >
 > **Lowdefy was killed.** Friction accumulated to the point where we were spending more time on framework workarounds than product code. Killed: plugin registration silently dropping `requests:` arrays (Plan 02-11 hotfix), `_state:` operator forcing UI-only testing (P02-HF-05), missing antd block exports (TimePicker/DatePicker/TimeSelector), build-time FATAL on Links to not-yet-existent pageIds, ECharts no native RTL.
 >
-> **Status as of pivot:** Phase 02 closed (v0.2.0-phase2 tag), Phase 03 paused mid-execution (Plans 03-01..03-04 done, 03-05..03-08 deleted from scope). Business logic preserved at `legacy/shifty-handlers/` for porting to the next stack (TBD — likely Next.js 15 + shadcn/ui + direct Auth.js).
+> **New stack (2026-05-16): Budibase self-hosted Community Edition** (Apache-2.0, no branding paywall in CE per release notes; we self-host so no SaaS branding constraints). See the "Budibase Deployment on hpg5 (2026-05-16)" section near the top for the post-pivot operating context. The legacy Lowdefy-era sections lower in this file are preserved for historical context and marked `<!-- SUPERSEDED -->`.
+>
+> **Status as of pivot:** Phase 02 closed (v0.2.0-phase2 tag), Phase 03 paused mid-execution (Plans 03-01..03-04 done, 03-05..03-08 deleted from scope). Business logic preserved at `legacy/shifty-handlers/` for porting/rebuilding on Budibase.
 >
 > **What survives the pivot:** Postgres schema + migrations (all 14 migrations including Layer-5 RLS), FastAPI solver (not yet built — Phase 04), Playwright test patterns + helpers, GSD planning artifacts (`.planning/`).
->
-> **All sections below that reference Lowdefy specifics, `app/lowdefy.yaml`, PsExec rebuild flow, etc., are outdated.** They will be rewritten when the new stack is chosen. See the "Stack Pivot Notes (2026-05-16)" section near the bottom for the post-pivot operating context.
+
+## Budibase Deployment on hpg5 (2026-05-16)
+
+**Stack today:** Budibase 3.38.4 (UI + thin business logic) + Postgres 16 (Shifty business data) + one-shot `migrate` runner. FastAPI solver joins later (Phase 04). All services live in `docker-compose.yml` at the repo root.
+
+### Service topology
+
+6 Budibase services + 2 Shifty services = 8 containers total:
+
+| Service | Image | Role |
+|---------|-------|------|
+| `budibase-proxy` | `budibase/proxy:3.38.4` | nginx reverse proxy; **only service with a host port: `8080:10000`** |
+| `budibase-app` | `budibase/apps:3.38.4` | builder + main app server (Node) |
+| `budibase-worker` | `budibase/worker:3.38.4` | background tasks, auth, tenants |
+| `budibase-couchdb` | `budibase/couchdb:v3.3.3` | Budibase metadata store (apps, screens, data sources, users) — **NOT** Shifty business data |
+| `budibase-redis` | `redis:7.4.9-alpine` | session cache + queue |
+| `budibase-minio` | `minio/minio:RELEASE.2024-12-18T13-15-44Z` | S3-compatible object store (attachments, uploads) |
+| `postgres` | `postgres:16` | **Shifty business data** (tenancy, roster, shifts, assignments, availability, audit); Layer-5 RLS active |
+| `migrate` | `migrate/migrate:v4.18.3` | one-shot DB migration runner; not a long-running service |
+
+The optional `litellm-service` + `litellm-db` pair from the upstream compose is intentionally omitted — we don't need Budibase's bundled AI features for v1. Confirmed safe: `packages/server/src/startup/index.ts` (Budibase 3.38.4) short-circuits the LiteLLM readiness check when `LITELLM_MASTER_KEY` is unset.
+
+### Why Budibase metadata in CouchDB, not Postgres
+
+Budibase ships with CouchDB as a hard dependency for its own metadata (the apps/screens/data sources/users you build inside the Builder UI). We do **NOT** route Shifty business data through CouchDB. Instead, Budibase reaches our Postgres at `postgres:5432` over the default docker network as a **data source** added in the Builder UI — preserving all 14 migrations, the Layer-5 RLS posture (`shifty_app` role, FORCE ROW LEVEL SECURITY on every domain table), and migration 0014's `availability.planning_window_id` / `org_unit.template_picked_at` additions.
+
+### First-time admin signup
+
+After the stack comes up, navigate to **http://hpg5:8080/builder** (LAN) or **https://apps.nesher.co/builder** (public via Cloudflare Tunnel). Budibase first-run onboarding will prompt you to create the initial admin account. Budibase does not auto-create an admin unless `BB_ADMIN_USER_EMAIL` + `BB_ADMIN_USER_PASSWORD` are set in `.env` — we leave those unset and use the UI signup.
+
+After signup, manually add Postgres as a data source:
+
+1. Builder UI → Data → "+ Add data source" → PostgreSQL
+2. Host: `postgres` Port: `5432` Database: `shifts` User: `shifts` Password: (the `POSTGRES_PASSWORD` from `.env`)
+3. Click "Save & continue" — Budibase will introspect schema and surface tables for binding.
+
+There is no Lowdefy-style "config as code" — Budibase apps are authored in the UI and stored in CouchDB. Treat the Builder UI as the source of truth for screens/queries; treat `db/migrations/` as the source of truth for the Shifty Postgres schema. CouchDB volume (`budibase-couchdb-data`) is the only way to back up Budibase apps — `docker compose exec budibase-couchdb` snapshots if/when we set that up.
+
+### Cloudflare Tunnel passthrough (unchanged)
+
+The existing tunnel still points at `http://192.168.1.133:8080` — we kept Budibase's proxy on host port 8080 specifically so no tunnel-side changes are needed. The tunnel runs in a separate Windows user account on hpg5 and is out of scope for SSH operations.
+
+### Deploy + ops cheatsheet (post-Lowdefy)
+
+```
+# Sync hpg5 mirror to latest origin/main
+plink -ssh -l claude -pw "Onclaude2103" -batch -hostkey "SHA256:tPg5mYQbJO/9ccGmNGeyJeQQSPXq+C6SL3EHJcbRZMQ" hpg5 "powershell -c \"cd C:\shifts-manager; git fetch origin main; git reset --hard origin/main; git log -1 --oneline\""
+
+# Pull Budibase images (REQUIRES PsExec — registry pulls need Docker Desktop credential helper)
+plink ... hpg5 "powershell -c \"\$env:PATH = [Environment]::GetEnvironmentVariable('PATH','Machine') + ';' + [Environment]::GetEnvironmentVariable('PATH','User'); psexec -accepteula -nobanner -i 1 -u claude -p Onclaude2103 cmd /c 'cd C:\shifts-manager && docker compose pull > C:\shifts-manager\pull.txt 2>&1'; Get-Content C:\shifts-manager\pull.txt -Tail 40\""
+
+# Start the stack (no PsExec — images are already cached locally after pull)
+plink ... hpg5 "powershell -c \"cd C:\shifts-manager; docker compose up -d; docker compose ps\""
+
+# Tail logs from a specific service
+plink ... hpg5 "powershell -c \"docker logs -f shifty-budibase-app\""
+
+# Ad-hoc Postgres queries (Shifty business data, NOT Budibase metadata)
+plink ... hpg5 "powershell -c \"docker compose -f C:\shifts-manager\docker-compose.yml exec -T postgres psql -U shifts -d shifts -c 'SELECT count(*) FROM employees;'\""
+
+# Apply a new migration (one-shot)
+plink ... hpg5 "powershell -c \"cd C:\shifts-manager; docker compose run --rm migrate\""
+```
+
+### Why PsExec is still relevant (registry pulls only)
+
+Same root cause as before: Docker Desktop on Windows requires an interactive user session for its credential helper (`docker-credential-desktop.exe`). SSH = Windows logon type 3 (network) = no credential helper access. Operations that pull from a registry (`docker compose pull`, `docker pull`, `docker compose build` for any service we add later) must be wrapped via PsExec to run inside the interactive `claude` session 1. Operations on locally-cached images (`docker compose up -d`, `docker compose ps`, `docker logs`, `docker compose exec`) do **NOT** need PsExec.
+
+### Secrets
+
+All Budibase secrets live in `.env` on hpg5 only (NEVER committed). `.env.example` documents the variable names. The 7 Budibase-specific secrets are: `JWT_SECRET`, `API_ENCRYPTION_KEY`, `INTERNAL_API_KEY`, `COUCH_DB_USER`, `COUCH_DB_PASSWORD`, `REDIS_PASSWORD`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`. Compose uses `${VAR:?missing}` so missing values fail-fast with a clear error.
+
+<!-- SUPERSEDED 2026-05-16 by Budibase pivot — the sections below describe the Lowdefy-era operations and are kept for historical context. -->
+
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -200,6 +274,8 @@ plink ... hpg5 "powershell -c \"docker compose -f C:\shifts-manager\docker-compo
 - Commands like `npm test` / `dotnet build` do not apply — no JS test suite, no .NET. The build sequence is `docker compose build && docker compose up -d` (with PsExec wrapping when on SSH).
 - For UI iteration: edit `app/*.yaml` locally, commit, push, `pscp` the changed files to `C:\shifts-manager\app\` on hpg5, then rebuild + restart the `lowdefy` service. (We can wire git pull on hpg5 later if it becomes painful.)
 
+<!-- END SUPERSEDED — Lowdefy-era operations end here. The post-pivot Budibase operating context is at the top of this file under "Budibase Deployment on hpg5 (2026-05-16)". -->
+
 ## Stack Pivot Notes (2026-05-16)
 
 ### What we learned about Lowdefy that informs the next pick
@@ -223,11 +299,11 @@ plink ... hpg5 "powershell -c \"docker compose -f C:\shifts-manager\docker-compo
 
 ### hpg5 deployment story
 
-- **The `shifty-lowdefy` container was stopped and removed** as part of the pivot (2026-05-16). Postgres + the one-shot `migrate` runner continue running.
-- **Migration 0014 IS applied on hpg5** (`db/migrations/0014_*.sql`). Don't re-run it. The schema is current; the next stack inherits a fully migrated database.
-- **The git working tree at `C:\shifts-manager\` on hpg5 still tracks `origin/main`.** `git fetch + reset --hard origin/main` continues to be the deploy-sync mechanism. After this commit lands, the hpg5 mirror will reflect the post-pivot tree (no `app/` directory).
-- **Cloudflare Tunnel is still up**, pointing at `http://192.168.1.133:8080`. Until a replacement service binds 8080, public requests will 502. That's expected and not blocking — the tunnel will be repointed when the next stack ships its first deployable app.
-- **The Windows Defender Firewall rule `Appsmith 8080 (shifts-manager)`** is still in place (name predates both the Appsmith→Lowdefy and Lowdefy→TBD pivots; not worth renaming until we know the final stack).
+- **The `shifty-lowdefy` container was stopped and removed** as part of the pivot (2026-05-16). Postgres + the one-shot `migrate` runner continue running. **Budibase 3.38.4 deployed same day** — see "Budibase Deployment on hpg5 (2026-05-16)" near the top of this file for service topology + ops.
+- **Migration 0014 IS applied on hpg5** (`db/migrations/0014_*.sql`). Don't re-run it. The schema is current; Budibase inherits a fully migrated database and reaches it as a PostgreSQL data source (host `postgres`, port `5432`).
+- **The git working tree at `C:\shifts-manager\` on hpg5 still tracks `origin/main`.** `git fetch + reset --hard origin/main` continues to be the deploy-sync mechanism. Budibase apps are authored in the Builder UI (CouchDB-backed) and are NOT in git — back up the `budibase-couchdb-data` volume separately if needed.
+- **Cloudflare Tunnel still points at `http://192.168.1.133:8080`** — Budibase's proxy publishes 8080 specifically so no tunnel-side changes are needed. Public requests now resolve through Budibase.
+- **The Windows Defender Firewall rule `Appsmith 8080 (shifts-manager)`** is still in place (name predates both pivots; not worth renaming).
 
 <!-- GSD:project-start source:PROJECT.md -->
 ## Project
