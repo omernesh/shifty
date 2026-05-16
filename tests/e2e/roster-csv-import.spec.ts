@@ -80,12 +80,13 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(async () => {
-  await teardownTestData();
+  try { await teardownTestData(); } catch { /* PG unreachable — nothing to tear down */ }
 });
 
 test.describe('Roster CSV import (ROST-08..13) — UI-driven', () => {
 
   test('A. happy path — clean.csv imports 5 rows (ROST-08, ROST-09, ROST-12)', async ({ page }) => {
+    if (!tenantA || !adminSignIn) { test.skip(true, 'fixtures not seeded — Postgres unreachable'); return; }
     let rawCsv: string;
     try { rawCsv = readFileSync(join(FIXTURES_DIR, 'clean.csv'), 'utf-8'); }
     catch { test.skip(true, 'clean.csv fixture missing'); return; }
@@ -117,6 +118,7 @@ test.describe('Roster CSV import (ROST-08..13) — UI-driven', () => {
   });
 
   test('A2. perf — perf-50.csv imports 50 rows within SLO budgets (W1 + ROST-13)', async ({ page }) => {
+    if (!tenantA || !adminSignIn) { test.skip(true, 'fixtures not seeded — Postgres unreachable'); return; }
     // ROST-13 re-interpretation: dbCommitWall < 35_000ms (Resend rate-limit budget).
     let rawCsv: string;
     try { rawCsv = readFileSync(join(FIXTURES_DIR, 'perf-50.csv'), 'utf-8'); }
@@ -151,6 +153,7 @@ test.describe('Roster CSV import (ROST-08..13) — UI-driven', () => {
   });
 
   test('B. smart-quote canary — kibbutz row imports as canonical bytes (ROST-11)', async ({ page }) => {
+    if (!tenantA || !adminSignIn) { test.skip(true, 'fixtures not seeded — Postgres unreachable'); return; }
     let rawCsv: string;
     try { rawCsv = readFileSync(join(FIXTURES_DIR, 'smart-quote.csv'), 'utf-8'); }
     catch { test.skip(true, 'smart-quote.csv fixture missing'); return; }
@@ -184,6 +187,7 @@ test.describe('Roster CSV import (ROST-08..13) — UI-driven', () => {
   });
 
   test('C. duplicate emails flagged + skipped by default (ROST-10)', async ({ page }) => {
+    if (!tenantA || !adminSignIn) { test.skip(true, 'fixtures not seeded — Postgres unreachable'); return; }
     let rawCsv: string;
     try { rawCsv = readFileSync(join(FIXTURES_DIR, 'dup-email.csv'), 'utf-8'); }
     catch { test.skip(true, 'dup-email.csv fixture missing'); return; }
@@ -231,6 +235,7 @@ test.describe('Roster CSV import (ROST-08..13) — UI-driven', () => {
   });
 
   test('D. bidi-mark stripping at write time (ROST-11)', async ({ page }) => {
+    if (!tenantA || !adminSignIn) { test.skip(true, 'fixtures not seeded — Postgres unreachable'); return; }
     let rawCsv: string;
     try { rawCsv = readFileSync(join(FIXTURES_DIR, 'bidi-mark.csv'), 'utf-8'); }
     catch { test.skip(true, 'bidi-mark.csv fixture missing'); return; }
