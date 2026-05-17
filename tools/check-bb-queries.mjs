@@ -101,6 +101,12 @@ const FRAMEWORK_TABLES = new Set([
   'time_clock_entries',
 ]);
 
+// API endpoint config (used by main_default). Declared before the dispatch
+// because TDZ rules mean `const` is not hoisted and the dispatch block runs
+// at module-evaluation time.
+const DEFAULT_API_URL = 'http://hpg5:8080';
+const REQUEST_TIMEOUT_MS = 15000;
+
 // CLI dispatch (gated so unit tests can `import` this module without executing main).
 // Windows note: `import.meta.url` uses `file:///C:/...` with URL-encoded spaces
 // (`%20`); `process.argv[1]` uses native backslashes and raw spaces. Decode and
@@ -120,7 +126,10 @@ if (isMainModule()) {
   } else if (args.includes('--self-test')) {
     main_selfTest();
   } else {
-    main_default();
+    main_default().catch((err) => {
+      console.error(`check-bb-queries: unexpected error: ${err?.stack ?? err}`);
+      process.exit(2);
+    });
   }
 }
 
@@ -238,15 +247,200 @@ function main_listDomainTables() {
   process.exit(0);
 }
 
-function main_default() {
-  // Full live-API implementation lives in Task 2.
-  // Placeholder until then — exits 0 with a notice.
-  console.log('check-bb-queries: live API mode not yet implemented (Task 2).');
-  process.exit(0);
+// ─────────────────────────────────────────────
+// BUDIBASE PUBLIC API CLIENT
+// ─────────────────────────────────────────────
+
+/**
+ * Wrap fetch with a timeout so an unreachable hpg5 doesn't hang the gate.
+ * Uses AbortController, not the bare `signal: AbortSignal.timeout(...)` shortcut,
+ * to support Node 22's stable API surface.
+ */
+async function fetchWithTimeout(url, opts = {}, timeoutMs = REQUEST_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...opts, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
+/**
+ * GET /api/public/v1/applications → list of app IDs.
+ *
+ * The Budibase Public API requires the `x-budibase-api-key` header. The applications
+ * endpoint does NOT need `x-budibase-app-id` (that's the endpoint that DISCOVERS app IDs).
+ *
+ * @param {string} apiUrl
+ * @param {string} apiKey
+ * @returns {Promise<Array<{ _id: string, name: string }>>}
+ */
+export async function listApplications(apiUrl, apiKey) {
+  const url = `${apiUrl.replace(/\/$/, '')}/api/public/v1/applications/search`;
+  const res = await fetchWithTimeout(url, {
+    method: 'POST',
+    headers: {
+      'x-budibase-api-key': apiKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ name: '' }), // empty filter → all apps
+  });
+
+  if (res.status === 401 || res.status === 403) {
+    throw new ApiAuthError(`Public API rejected the API key (HTTP ${res.status})`);
+  }
+  if (!res.ok) {
+    throw new Error(`listApplications failed: HTTP ${res.status} ${res.statusText}`);
+  }
+
+  const body = await res.json();
+  // Budibase Public API responses are shaped `{ data: [...] }` for list endpoints.
+  return Array.isArray(body) ? body : (body?.data ?? []);
+}
+
+/**
+ * POST /api/public/v1/queries/search → list of all queries for an app.
+ *
+ * @param {string} apiUrl
+ * @param {string} apiKey
+ * @param {string} appId
+ * @returns {Promise<Array<{ name: string, _id: string, fields?: { sql?: string } }>>}
+ */
+export async function searchQueries(apiUrl, apiKey, appId) {
+  const url = `${apiUrl.replace(/\/$/, '')}/api/public/v1/queries/search`;
+  const res = await fetchWithTimeout(url, {
+    method: 'POST',
+    headers: {
+      'x-budibase-api-key': apiKey,
+      'x-budibase-app-id': appId,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ name: '' }),
+  });
+
+  if (res.status === 401 || res.status === 403) {
+    throw new ApiAuthError(`Public API rejected the API key (HTTP ${res.status})`);
+  }
+  if (!res.ok) {
+    throw new Error(`searchQueries(app=${appId}) failed: HTTP ${res.status} ${res.statusText}`);
+  }
+
+  const body = await res.json();
+  return Array.isArray(body) ? body : (body?.data ?? []);
+}
+
+class ApiAuthError extends Error {
+  constructor(msg) { super(msg); this.name = 'ApiAuthError'; }
+}
+
+// ─────────────────────────────────────────────
+// DEFAULT MODE — live API check
+// ─────────────────────────────────────────────
+
+async function main_default() {
+  const apiKey = process.env.BUDIBASE_API_KEY;
+  const apiUrl = process.env.BUDIBASE_API_URL ?? DEFAULT_API_URL;
+
+  if (!apiKey) {
+    console.warn(`check-bb-queries: BUDIBASE_API_KEY not set — skipping live API check.`);
+    console.warn(`  (Self-test runs independently: \`node tools/check-bb-queries.mjs --self-test\`.)`);
+    process.exit(0);
+  }
+
+  let apps;
+  try {
+    apps = await listApplications(apiUrl, apiKey);
+  } catch (err) {
+    if (err instanceof ApiAuthError) {
+      console.error(`check-bb-queries: ${err.message}`);
+      console.error(`  Verify BUDIBASE_API_KEY against .env on hpg5. Aborting.`);
+      process.exit(2);
+    }
+    // Network unreachable (ECONNREFUSED, DNS failure, AbortError on timeout) — skip + warn.
+    const code = err?.cause?.code ?? err?.code ?? err?.name;
+    console.warn(`check-bb-queries: Public API unreachable at ${apiUrl} (${code ?? err.message}) — skipping live check.`);
+    process.exit(0);
+  }
+
+  if (!apps.length) {
+    console.log(`check-bb-queries: no applications found at ${apiUrl}. Nothing to validate.`);
+    process.exit(0);
+  }
+
+  const domainTables = getDomainTables();
+  const exemptSet = new Set(EXEMPT_QUERIES);
+
+  let totalQueries = 0;
+  let totalValidated = 0;
+  let totalExempt = 0;
+  let totalSkipped = 0;
+  const violations = [];
+
+  for (const app of apps) {
+    const appId = app._id ?? app.appId;
+    if (!appId) continue;
+
+    let queries;
+    try {
+      queries = await searchQueries(apiUrl, apiKey, appId);
+    } catch (err) {
+      if (err instanceof ApiAuthError) {
+        console.error(`check-bb-queries: ${err.message}`);
+        process.exit(2);
+      }
+      console.warn(`check-bb-queries: failed to fetch queries for app ${appId}: ${err.message}`);
+      continue;
+    }
+
+    for (const q of queries) {
+      totalQueries++;
+      const result = validateQuery(q, domainTables, exemptSet);
+      if (result.reason === 'exempt') {
+        totalExempt++;
+        continue;
+      }
+      if (result.reason === 'no SQL body' ||
+          result.reason === 'no domain table referenced' ||
+          result.reason === 'not a query object') {
+        totalSkipped++;
+        continue;
+      }
+      totalValidated++;
+      if (result.violation) {
+        violations.push({ appId, appName: app.name ?? '(unnamed)', query: q, result });
+      }
+    }
+  }
+
+  // Report
+  console.log(`check-bb-queries: scanned ${apps.length} app(s), ${totalQueries} query(ies) total.`);
+  console.log(`  validated: ${totalValidated}, exempt: ${totalExempt}, skipped (no SQL or no domain table): ${totalSkipped}.`);
+
+  if (violations.length === 0) {
+    console.log(`check-bb-queries: PASS — all domain-table queries embed the canonical tenant filter.`);
+    process.exit(0);
+  }
+
+  console.error('');
+  console.error(`check-bb-queries: FAIL — ${violations.length} violation(s):`);
+  for (const v of violations) {
+    const sql = v.query?.fields?.sql ?? '(no SQL)';
+    const snippet = sql.length > 200 ? sql.slice(0, 200) + '…' : sql;
+    console.error(`\nFAIL: query "${v.query.name}" (app ${v.appName}/${v.appId})`);
+    console.error(`  ${v.result.reason}`);
+    console.error(`  SQL: ${snippet.replace(/\n/g, ' ')}`);
+    console.error(`  Fix: add \`WHERE tenant_id = '{{ Current User.tenantId }}'::uuid\` to the query, or`);
+    console.error(`       add "${v.query.name}" to EXEMPT_QUERIES in tools/check-bb-queries.mjs with a 1-line reason.`);
+  }
+  process.exit(1);
+}
+
+// ─────────────────────────────────────────────
+// SELF-TEST MODE (Task 3)
+// ─────────────────────────────────────────────
+
 function main_selfTest() {
-  // Full self-test implementation lives in Task 3.
   console.log('check-bb-queries: --self-test not yet implemented (Task 3).');
   process.exit(0);
 }
