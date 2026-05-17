@@ -320,12 +320,16 @@ If `node:22-alpine` is not cached on hpg5 (first-ever run from a fresh deploy), 
 
 Verifying claimed artifacts:
 
-- `tools/snapshot-budibase.ps1` — FOUND (293 lines)
-- `budibase-exports/2026-05-17-w0-05-inaugural.tar.gz` — FOUND (1,564,718 bytes, sha256 E7CA45...)
+- `tools/snapshot-budibase.ps1` — FOUND (293 lines, 14117 bytes)
+- `budibase-exports/2026-05-17-w0-05-inaugural.tar.gz` — FOUND (1,564,718 bytes, sha256 E7CA45BF4129A11D25E0E651EC7BABF492ED63319C77260EDAB84818418D08E2)
+- `.planning/phases/03-availability-rules/03-W0-05-SUMMARY.md` — FOUND (this file, 24316 bytes)
 - `.gitignore` updated (3 budibase-exports entries) — FOUND
 - `docs/BUDIBASE-CONVENTIONS.md` references to `snapshot-budibase.ps1` — 3 occurrences FOUND
 - Commit `7cd2e2e` (Task 2: wrapper) — VERIFIED in git log
 - Commit `9ef4de6` (Task 3: gitignore + conventions) — VERIFIED in git log
+- Commit `5021e7d` (inaugural snapshot) — VERIFIED in git log
+- Commit `26b4361` (SUMMARY) — VERIFIED in git log
+- Commit `e9dbc56` (state/roadmap/requirements metadata) — VERIFIED in git log
 
 ---
 *Phase: 03-availability-rules*
