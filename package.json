@@ -8,6 +8,9 @@
     "test:e2e": "playwright test",
     "test:unit": "node --test --experimental-strip-types tests/unit/*.spec.ts",
     "test:check-queries": "node tools/check-queries.mjs",
+    "test:check-bb-queries": "node tools/check-bb-queries.mjs",
+    "test:check-bb-queries-selftest": "node tools/check-bb-queries.mjs --self-test",
+    "test:check-bb-queries-unit": "node --test tools/test/check-bb-queries.test.mjs",
     "test:invite-code": "node --test tools/test/invite-code.test.mjs"
   },
   "devDependencies": {

@@ -437,10 +437,67 @@ async function main_default() {
 }
 
 // ─────────────────────────────────────────────
-// SELF-TEST MODE (Task 3)
+// SELF-TEST MODE
 // ─────────────────────────────────────────────
+// Mirrors the spirit of tools/check-queries.mjs --self-test (Lowdefy era) but
+// adapted to a Public-API gate: we don't mutate a file, we run synthetic query
+// objects through the in-process validator and assert it behaves correctly.
+// This is the "gate is alive" assertion — it passes even when no live API is
+// reachable, so CI / contributors / pre-commit can run it unconditionally.
 
 function main_selfTest() {
-  console.log('check-bb-queries: --self-test not yet implemented (Task 3).');
+  const domainTables = getDomainTables();
+  const exemptSet = new Set(EXEMPT_QUERIES);
+
+  const cases = [
+    {
+      label: 'bad — missing filter on a domain-table SELECT',
+      query: {
+        name: 'SELFTEST_synthetic_bad',
+        fields: { sql: 'SELECT id, display_name FROM soldier' },
+      },
+      expectViolation: true,
+    },
+    {
+      label: 'good — canonical filter present',
+      query: {
+        name: 'SELFTEST_synthetic_good',
+        fields: {
+          sql: "SELECT id FROM soldier WHERE tenant_id = '{{ Current User.tenantId }}'::uuid",
+        },
+      },
+      expectViolation: false,
+    },
+    {
+      label: 'exempt — known exempt name beats validation',
+      query: {
+        name: 'resolveInviteCode_GetTenantId',
+        fields: { sql: 'SELECT id FROM soldier' }, // would be bad but exempt
+      },
+      expectViolation: false,
+    },
+  ];
+
+  let passed = 0;
+  let failed = 0;
+
+  for (const c of cases) {
+    const result = validateQuery(c.query, domainTables, exemptSet);
+    const actual = !!result.violation;
+    if (actual === c.expectViolation) {
+      console.log(`  PASS: ${c.label}`);
+      passed++;
+    } else {
+      console.error(`  FAIL: ${c.label}`);
+      console.error(`        expected violation=${c.expectViolation}, got violation=${actual}, reason=${result.reason}`);
+      failed++;
+    }
+  }
+
+  if (failed > 0) {
+    console.error(`\nSELF-TEST FAIL: ${failed}/${cases.length} case(s) failed.`);
+    process.exit(1);
+  }
+  console.log(`\nSELF-TEST PASS: ${passed}/${cases.length} cases. Gate is alive.`);
   process.exit(0);
 }
