@@ -82,7 +82,7 @@ Each `.planning/phases/<phase>/PLAN-<N>.md` describes:
    - **New legitimate exemption needed** (e.g., a future bulk-import Automation that creates tenant-bound rows from an admin context)? Add a 1-line entry to `EXEMPT_QUERIES` in `tools/check-bb-queries.mjs` with a comment naming the reason. The PR diff is the audit trail (per D-03, no separate JSON file or marker comment in the SQL body).
    - **Run before opening a PR** that adds a Budibase Query: `npm run test:check-bb-queries` (live API mode against hpg5; requires `BUDIBASE_API_KEY` in env) AND `npm run test:check-bb-queries-selftest` (offline; runs unconditionally).
    - **No CI provider yet.** Until `.github/workflows/` or husky is added, the gate is opt-in for contributors. Any Wave 1+ plan that introduces a new domain-table Query MUST run the gate locally before opening the PR — that's the contract that holds until CI exists.
-5. **Snapshot tarball** — at PR open, run `budi backups --export`, commit the tarball to `budibase-exports/YYYY-MM-DD-<feature>.tar.gz`. Reviewer can extract + grep to spot-check what changed.
+5. **Snapshot tarball** — at PR open, run `pwsh tools\snapshot-budibase.ps1 -FeatureSlug "<slug>"` from the local workstation; the wrapper SSHes to hpg5, runs `@budibase/cli`'s `budi backups --export` against the live stack (in an ephemeral `node:22-alpine` container on the `shifts-manager_default` docker network), copies the tarball back, atomically places it at `budibase-exports/YYYY-MM-DD-<slug>.tar.gz`, and prints the suggested commit message. Reviewer can extract + grep to spot-check what changed. See `tools/snapshot-budibase.ps1` for the empirical-PsExec-gating notes; resolved in `.planning/phases/03-availability-rules/03-W0-05-SUMMARY.md`.
 
 **Done criteria** for a Budibase plan:
 - Schema migration applies clean against test DB
@@ -124,8 +124,15 @@ Each `.planning/phases/<phase>/PLAN-<N>.md` describes:
 ## 9. Operations cheatsheet (Budibase-specific)
 
 ```powershell
-# Export the Default workspace app for PR snapshot
-plink ... hpg5 "powershell -c \"docker exec shifty-budibase-app budi backups --export /backup/snapshot.tar.gz --env-file /app/.env\""
+# PR-time snapshot (preferred — uniform across PRs, atomic, idempotent)
+pwsh tools\snapshot-budibase.ps1 -FeatureSlug "<slug>"
+
+# One-off snapshot (no script) — used when you need a checkpoint mid-iteration
+# without staging it for commit. Runs @budibase/cli inside an ephemeral
+# container on the shifty network. Note: `budi` is NOT inside the apps image
+# (W0-05 empirical finding); it must be installed per-invocation as below.
+plink -ssh -l claude -pw "<pw>" -batch -hostkey "<key>" hpg5 `
+  "powershell -c \"docker run --rm --network shifts-manager_default -v C:/shifts-manager/.snapshot-stage:/work node:22-alpine sh -c 'npm install -g --silent @budibase/cli@3.38.4 && cd /work && budi backups --export quick.tar.gz --env /work/budi.env'\""
 
 # Fetch a query body via Public API (for the Layer-2 gate)
 curl -H "x-budibase-api-key: $env:BUDIBASE_API_KEY" `
@@ -143,7 +150,7 @@ curl -H "x-budibase-api-key: $env:BUDIBASE_API_KEY" `
 1. ~~**JS code block + helper integration pattern.** How does a Budibase JS automation/code block consume `legacy/shifty-handlers/helpers/canonicalize.js`? Bundle into a single file? Inline copy? Custom NPM package committed to the snapshot tarball? Spike during Phase 03 Wave 0.~~ **RESOLVED (2026-05-17, plan `03-W0-03`).** The 4 pure-function helpers are now bundled into a single IIFE at `tools/budibase-helpers/helpers.bundle.js` (~1.3 KB minified) exposing global `Shifty`. Builder UI JS code blocks consume the bundle via the **paste-as-fixture** pattern — see `tools/budibase-helpers/README.md` and `.planning/phases/03-availability-rules/03-W0-03-SUMMARY.md` for the full surface contract, consumption pattern, and update workflow.
 2. ~~**Layer-2 CI gate implementation.** Write `tools/check-bb-queries.mjs` — pulls queries via Public API, parses SQL, asserts the canonical filter pattern on every domain-table query. Whitelist mechanism for legitimate exceptions (e.g., `app_user` provisioning).~~ **RESOLVED (2026-05-17, plan `03-W0-04`).** `tools/check-bb-queries.mjs` (503 lines) fetches queries via `POST /api/public/v1/queries/search`, validates each SQL body against the canonical filter pattern `WHERE tenant_id = '{{ Current User.tenantId }}'::uuid`, and exempts query names listed in the inline `EXEMPT_QUERIES` allowlist (seeded with the two W0-02 invite-redemption queries per D-03). Domain tables are enumerated dynamically from `db/migrations/*.up.sql`. A `--self-test` mode runs offline and proves the validator is alive; `--list-domain-tables` is a debug helper. Wired into npm scripts: `test:check-bb-queries`, `test:check-bb-queries-selftest`, `test:check-bb-queries-unit`. **Run-it-manually procedure** documented in `.planning/phases/03-availability-rules/03-W0-04-SUMMARY.md` (no `.github/workflows/` or husky in this repo yet — gate is opt-in until a future CI provider is wired).
 3. **Budibase user-schema custom field flow.** Verify the Builder UI exposes adding a `tenantId` custom user field. If not, alternative: store tenant_id on the `app_user` table and JOIN per query (heavier but framework-aligned).
-4. **PR snapshot tooling.** Helper script (`tools/snapshot-budibase.ps1`) that calls `budi backups --export` and commits the tarball — used at PR open time.
+4. ~~**PR snapshot tooling.** Helper script (`tools/snapshot-budibase.ps1`) that calls `budi backups --export` and commits the tarball — used at PR open time.~~ **RESOLVED (2026-05-17, plan `03-W0-05`).** `tools/snapshot-budibase.ps1` (293 lines) is a PowerShell wrapper that SSHes to hpg5, runs `@budibase/cli@3.38.4` inside an ephemeral `node:22-alpine` container attached to `shifts-manager_default` (the apps image does NOT ship `budi` — empirical finding documented in the script header), copies the tarball back via `pscp`, atomically places it at `budibase-exports/YYYY-MM-DD-<slug>.tar.gz`, and prints the suggested commit message. Idempotent (re-running overwrites cleanly). `.gitignore` excludes `budibase-exports/*.tmp` + `*.partial` but tracks the finalized `.tar.gz`. PsExec is NOT required for snapshot runs (only for one-time `docker pull node:22-alpine` bootstrap — script detects and prints a recovery hint). First inaugural snapshot: `budibase-exports/2026-05-17-w0-05-inaugural.tar.gz` (1,564,718 bytes; SHA256 `E7CA45BF4129A11D25E0E651EC7BABF492ED63319C77260EDAB84818418D08E2`). Full empirical findings + run-it procedure in `.planning/phases/03-availability-rules/03-W0-05-SUMMARY.md`.
 5. **PRD §8.3 amendment.** During ROADMAP revision, write the explicit amendment recording the framework constraint + Layer-2 promotion.
 
 ---
