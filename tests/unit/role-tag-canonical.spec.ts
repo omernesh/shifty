@@ -2,16 +2,19 @@
 // B1 fix — VALIDATION Wave 0 requires a separate tests/unit/ surface for the
 // role-tag kebab-case canonicalizer (D-13, ROST-07).
 //
-// These tests thinly delegate to app/plugins/shifty-plugin/src/helpers/role-tag.js
-// (the merged Phase-2 plugin — see .planning/phases/02-org-people/02-11-PLAN.md;
-// helper moved from shifty-roster as part of the plugin-registration hotfix).
+// These tests thinly delegate to tools/budibase-helpers/src/role-tag.js
+// (the post-pivot location — see .planning/phases/03-availability-rules/03-W0-03-PLAN.md;
+// the 4 pure-function helpers ported verbatim from the frozen Lowdefy-era snapshot at
+// legacy/shifty-handlers/helpers/, now bundled as the global `Shifty` for Budibase JS
+// code blocks. The legacy/ files remain on disk as historical record but are NOT the
+// source-of-truth for new code).
 //
 // Run: node --test --experimental-strip-types tests/unit/role-tag-canonical.spec.ts
 // Or via root package.json: npm run test:unit
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { canonicalizeRoleTag } from '../../legacy/shifty-handlers/helpers/role-tag.js';
+import { canonicalizeRoleTag } from '../../tools/budibase-helpers/src/role-tag.js';
 
 // ─── Basic lowercase kebab-case ───────────────────────────────────────────────
 test('role-tag: lowercase kebab-case proof — "Driving" → "driving"', () => {

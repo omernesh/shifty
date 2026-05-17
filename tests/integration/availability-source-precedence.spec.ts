@@ -44,7 +44,15 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { Client } from 'pg';
 import { randomUUID } from 'node:crypto';
-import { SOURCE_RANK } from '../../app/plugins/shifty-plugin/src/helpers/availability-source.js';
+// SOURCE_RANK is now sourced from tools/budibase-helpers/src/ (post-Lowdefy pivot,
+// per 03-W0-03-PLAN.md). The old path app/plugins/shifty-plugin/src/helpers/ is dead.
+// NOTE (W0-03 follow-up): the YAML-drift assertion at the bottom of this file still
+// references app/pages/my_availability.yaml, which is also gone (Lowdefy-era). That
+// drift check needs to be re-pointed to the Budibase Automation/query that embeds
+// the CASE expression once Phase 3 W2+ ports my_availability to Budibase. Until then
+// the SOURCE_RANK enum check is the active load-bearing assertion; the YAML check
+// will be reworked when its replacement surface lands.
+import { SOURCE_RANK } from '../../tools/budibase-helpers/src/availability-source.js';
 
 const PG_URL = process.env.PG_TEST_URL ?? 'postgres://shifts:changeme@localhost:5432/shifts';
 
