@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: milestone
 status: executing
-stopped_at: Completed 03-W0-05 — Wave 0 of Phase 03 done; ready for Wave 1
-last_updated: "2026-05-17T13:15:36.785Z"
+stopped_at: "Phase 3 Wave 0 COMPLETE (4 of 5 plans executed autonomously; W0-02 deferred for user Builder-UI click-through). 16 commits this run: 1 plan-set + 4 plan task-chains + 1 inaugural snapshot tarball + state recordings. BUDIBASE-CONVENTIONS.md §10 items #1 (helper bundling), #2 (CI gate), #4 (snapshot tooling) RESOLVED. §10 #3 (PRD §8.3 amendment) was already done at 06170d8 baseline. §10 #5 (tenantId field) blocked on user Builder UI work. Resume Wave 1 with: discuss-phase 3 (W1+ deferred areas), then plan-phase 3 W1+, then execute. Helper bundle at tools/budibase-helpers/helpers.bundle.js (1343 B, 40/40 tests). CI gate at tools/check-bb-queries.mjs (503 LOC, 23/23 tests, live API smoke green). Snapshot wrapper at tools/snapshot-budibase.ps1 (293 LOC, no PsExec needed). Inaugural snapshot tarball at budibase-exports/2026-05-17-w0-05-inaugural.tar.gz (1.5MB, SHA256 E7CA45BF...8E2)."
+last_updated: "2026-05-17T13:18:15.358Z"
 last_activity: 2026-05-17
 progress:
   total_phases: 8
@@ -156,7 +156,7 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-05-17T13:15:36.769Z
-Stopped at: Completed 03-W0-05 — Wave 0 of Phase 03 done; ready for Wave 1
-Resume file: None
+Last session: 2026-05-17T13:18:15.328Z
+Stopped at: Phase 3 Wave 0 COMPLETE (4 of 5 plans executed autonomously; W0-02 deferred for user Builder-UI click-through). 16 commits this run: 1 plan-set + 4 plan task-chains + 1 inaugural snapshot tarball + state recordings. BUDIBASE-CONVENTIONS.md §10 items #1 (helper bundling), #2 (CI gate), #4 (snapshot tooling) RESOLVED. §10 #3 (PRD §8.3 amendment) was already done at 06170d8 baseline. §10 #5 (tenantId field) blocked on user Builder UI work. Resume Wave 1 with: discuss-phase 3 (W1+ deferred areas), then plan-phase 3 W1+, then execute. Helper bundle at tools/budibase-helpers/helpers.bundle.js (1343 B, 40/40 tests). CI gate at tools/check-bb-queries.mjs (503 LOC, 23/23 tests, live API smoke green). Snapshot wrapper at tools/snapshot-budibase.ps1 (293 LOC, no PsExec needed). Inaugural snapshot tarball at budibase-exports/2026-05-17-w0-05-inaugural.tar.gz (1.5MB, SHA256 E7CA45BF...8E2).
+Resume file: .planning/phases/03-availability-rules/03-W0-05-SUMMARY.md
 Next action: in a new session post-/clear, run `/gsd-autonomous` to begin Phase 03 Wave 0.
