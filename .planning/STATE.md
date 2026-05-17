@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: milestone
-status: planning
-stopped_at: Phase 3 W0 context gathered (4 gray areas resolved); ready to plan W0 plans
-last_updated: "2026-05-17T12:09:29.287Z"
-last_activity: 2026-05-17 — stack-pivot planning landed (ROADMAP/PROJECT/PRD §8.3 amendment/BUDIBASE-CONVENTIONS.md/STATE)
+status: executing
+stopped_at: Completed 03-W0-05 — Wave 0 of Phase 03 done; ready for Wave 1
+last_updated: "2026-05-17T13:15:36.785Z"
+last_activity: 2026-05-17
 progress:
   total_phases: 8
-  completed_phases: 3
-  total_plans: 20
-  completed_plans: 20
-  percent: 38
+  completed_phases: 2
+  total_plans: 25
+  completed_plans: 24
+  percent: 25
 ---
 
 # Project State
@@ -26,12 +26,12 @@ See: .planning/PROJECT.md (updated 2026-05-12)
 ## Current Position
 
 Phase: 03 (availability-rules) — READY FOR AUTONOMOUS START (Wave 0)
-Plan: 0 of 9 (Wave 0 has 5 plans, Wave 1–4 has 4 plans)
-Status: Post-pivot planning complete; awaiting /gsd-autonomous invocation
-Last activity: 2026-05-17 — stack-pivot planning landed (ROADMAP/PROJECT/PRD §8.3 amendment/BUDIBASE-CONVENTIONS.md/STATE)
+Plan: 1 of 9 (Wave 0 has 5 plans, Wave 1–4 has 4 plans)
+Status: Ready to execute
+Last activity: 2026-05-17
 Next phase: 03 — Availability & Rules (executes on Budibase 3.38.4)
 
-Progress: 03-W0-01 → 03-W0-05 → 03-W1-01 → 03-W2-01 → 03-W3-01 → 03-W4-01
+Progress: [██████████] 96%
 
 ## Performance Metrics
 
@@ -65,6 +65,7 @@ Progress: 03-W0-01 → 03-W0-05 → 03-W1-01 → 03-W2-01 → 03-W3-01 → 03-W4
 | Phase 02-org-people P06 | 28 | - tasks | - files |
 | Phase 02-org-people P07 | 30 | 3 tasks | 3 files |
 | Phase 02-org-people P08 | 24 | - tasks | - files |
+| Phase 03-availability-rules PW0-05 | 26 | 4 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -127,6 +128,10 @@ Recent decisions affecting current work:
 - [Phase ?]: Plan 02-08: ROST-13 SLO interpretation = 'DB commit + result page within 10s; Resend dispatch async with poll'. Strict <10s/50rows impossible at Resend 2 req/s. Plan 10 Test A2 enforces dbCommitWall<2000ms / firstBatchWall<8000ms / totalWall<35000ms
 - [Phase ?]: Plan 02-08: Wizard step indicator uses Box+Tag (not Ant Steps) because blocks-antd Steps exposure unverified at write time; Tag is shipped per plan 04 usage
 - [Phase ?]: Plan 02-08: Two-stage canonicalization (Pitfall P2 belt-and-braces) — canonicalizeText runs in ParseCsvAndValidate (preview) AND in CommitRosterImport (DB write) so edited preview rows that skipped re-validation still canonicalize correctly before INSERT
+- [Phase ?]: Plan 03-W0-05: budi is NOT inside the budibase/apps:3.38.4 image — snapshot wrapper runs @budibase/cli@3.38.4 inside ephemeral node:22-alpine container attached to shifts-manager_default; budibase-proxy:10000 is in-network entry point
+- [Phase ?]: Plan 03-W0-05: PsExec NOT required for snapshot runs (docker run --rm against cached image works fine over plink); PsExec required only for one-time docker pull bootstrap — script detects not-cached case and prints recovery hint
+- [Phase ?]: Plan 03-W0-05: budi backups --export takes POSITIONAL filename (NOT -o flag); --env <envfile> mandatory in non-interactive use; wrapper synthesizes budi-compatible env on hpg5 per-run from existing .env
+- [Phase ?]: Plan 03-W0-05: pscp Windows-path quoting requires forward slashes (claude@hpg5:C:/path/file) — backslashes confuse colon-parsing for host:path; GNU tar needs --force-local when inspecting C:\... paths
 
 ### Pending Todos
 
@@ -151,7 +156,7 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-05-17T12:09:29.251Z
-Stopped at: Phase 3 W0 context gathered (4 gray areas resolved); ready to plan W0 plans
-Resume file: .planning/phases/03-availability-rules/03-CONTEXT.md
+Last session: 2026-05-17T13:15:36.769Z
+Stopped at: Completed 03-W0-05 — Wave 0 of Phase 03 done; ready for Wave 1
+Resume file: None
 Next action: in a new session post-/clear, run `/gsd-autonomous` to begin Phase 03 Wave 0.

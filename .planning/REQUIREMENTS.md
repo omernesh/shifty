@@ -189,7 +189,7 @@ Requirements for initial release. Each maps to roadmap phases via Traceability (
 
 ### Operations & Observability (PRD §8.4, §8.8)
 
-- [ ] **OPS-01**: Docker Compose stack includes services: `lowdefy`, `postgres`, `solver`, `cron`, `waha`, `migrate` (one-shot)
+- [x] **OPS-01**: Docker Compose stack includes services: `lowdefy`, `postgres`, `solver`, `cron`, `waha`, `migrate` (one-shot)
 - [x] **OPS-02**: `migrate/migrate` (golang-migrate) compose service runs `db/migrations/0001-0010` in order; idempotent re-runs via `schema_migrations` table
 - [x] **OPS-03**: Nightly `pg_dump --format=custom` to `C:\shifts-manager\backups\pg\YYYY-MM-DD.dump` via Windows Task Scheduler; retention 14 daily + 8 weekly + 6 monthly
 - [x] **OPS-04**: Off-host nightly copy to neshernas (192.168.1.121) or S3-compatible bucket via `rclone`/`restic`
@@ -412,7 +412,7 @@ Each v1 requirement maps to exactly one phase. Phase assignment follows the rule
 | SEC-08 | Phase 1 (Foundations) | Pending |
 | SEC-09 | Phase 1 (Foundations) | Complete |
 | SEC-10 | Phase 1 (Foundations) | Complete |
-| OPS-01 | Phase 1 (Foundations) | Pending |
+| OPS-01 | Phase 1 (Foundations) | Complete |
 | OPS-02 | Phase 1 (Foundations) | Complete |
 | OPS-03 | Phase 1 (Foundations) | Complete |
 | OPS-04 | Phase 1 (Foundations) | Complete |
