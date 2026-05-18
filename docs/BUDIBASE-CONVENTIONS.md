@@ -1,20 +1,24 @@
 # Budibase Conventions
 
-> **Status:** active as of 2026-05-17 (post-Lowdefy pivot).
+> **Status:** active as of 2026-05-18 (post-Lowdefy pivot, updated post-Internal-API spike `55f657b`).
 > **Scope:** how we work with Budibase 3.38.4 on hpg5. Load-bearing for all Phase 03+ planning.
-> **Related:** [CLAUDE.md](../CLAUDE.md) (deployment + ops), [PRD.md](PRD.md) (product spec — §8.3 has an amendment, see below).
+> **Related:** [CLAUDE.md](../CLAUDE.md) (deployment + ops), [PRD.md](PRD.md) (product spec — §8.3 has an amendment, see below), [tools/budibase-cli/SPIKE-FINDINGS.md](../tools/budibase-cli/SPIKE-FINDINGS.md) (headless authoring reverse-engineering).
 
 ## 1. Source-of-truth boundaries
 
 | Lives in | What | Why |
 |---|---|---|
-| **Git** | `db/migrations/*.sql`, `docker-compose.yml`, `.env.example`, `legacy/`, `tests/`, `docs/`, `tools/check-bb-queries.mjs` (Layer-2 gate) | Reviewable, diffable, version-controlled |
-| **CouchDB** (Builder UI) | All Budibase apps: screens, queries, automations, role/permission config, user-table extensions | Framework-mandated; CE has no "config as code" option |
-| **PR-time snapshots** | `budibase-exports/YYYY-MM-DD-<feature>.tar.gz` from Builder UI → Export | PR audit trail of WHICH app snapshot a change ships at — diffs are noisy (CouchDB `_rev` IDs) but reviewer can at least bisect against. **Not** the source of truth, but the record. |
+| **Git** | `db/migrations/*.sql`, `docker-compose.yml`, `.env.example`, `legacy/`, `tests/`, `docs/`, `tools/check-bb-queries.mjs` (Layer-2 gate), `tools/budibase-cli/` (Internal API client for headless work) | Reviewable, diffable, version-controlled |
+| **CouchDB** (Builder UI runtime store) | All Budibase apps at runtime: screens, queries, automations, role/permission config, user-table extensions | Framework-mandated; CouchDB is where Budibase runs queries against |
+| **PR-time snapshots** | `budibase-exports/YYYY-MM-DD-<feature>.tar.gz` from `tools/snapshot-budibase.ps1` (wraps `budi backups --export`) | PR audit trail; not source of truth, just the record. |
 | **Nightly backups** to NAS | Whole-instance `budi backups --export` to `\\192.168.1.121\backups\shifty\budibase\` | Disaster recovery; CouchDB volume + MinIO volume + datasource config in one tarball |
 
 **Implications:**
-- "Where does the UI change live?" — Builder UI (CouchDB). PRs cannot show diffs for UI work; they describe it in prose with screenshot/wireframe references.
+- **Builder UI is the canonical authoring surface for interactive work** — drag-drop screen design, automation graph editing, etc. CouchDB stores the result.
+- **The Internal API at `/api/screens`, `/api/automations`, `/api/queries`, `/api/datasources`, `/api/global/configs/*` exposes the same JSON shape the Builder UI reads/writes** — proven by the 2026-05-17 spike (see [tools/budibase-cli/SPIKE-FINDINGS.md](../tools/budibase-cli/SPIKE-FINDINGS.md)). Headless authoring works via cookie auth. So:
+  - For high-touch design work, use the Builder UI.
+  - For repeatable / scripted work (CI seed data, mass mutation, config-as-code workflows), use `tools/budibase-cli/`. The cookie-auth path supports CRUD on every resource type.
+- "Where does the UI change live?" — at runtime, CouchDB. At PR time, *either* a prose description + snapshot tarball, *or* (preferred when feasible) git-tracked JSON applied via the CLI. The choice depends on the phase plan.
 - "Where does the schema change live?" — `db/migrations/0015+_*.sql`. PRs CAN show full diffs. This is where review + lint apply.
 - "Where does business logic live?" — see §4.
 
@@ -58,8 +62,10 @@ Budibase has no built-in multi-tenant SaaS model — its "tenants" concept is fo
 | Postgres schema | `db/migrations/00NN_<name>.up.sql` (golang-migrate, numbered, idempotent) | Applied via `docker compose run --rm migrate` |
 | Pure-function helpers (canonicalize, palette, role-tag, availability-source) | `legacy/shifty-handlers/helpers/` — PORT VERBATIM to a new git-tracked location once we wire them into a Budibase JS code block (TBD pattern in Phase 03 Wave 0) | 26 unit tests stay; framework-agnostic |
 | Mutation logic | Budibase Automations (declarative steps) or JS code blocks (sandboxed) | NOT custom Postgres functions; NOT custom Budibase plugins (per "minimum custom code" principle) |
-| Read queries | Builder UI → Queries (PostgreSQL data source). MUST include `WHERE tenant_id = '{{ Current User.tenantId }}'::uuid` on domain tables — CI gate enforces. |
-| Screens | Builder UI (CouchDB). Described in prose in phase plans; snapshot tarball at PR time. |
+| Read queries | Authored in Builder UI → Queries (PostgreSQL data source) OR via `tools/budibase-cli/` for scripted/repeatable creation. MUST include `WHERE tenant_id = '{{ Current User.tenantId }}'::uuid` on domain tables — CI gate enforces, regardless of which surface authored the query. |
+| Screens | Authored in Builder UI for interactive design; mass mutation / CI seed via `tools/budibase-cli/` (`POST /api/screens`). PR shape is prose + snapshot tarball today; future config-as-code option via git-tracked JSON applied through the CLI. |
+| Automations | Same as screens — Builder UI for interactive authoring, `tools/budibase-cli/` (`POST /api/automations`) for scripted creation. |
+| User-schema customizations (e.g., `tenantId` field) | `tools/budibase-cli/` against `/api/global/configs/*`. Builder UI also works but the API path is reproducible / git-trackable. |
 | Auth | Budibase built-in (email/password or SSO). Email magic-link via Auth.js EmailProvider is REPLACED by Budibase's own auth flow. RTL email template from `legacy/dispatch/resend.js` may still be useful for application-level email (invite emails, schedule notifications) but not for auth. |
 | Notifications dispatcher | Budibase Automations with HTTP step → Resend / WAHA / Web Push (these stay as external services; only the orchestration changes) |
 | Tests — unit | Existing Vitest setup against pure-function helpers, unchanged |
@@ -149,9 +155,13 @@ curl -H "x-budibase-api-key: $env:BUDIBASE_API_KEY" `
 
 1. ~~**JS code block + helper integration pattern.** How does a Budibase JS automation/code block consume `legacy/shifty-handlers/helpers/canonicalize.js`? Bundle into a single file? Inline copy? Custom NPM package committed to the snapshot tarball? Spike during Phase 03 Wave 0.~~ **RESOLVED (2026-05-17, plan `03-W0-03`).** The 4 pure-function helpers are now bundled into a single IIFE at `tools/budibase-helpers/helpers.bundle.js` (~1.3 KB minified) exposing global `Shifty`. Builder UI JS code blocks consume the bundle via the **paste-as-fixture** pattern — see `tools/budibase-helpers/README.md` and `.planning/phases/03-availability-rules/03-W0-03-SUMMARY.md` for the full surface contract, consumption pattern, and update workflow.
 2. ~~**Layer-2 CI gate implementation.** Write `tools/check-bb-queries.mjs` — pulls queries via Public API, parses SQL, asserts the canonical filter pattern on every domain-table query. Whitelist mechanism for legitimate exceptions (e.g., `app_user` provisioning).~~ **RESOLVED (2026-05-17, plan `03-W0-04`).** `tools/check-bb-queries.mjs` (503 lines) fetches queries via `POST /api/public/v1/queries/search`, validates each SQL body against the canonical filter pattern `WHERE tenant_id = '{{ Current User.tenantId }}'::uuid`, and exempts query names listed in the inline `EXEMPT_QUERIES` allowlist (seeded with the two W0-02 invite-redemption queries per D-03). Domain tables are enumerated dynamically from `db/migrations/*.up.sql`. A `--self-test` mode runs offline and proves the validator is alive; `--list-domain-tables` is a debug helper. Wired into npm scripts: `test:check-bb-queries`, `test:check-bb-queries-selftest`, `test:check-bb-queries-unit`. **Run-it-manually procedure** documented in `.planning/phases/03-availability-rules/03-W0-04-SUMMARY.md` (no `.github/workflows/` or husky in this repo yet — gate is opt-in until a future CI provider is wired).
-3. **Budibase user-schema custom field flow.** Verify the Builder UI exposes adding a `tenantId` custom user field. If not, alternative: store tenant_id on the `app_user` table and JOIN per query (heavier but framework-aligned).
+3. ~~**Budibase user-schema custom field flow.** Verify the Builder UI exposes adding a `tenantId` custom user field. If not, alternative: store tenant_id on the `app_user` table and JOIN per query (heavier but framework-aligned).~~ **SOLVABLE via Internal API as of spike `55f657b`** — see `tools/budibase-cli/SPIKE-FINDINGS.md`. The user-schema customization mechanism lives at `/api/global/configs/*`; mutating it via cookie auth is the canonical path. Will be exercised + closed by plan `03-W0-02` (rewritten 2026-05-18 as `autonomous: true`).
 4. ~~**PR snapshot tooling.** Helper script (`tools/snapshot-budibase.ps1`) that calls `budi backups --export` and commits the tarball — used at PR open time.~~ **RESOLVED (2026-05-17, plan `03-W0-05`).** `tools/snapshot-budibase.ps1` (293 lines) is a PowerShell wrapper that SSHes to hpg5, runs `@budibase/cli@3.38.4` inside an ephemeral `node:22-alpine` container attached to `shifts-manager_default` (the apps image does NOT ship `budi` — empirical finding documented in the script header), copies the tarball back via `pscp`, atomically places it at `budibase-exports/YYYY-MM-DD-<slug>.tar.gz`, and prints the suggested commit message. Idempotent (re-running overwrites cleanly). `.gitignore` excludes `budibase-exports/*.tmp` + `*.partial` but tracks the finalized `.tar.gz`. PsExec is NOT required for snapshot runs (only for one-time `docker pull node:22-alpine` bootstrap — script detects and prints a recovery hint). First inaugural snapshot: `budibase-exports/2026-05-17-w0-05-inaugural.tar.gz` (1,564,718 bytes; SHA256 `E7CA45BF4129A11D25E0E651EC7BABF492ED63319C77260EDAB84818418D08E2`). Full empirical findings + run-it procedure in `.planning/phases/03-availability-rules/03-W0-05-SUMMARY.md`.
-5. **PRD §8.3 amendment.** During ROADMAP revision, write the explicit amendment recording the framework constraint + Layer-2 promotion.
+5. ~~**PRD §8.3 amendment.** During ROADMAP revision, write the explicit amendment recording the framework constraint + Layer-2 promotion.~~ **RESOLVED (2026-05-17, plan `03-W0-01`).** §8.3 amendment was already complete at the post-pivot baseline (`06170d8`); `03-W0-01` confirmed presence of checkpoints (a)–(f) — Layer 5 inactive for Budibase clients + 4 concrete blockers, Layer 5 preserved for FastAPI solver, Layer 2 promoted to top defense, CI gate named as enforcement, "release-blocking" rule restated against effective layer map, and explicit cross-link to §2 above. See `.planning/phases/03-availability-rules/03-W0-01-SUMMARY.md`.
+
+---
+
+**Wave 0 status (2026-05-18):** All 5 items above are resolved or solvable. Phase 3 W1+ planning can begin.
 
 ---
 *Conventions doc written 2026-05-17 after stack pivot. Update as Phase 03 Wave 0 resolves open items.*
