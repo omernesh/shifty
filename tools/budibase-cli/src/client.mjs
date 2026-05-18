@@ -48,7 +48,14 @@ export class BudibaseClient {
     });
     if (r.status < 200 || r.status >= 300) {
       const txt = await r.text().catch(() => '<no body>');
-      throw new Error(`${method} ${path}: HTTP ${r.status} — ${txt.slice(0, 300)}`);
+      // WR-03 fix (2026-05-18): keep the FULL body on the Error object so
+      // structured-logging callers can capture the actual cause string.
+      // The message field stays truncated (300 chars) to keep terminal
+      // output legible; bodyText preserves the entire response.
+      const err = new Error(`${method} ${path}: HTTP ${r.status} — ${txt.slice(0, 300)}`);
+      err.status = r.status;
+      err.bodyText = txt;
+      throw err;
     }
     const ct = r.headers.get('content-type') || '';
     return ct.includes('application/json') ? r.json() : r.text();
