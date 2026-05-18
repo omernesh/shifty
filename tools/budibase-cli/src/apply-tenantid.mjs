@@ -23,13 +23,26 @@ const HW = { Cookie: cookieHeader, 'Content-Type': 'application/json' };
 // Note (CR-03 fix): APP_URL/APP_ID/PG_DS were used by the removed step-4
 // binding test. They are no longer referenced by this script.
 
-// 1) Find the admin user (matches BB_EMAIL)
+// 1) Find the admin user (matches BB_EMAIL) — list endpoint may return a
+//    summary projection, so we use it only to discover the _id, then fetch
+//    the canonical full doc via GET /api/global/users/<id> (WR-04 fix).
 const adminEmail = process.env.BB_EMAIL;
 const usersResp = await fetch(`${WORKER}/api/global/users`, { headers: HW });
 if (usersResp.status !== 200) { console.error(`[1] list users HTTP ${usersResp.status}`); process.exit(2); }
 const users = await usersResp.json();
-const me = users.find(u => u.email === adminEmail);
-if (!me) { console.error(`[1] admin user with email ${adminEmail} not found`); process.exit(2); }
+const meStub = users.find(u => u.email === adminEmail);
+if (!meStub) { console.error(`[1] admin user with email ${adminEmail} not found`); process.exit(2); }
+
+// Fetch the canonical full doc — the list endpoint may omit fields by
+// design. Spreading a partial doc into the PATCH body would clobber any
+// list-omitted field with `undefined` and effectively delete it on the
+// server.
+const fullUserResp = await fetch(`${WORKER}/api/global/users/${meStub._id}`, { headers: HW });
+if (fullUserResp.status !== 200) {
+  console.error(`[1] GET full user HTTP ${fullUserResp.status} for ${meStub._id}`);
+  process.exit(2);
+}
+const me = await fullUserResp.json();
 console.log(`[1] admin user: ${me._id}, rev=${me._rev}, current shiftyTenantId=${JSON.stringify(me.shiftyTenantId)}`);
 
 // 2) Idempotency check
@@ -37,7 +50,11 @@ let patchedUser = me;
 if (me.shiftyTenantId === SENTINEL_TENANT) {
   console.log(`[2] idempotent — shiftyTenantId already = ${SENTINEL_TENANT}, skipping PATCH`);
 } else {
-  // Budibase user-patch shape: POST /api/global/users with the full updated doc body
+  // Budibase user-patch shape: POST /api/global/users with the full updated
+  // doc body. WR-04 (2026-05-18): we now spread the canonical full doc
+  // fetched in step 1 above (NOT the list-endpoint projection), so this
+  // round-trip preserves every server-side field rather than the subset
+  // the list happened to project.
   const patch = { ...me, shiftyTenantId: SENTINEL_TENANT };
   const r = await fetch(`${WORKER}/api/global/users`, {
     method: 'POST', headers: HW,
