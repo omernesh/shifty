@@ -68,18 +68,51 @@ const MIGRATIONS_DIR = join(REPO_ROOT, 'db', 'migrations');
 //   - allows whitespace variance around `=`, around `::`, around `{{ }}`
 //   - case-insensitive
 //   - does NOT require WHERE on the same line (placement in an AND-chain is fine)
+//
+// ASSUMPTION (WR-07 note, 2026-05-18):
+//   Queries MUST use the canonical literal binding `{{ Current User.shiftyTenantId }}`.
+//   The gate does NOT recognise template-constructed bindings such as
+//   `{{ "Current" + " User.shiftyTenantId" }}` — those would still resolve in
+//   Budibase's Handlebars engine but the regex won't match, so the gate flags
+//   them as missing the filter. This is intentional: gate authors should use
+//   the canonical form, full stop. Document the canonical form in
+//   docs/BUDIBASE-CONVENTIONS.md §3 and reject PRs that template-construct
+//   the binding name in review.
 export const TENANT_FILTER_PATTERN =
   /\b(?:\w+\.)?tenant_id\s*=\s*'\s*\{\{\s*Current\s+User\.shiftyTenantId\s*\}\}\s*'\s*::\s*uuid/i;
 
 // Per D-03: inline whitelist. PR-visible diff is the audit trail.
+//
+// WR-01 fix (2026-05-18): each exemption is scoped to an (app, name) tuple.
+// Previously this list was a flat array of bare query names; a malicious
+// clone of an exempt query in a second Budibase app would silently inherit
+// exempt status. Now an exemption must specify both the Builder app ID and
+// the exact query name.
+//
 // SEED EXEMPTIONS (from W0-02 invite-redemption Automation):
 //   resolveInviteCode_GetTenantId   — CANNOT filter on tenant_id (the query RESOLVES it from invite code)
 //   insertAppUserOnInviteRedemption — CREATES the tenant-bound row; no filter applicable
+// The app ID below pins these to the canonical dev workspace; clones in
+// other apps must add their own exemption row with explicit reason.
 // Add new exemptions one line at a time with a 1-line reason comment.
 export const EXEMPT_QUERIES = [
-  'resolveInviteCode_GetTenantId',     // W0-02: resolves tenant_id from invite code (CANNOT filter)
-  'insertAppUserOnInviteRedemption',   // W0-02: creates the tenant-bound row (no filter applicable)
+  { app: 'app_dev_169e766804934fd18f2e20200d8fd22d', name: 'resolveInviteCode_GetTenantId' },     // W0-02: resolves tenant_id from invite code (CANNOT filter)
+  { app: 'app_dev_169e766804934fd18f2e20200d8fd22d', name: 'insertAppUserOnInviteRedemption' },   // W0-02: creates the tenant-bound row (no filter applicable)
 ];
+
+/**
+ * Decide whether a (appId, queryName) tuple matches an entry in EXEMPT_QUERIES.
+ * Exported so the unit tests can exercise the matcher directly.
+ *
+ * @param {string} appId
+ * @param {string} queryName
+ * @param {Array<{app: string, name: string}>} exemptList
+ * @returns {boolean}
+ */
+export function isExempt(appId, queryName, exemptList) {
+  if (!Array.isArray(exemptList)) return false;
+  return exemptList.some((e) => e && e.app === appId && e.name === queryName);
+}
 
 // Framework / internal tables that should NEVER be gated. These are NOT business
 // data — `schema_migrations` is golang-migrate's own state; the Auth.js tables
@@ -196,18 +229,31 @@ export function getDomainTables(migrationsDir = MIGRATIONS_DIR) {
 /**
  * Decide whether a single query should be flagged as a Layer-2 violation.
  *
- * @param {{ name: string, fields?: { sql?: string }, _id?: string }} query
+ * @param {{ name: string, fields?: { sql?: string }, _id?: string, transformer?: string }} query
  * @param {Set<string>} domainTables
- * @param {Set<string>} exemptSet
+ * @param {Array<{app: string, name: string}>} exemptList — tuple-scoped exemptions
+ * @param {string} [appId] — Builder app ID owning this query (used for exemption matching).
+ *                          Defaults to '' so unit tests can still pass a query-name-only Set
+ *                          via the legacy code path (see backwards-compat shim below).
  * @returns {{ violation: boolean, reason?: string, table?: string }}
  */
-export function validateQuery(query, domainTables, exemptSet) {
+export function validateQuery(query, domainTables, exemptList, appId = '') {
   if (!query || typeof query !== 'object') {
     return { violation: false, reason: 'not a query object' };
   }
 
-  // Skip exempt queries by exact name match
-  if (exemptSet.has(query.name)) {
+  // Backwards-compat: tests historically passed a `Set` of query names as the
+  // third argument. Translate that into a per-app exemption list keyed on the
+  // current appId so existing tests keep their semantics.
+  let exemptions;
+  if (exemptList instanceof Set) {
+    exemptions = Array.from(exemptList).map((name) => ({ app: appId, name }));
+  } else {
+    exemptions = exemptList;
+  }
+
+  // Skip exempt queries — tuple match on (appId, query.name)
+  if (isExempt(appId, query.name, exemptions)) {
     return { violation: false, reason: 'exempt' };
   }
 
@@ -228,6 +274,25 @@ export function validateQuery(query, domainTables, exemptSet) {
 
   if (referenced.length === 0) {
     return { violation: false, reason: 'no domain table referenced' };
+  }
+
+  // WR-07 fix (2026-05-18): a non-default transformer can post-process row
+  // shape and bypass tenant filtering at the JS layer (Budibase supports a
+  // JS post-processor on queries). The canonical default is "return data"
+  // (sometimes serialized as the empty string). Anything else demands an
+  // explicit exemption with rationale.
+  if (typeof query.transformer === 'string') {
+    const t = query.transformer.trim();
+    if (t !== '' && t !== 'return data') {
+      return {
+        violation: true,
+        reason:
+          `query has a non-trivial transformer (${query.transformer.length} chars) — manual review required; ` +
+          `transformers can mutate row shape and bypass tenant filtering. ` +
+          `Add an EXEMPT_QUERIES entry with rationale if intended.`,
+        table: referenced[0],
+      };
+    }
   }
 
   // Check the canonical filter pattern
@@ -375,7 +440,9 @@ async function main_default() {
   }
 
   const domainTables = getDomainTables();
-  const exemptSet = new Set(EXEMPT_QUERIES);
+  // WR-01: exemptions are (app, name) tuples now. Pass the raw array through
+  // to validateQuery, which performs tuple matching against the current appId.
+  const exemptList = EXEMPT_QUERIES;
 
   let totalQueries = 0;
   let totalValidated = 0;
@@ -401,7 +468,7 @@ async function main_default() {
 
     for (const q of queries) {
       totalQueries++;
-      const result = validateQuery(q, domainTables, exemptSet);
+      const result = validateQuery(q, domainTables, exemptList, appId);
       if (result.reason === 'exempt') {
         totalExempt++;
         continue;
@@ -453,7 +520,10 @@ async function main_default() {
 
 function main_selfTest() {
   const domainTables = getDomainTables();
-  const exemptSet = new Set(EXEMPT_QUERIES);
+  // WR-01: tuple-scoped exemptions. Use the canonical dev app ID so the
+  // seed exemption row matches the exempt-name case below.
+  const SELFTEST_APP_ID = 'app_dev_169e766804934fd18f2e20200d8fd22d';
+  const exemptList = EXEMPT_QUERIES;
 
   const cases = [
     {
@@ -475,12 +545,25 @@ function main_selfTest() {
       expectViolation: false,
     },
     {
-      label: 'exempt — known exempt name beats validation',
+      label: 'exempt — known (app, name) tuple beats validation',
       query: {
         name: 'resolveInviteCode_GetTenantId',
         fields: { sql: 'SELECT id FROM soldier' }, // would be bad but exempt
       },
       expectViolation: false,
+    },
+    {
+      // WR-07 selftest: non-default transformer must trigger a violation
+      // even when the SQL itself has the canonical filter.
+      label: 'transformer — non-default transformer flagged (WR-07)',
+      query: {
+        name: 'SELFTEST_transformer_bad',
+        fields: {
+          sql: "SELECT id FROM soldier WHERE tenant_id = '{{ Current User.shiftyTenantId }}'::uuid",
+        },
+        transformer: 'return data.map(r => ({ ...r, tenant_id: "leaked" }))',
+      },
+      expectViolation: true,
     },
   ];
 
@@ -488,7 +571,7 @@ function main_selfTest() {
   let failed = 0;
 
   for (const c of cases) {
-    const result = validateQuery(c.query, domainTables, exemptSet);
+    const result = validateQuery(c.query, domainTables, exemptList, SELFTEST_APP_ID);
     const actual = !!result.violation;
     if (actual === c.expectViolation) {
       console.log(`  PASS: ${c.label}`);

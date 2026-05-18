@@ -21,13 +21,49 @@ import {
   validateQuery,
   TENANT_FILTER_PATTERN,
   EXEMPT_QUERIES,
+  isExempt,
 } from '../check-bb-queries.mjs';
 
 // ──────────────── EXEMPT_QUERIES ────────────────
 
 test('EXEMPT_QUERIES contains the two W0-02 invite-redemption query names', () => {
-  assert.ok(EXEMPT_QUERIES.includes('resolveInviteCode_GetTenantId'));
-  assert.ok(EXEMPT_QUERIES.includes('insertAppUserOnInviteRedemption'));
+  // WR-01 (2026-05-18): exemptions are now (app, name) tuples — match by .name
+  // and assert the canonical dev app is the .app scope.
+  const names = EXEMPT_QUERIES.map((e) => e.name);
+  assert.ok(names.includes('resolveInviteCode_GetTenantId'));
+  assert.ok(names.includes('insertAppUserOnInviteRedemption'));
+  for (const e of EXEMPT_QUERIES) {
+    assert.ok(typeof e.app === 'string' && e.app.length > 0, `exemption ${JSON.stringify(e)} must have .app`);
+  }
+});
+
+// ──────────────── isExempt() ────────────────
+
+test('isExempt matches on exact (app, name) tuple', () => {
+  const list = [
+    { app: 'app_A', name: 'resolveInviteCode_GetTenantId' },
+    { app: 'app_A', name: 'insertAppUserOnInviteRedemption' },
+  ];
+  assert.strictEqual(isExempt('app_A', 'resolveInviteCode_GetTenantId', list), true);
+  assert.strictEqual(isExempt('app_A', 'insertAppUserOnInviteRedemption', list), true);
+});
+
+test('isExempt does NOT match across apps (name collision in a different app)', () => {
+  // The WR-01 scenario: a clone in app_B with the same name must not inherit
+  // exempt status from app_A.
+  const list = [{ app: 'app_A', name: 'resolveInviteCode_GetTenantId' }];
+  assert.strictEqual(isExempt('app_B', 'resolveInviteCode_GetTenantId', list), false);
+});
+
+test('isExempt does NOT match on bare name match alone', () => {
+  const list = [{ app: 'app_A', name: 'q1' }];
+  assert.strictEqual(isExempt('', 'q1', list), false);
+});
+
+test('isExempt handles a malformed exempt list gracefully', () => {
+  assert.strictEqual(isExempt('app_A', 'q1', null), false);
+  assert.strictEqual(isExempt('app_A', 'q1', undefined), false);
+  assert.strictEqual(isExempt('app_A', 'q1', 'not-an-array'), false);
 });
 
 // ──────────────── TENANT_FILTER_PATTERN regex ────────────────
@@ -249,4 +285,97 @@ test('validateQuery gracefully handles a malformed query object', () => {
   assert.strictEqual(validateQuery(null, DOMAIN, EXEMPT).violation, false);
   assert.strictEqual(validateQuery(undefined, DOMAIN, EXEMPT).violation, false);
   assert.strictEqual(validateQuery('string', DOMAIN, EXEMPT).violation, false);
+});
+
+// ──────────────── validateQuery — WR-07 transformer check ────────────────
+
+test('validateQuery flags a non-default transformer even with the canonical filter (WR-07)', () => {
+  const r = validateQuery(
+    {
+      name: 'transformerBad',
+      fields: { sql: "SELECT id FROM soldier WHERE tenant_id = '{{ Current User.shiftyTenantId }}'::uuid" },
+      transformer: 'return data.map(r => ({ ...r, tenant_id: "leaked" }))',
+    },
+    DOMAIN, EXEMPT,
+  );
+  assert.strictEqual(r.violation, true);
+  assert.match(r.reason, /non-trivial transformer/);
+});
+
+test('validateQuery accepts the canonical default transformer ("return data") (WR-07)', () => {
+  const r = validateQuery(
+    {
+      name: 'transformerDefault',
+      fields: { sql: "SELECT id FROM soldier WHERE tenant_id = '{{ Current User.shiftyTenantId }}'::uuid" },
+      transformer: 'return data',
+    },
+    DOMAIN, EXEMPT,
+  );
+  assert.strictEqual(r.violation, false);
+});
+
+test('validateQuery accepts an empty-string transformer as default (WR-07)', () => {
+  const r = validateQuery(
+    {
+      name: 'transformerEmpty',
+      fields: { sql: "SELECT id FROM soldier WHERE tenant_id = '{{ Current User.shiftyTenantId }}'::uuid" },
+      transformer: '',
+    },
+    DOMAIN, EXEMPT,
+  );
+  assert.strictEqual(r.violation, false);
+});
+
+test('validateQuery accepts a "return data" transformer with surrounding whitespace (WR-07)', () => {
+  const r = validateQuery(
+    {
+      name: 'transformerPadded',
+      fields: { sql: "SELECT id FROM soldier WHERE tenant_id = '{{ Current User.shiftyTenantId }}'::uuid" },
+      transformer: '  return data  \n',
+    },
+    DOMAIN, EXEMPT,
+  );
+  assert.strictEqual(r.violation, false);
+});
+
+test('validateQuery does NOT trip the transformer check when SQL has no domain table (WR-07)', () => {
+  // Transformer-only queries that don't touch domain tables (e.g., REST
+  // datasource glue) should still skip via the "no domain table" path.
+  const r = validateQuery(
+    {
+      name: 'transformerNonDomain',
+      fields: { sql: 'SELECT NOW()' },
+      transformer: 'return data.map(r => r)',
+    },
+    DOMAIN, EXEMPT,
+  );
+  assert.strictEqual(r.violation, false);
+  assert.match(r.reason, /no domain table referenced/);
+});
+
+// ──────────────── validateQuery — WR-01 (app, name) tuple scoping ────────────────
+
+test('validateQuery exempts only when appId matches the exemption tuple (WR-01)', () => {
+  const tupleList = [{ app: 'app_A', name: 'resolveInviteCode_GetTenantId' }];
+  const goodSqlForExemptName = 'SELECT tenant_id FROM invite_code WHERE code = {{ params.code }}';
+
+  // Same app → exempt
+  const inApp = validateQuery(
+    { name: 'resolveInviteCode_GetTenantId', fields: { sql: goodSqlForExemptName } },
+    new Set(['invite_code']),
+    tupleList,
+    'app_A',
+  );
+  assert.strictEqual(inApp.violation, false);
+  assert.strictEqual(inApp.reason, 'exempt');
+
+  // Different app → NOT exempt (must validate against the regular rules)
+  const otherApp = validateQuery(
+    { name: 'resolveInviteCode_GetTenantId', fields: { sql: 'SELECT * FROM soldier' } },
+    DOMAIN,
+    tupleList,
+    'app_B',
+  );
+  assert.strictEqual(otherApp.violation, true);
+  assert.match(otherApp.reason, /missing tenant_id filter/);
 });
