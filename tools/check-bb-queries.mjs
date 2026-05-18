@@ -44,7 +44,7 @@
 //   2  — configuration error (API key rejected, etc.)
 
 import { readFileSync, readdirSync, existsSync } from 'fs';
-import { join, dirname } from 'path';
+import { join, dirname, resolve as resolvePath } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -147,15 +147,21 @@ const DEFAULT_API_URL = 'http://hpg5:8080';
 const REQUEST_TIMEOUT_MS = 15000;
 
 // CLI dispatch (gated so unit tests can `import` this module without executing main).
-// Windows note: `import.meta.url` uses `file:///C:/...` with URL-encoded spaces
-// (`%20`); `process.argv[1]` uses native backslashes and raw spaces. Decode and
-// normalize both before comparing suffixes.
+// WR-09 fix (2026-05-18): use exact resolved-path equality (Windows path is
+// case-insensitive). Replaces the prior endsWith heuristic which could
+// false-positive on suffix-matching siblings (e.g., `check-bb-queries.mjs.bak`).
 function isMainModule() {
   if (!process.argv[1]) return false;
-  const norm = (p) => decodeURIComponent(p).replace(/\\/g, '/').toLowerCase();
-  const metaPath = norm(import.meta.url.replace(/^file:\/\/\//, '').replace(/^file:\/\//, ''));
-  const argPath = norm(process.argv[1]);
-  return metaPath.endsWith(argPath) || argPath.endsWith(metaPath.replace(/^\/+/, ''));
+  // import.meta.url is always a file:// URL; fileURLToPath handles Windows %20
+  // decoding + drive-letter normalisation. Resolve both paths so relative
+  // process.argv[1] (e.g. `tools/check-bb-queries.mjs`) is compared against an
+  // absolute import.meta path on equal footing.
+  const metaPath = resolvePath(fileURLToPath(import.meta.url));
+  const argPath = resolvePath(process.argv[1]);
+  // Case-insensitive comparison because Windows is case-insensitive at the FS
+  // level and macOS HFS+ is too by default. Linux is case-sensitive but the
+  // path equality still holds.
+  return metaPath.toLowerCase() === argPath.toLowerCase();
 }
 
 if (isMainModule()) {
