@@ -1,0 +1,25 @@
+{
+  "name": "shift-slot-list",
+  "datasourceId": "datasource_plus_e5b3191da9eb4cb8854252f16a15367a",
+  "queryVerb": "read",
+  "fields": {
+    "sql": "SELECT id, name, start_time, end_time, headcount, required_role_tags, min_seniority, team_id, display_order FROM shift_slot WHERE tenant_id = '{{ Current User.shiftyTenantId }}'::uuid AND team_id = :team_id::uuid ORDER BY display_order, name"
+  },
+  "parameters": [
+    { "name": "team_id", "default": "" }
+  ],
+  "schema": {
+    "id":                 { "type": "string",   "name": "id" },
+    "name":               { "type": "string",   "name": "name" },
+    "start_time":         { "type": "string",   "name": "start_time" },
+    "end_time":           { "type": "string",   "name": "end_time" },
+    "headcount":          { "type": "number",   "name": "headcount" },
+    "required_role_tags": { "type": "string",   "name": "required_role_tags" },
+    "min_seniority":      { "type": "number",   "name": "min_seniority" },
+    "team_id":            { "type": "string",   "name": "team_id" },
+    "display_order":      { "type": "number",   "name": "display_order" }
+  },
+  "transformer": "return data",
+  "readable": true,
+  "nullDefaultSupport": true
+}

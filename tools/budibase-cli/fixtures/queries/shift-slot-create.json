@@ -1,0 +1,24 @@
+{
+  "name": "shift-slot-create",
+  "datasourceId": "datasource_plus_e5b3191da9eb4cb8854252f16a15367a",
+  "queryVerb": "create",
+  "fields": {
+    "sql": "INSERT INTO shift_slot (tenant_id, team_id, name, start_time, end_time, headcount, required_role_tags, min_seniority, display_order) VALUES ('{{ Current User.shiftyTenantId }}'::uuid, :team_id::uuid, :name, :start_time::time, :end_time::time, :headcount::smallint, string_to_array(NULLIF(:required_role_tags, ''), ',')::text[], NULLIF(:min_seniority, '')::smallint, COALESCE(NULLIF(:display_order, '')::smallint, 0)) RETURNING id"
+  },
+  "parameters": [
+    { "name": "team_id",            "default": "" },
+    { "name": "name",               "default": "" },
+    { "name": "start_time",         "default": "" },
+    { "name": "end_time",           "default": "" },
+    { "name": "headcount",          "default": "1" },
+    { "name": "required_role_tags", "default": "" },
+    { "name": "min_seniority",      "default": "" },
+    { "name": "display_order",      "default": "0" }
+  ],
+  "schema": {
+    "id": { "type": "string", "name": "id" }
+  },
+  "transformer": "return data",
+  "readable": true,
+  "nullDefaultSupport": true
+}

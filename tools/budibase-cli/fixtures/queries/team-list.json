@@ -1,0 +1,16 @@
+{
+  "name": "team-list",
+  "datasourceId": "datasource_plus_e5b3191da9eb4cb8854252f16a15367a",
+  "queryVerb": "read",
+  "fields": {
+    "sql": "SELECT id, name FROM org_unit WHERE tenant_id = '{{ Current User.shiftyTenantId }}'::uuid AND kind = 'team' ORDER BY name"
+  },
+  "parameters": [],
+  "schema": {
+    "id":   { "type": "string", "name": "id" },
+    "name": { "type": "string", "name": "name" }
+  },
+  "transformer": "return data",
+  "readable": true,
+  "nullDefaultSupport": true
+}

@@ -1,0 +1,24 @@
+{
+  "name": "shift-slot-update",
+  "datasourceId": "datasource_plus_e5b3191da9eb4cb8854252f16a15367a",
+  "queryVerb": "update",
+  "fields": {
+    "sql": "UPDATE shift_slot SET name = :name, start_time = :start_time::time, end_time = :end_time::time, headcount = :headcount::smallint, required_role_tags = string_to_array(NULLIF(:required_role_tags, ''), ',')::text[], min_seniority = NULLIF(:min_seniority, '')::smallint, display_order = COALESCE(NULLIF(:display_order, '')::smallint, display_order), updated_at = now() WHERE id = :id::uuid AND tenant_id = '{{ Current User.shiftyTenantId }}'::uuid RETURNING id"
+  },
+  "parameters": [
+    { "name": "id",                 "default": "" },
+    { "name": "name",               "default": "" },
+    { "name": "start_time",         "default": "" },
+    { "name": "end_time",           "default": "" },
+    { "name": "headcount",          "default": "1" },
+    { "name": "required_role_tags", "default": "" },
+    { "name": "min_seniority",      "default": "" },
+    { "name": "display_order",      "default": "" }
+  ],
+  "schema": {
+    "id": { "type": "string", "name": "id" }
+  },
+  "transformer": "return data",
+  "readable": true,
+  "nullDefaultSupport": true
+}

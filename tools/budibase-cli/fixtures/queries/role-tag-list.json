@@ -1,0 +1,17 @@
+{
+  "name": "role-tag-list",
+  "datasourceId": "datasource_plus_e5b3191da9eb4cb8854252f16a15367a",
+  "queryVerb": "read",
+  "fields": {
+    "sql": "SELECT id, key, label FROM role_tag WHERE tenant_id = '{{ Current User.shiftyTenantId }}'::uuid ORDER BY key"
+  },
+  "parameters": [],
+  "schema": {
+    "id":    { "type": "string", "name": "id" },
+    "key":   { "type": "string", "name": "key" },
+    "label": { "type": "string", "name": "label" }
+  },
+  "transformer": "return data",
+  "readable": true,
+  "nullDefaultSupport": true
+}

@@ -98,6 +98,7 @@ export const TENANT_FILTER_PATTERN =
 export const EXEMPT_QUERIES = [
   { app: 'app_dev_169e766804934fd18f2e20200d8fd22d', name: 'resolveInviteCode_GetTenantId' },     // W0-02: resolves tenant_id from invite code (CANNOT filter)
   { app: 'app_dev_169e766804934fd18f2e20200d8fd22d', name: 'insertAppUserOnInviteRedemption' },   // W0-02: creates the tenant-bound row (no filter applicable)
+  { app: 'app_dev_169e766804934fd18f2e20200d8fd22d', name: 'shift-slot-create' },                 // W1-01: INSERT — tenant_id is written into the VALUES clause from {{ Current User.shiftyTenantId }}, no filterable column applies
 ];
 
 /**

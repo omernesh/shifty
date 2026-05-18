@@ -37,6 +37,70 @@ test('EXEMPT_QUERIES contains the two W0-02 invite-redemption query names', () =
   }
 });
 
+test('EXEMPT_QUERIES contains the W1-01 shift-slot-create entry (INSERT, tenant_id in VALUES)', () => {
+  const names = EXEMPT_QUERIES.map((e) => e.name);
+  assert.ok(names.includes('shift-slot-create'), 'W1-01 INSERT must be exempted');
+  const e = EXEMPT_QUERIES.find((x) => x.name === 'shift-slot-create');
+  assert.strictEqual(e.app, 'app_dev_169e766804934fd18f2e20200d8fd22d');
+});
+
+// ──────────── W1-01 synthetic shift_slot queries pass the gate ────────────
+
+test('shift-slot-list synthetic SQL passes the gate (canonical filter present)', () => {
+  // Mirror the SQL in tools/budibase-cli/fixtures/queries/shift-slot-list.json
+  const synthetic = {
+    name: 'shift-slot-list',
+    fields: {
+      sql: "SELECT id, name FROM shift_slot WHERE tenant_id = '{{ Current User.shiftyTenantId }}'::uuid AND team_id = :team_id::uuid ORDER BY name",
+    },
+  };
+  const r = validateQuery(
+    synthetic,
+    new Set(['shift_slot']),
+    EXEMPT_QUERIES,
+    'app_dev_169e766804934fd18f2e20200d8fd22d',
+  );
+  assert.strictEqual(r.violation, false, `expected pass, got ${r.reason}`);
+});
+
+test('shift-slot-create synthetic INSERT is exempted in the canonical app', () => {
+  // Mirror the SQL in tools/budibase-cli/fixtures/queries/shift-slot-create.json
+  // — this is an INSERT writing tenant_id into VALUES, no filterable column to gate.
+  const synthetic = {
+    name: 'shift-slot-create',
+    fields: {
+      sql: "INSERT INTO shift_slot (tenant_id, name) VALUES ('{{ Current User.shiftyTenantId }}'::uuid, :name) RETURNING id",
+    },
+  };
+  const r = validateQuery(
+    synthetic,
+    new Set(['shift_slot']),
+    EXEMPT_QUERIES,
+    'app_dev_169e766804934fd18f2e20200d8fd22d',
+  );
+  assert.strictEqual(r.violation, false);
+  assert.strictEqual(r.reason, 'exempt');
+});
+
+test('a non-exempt INSERT against shift_slot WITHOUT the filter must be flagged', () => {
+  // Synthetic: another app trying to create a "shift-slot-create"-named query
+  // and getting it past the gate by name match alone — the WR-01 tuple scope
+  // means a different app's "shift-slot-create" is NOT auto-exempted.
+  const synthetic = {
+    name: 'shift-slot-create',
+    fields: {
+      sql: "INSERT INTO shift_slot (name) VALUES (:name)",  // no tenant_id at all
+    },
+  };
+  const r = validateQuery(
+    synthetic,
+    new Set(['shift_slot']),
+    EXEMPT_QUERIES,
+    'app_dev_OTHER_app_id',  // <-- different app
+  );
+  assert.strictEqual(r.violation, true, 'cloned-named query in a different app must NOT inherit exemption');
+});
+
 // ──────────────── isExempt() ────────────────
 
 test('isExempt matches on exact (app, name) tuple', () => {
