@@ -14,16 +14,14 @@
 
 import { login } from './login.mjs';
 
-const WORKER  = process.env.BB_WORKER  || 'http://budibase-worker:4003';
-const APP_URL = process.env.BB_APP     || 'http://budibase-app:4002';
-const APP_ID  = process.env.BB_APP_ID  || 'app_dev_169e766804934fd18f2e20200d8fd22d';
-const PG_DS   = process.env.BB_PG_DS   || 'datasource_plus_e5b3191da9eb4cb8854252f16a15367a';
+const WORKER = process.env.BB_WORKER || 'http://budibase-worker:4003';
 // Sentinel tenant — replace with a real tenant UUID once tenants are provisioned (Phase 3+ work).
 const SENTINEL_TENANT = process.env.BB_SHIFTY_TENANT_ID || '00000000-0000-0000-0000-000000000001';
 
 const { cookieHeader } = await login();
 const HW = { Cookie: cookieHeader, 'Content-Type': 'application/json' };
-const HA = { Cookie: cookieHeader, 'x-budibase-app-id': APP_ID, 'Content-Type': 'application/json' };
+// Note (CR-03 fix): APP_URL/APP_ID/PG_DS were used by the removed step-4
+// binding test. They are no longer referenced by this script.
 
 // 1) Find the admin user (matches BB_EMAIL)
 const adminEmail = process.env.BB_EMAIL;
@@ -65,40 +63,16 @@ if (verifyUser.shiftyTenantId !== SENTINEL_TENANT) {
 }
 console.log(`[3] round-trip OK — shiftyTenantId=${verifyUser.shiftyTenantId}`);
 
-// 4) Binding test — create disposable query, execute as the admin, assert {{ Current User.shiftyTenantId }} resolves
-const testQuery = {
-  name: '_W0_02_BINDING_TEST_DELETE_ME',
-  datasourceId: PG_DS,
-  fields: { sql: "SELECT '{{ Current User.shiftyTenantId }}'::uuid AS resolved;" },
-  queryVerb: 'read',
-  parameters: [],
-  schema: { resolved: { type: 'string', name: 'resolved' } },
-  transformer: 'return data',
-  readable: true,
-};
-const createR = await fetch(`${APP_URL}/api/queries`, { method: 'POST', headers: HA, body: JSON.stringify(testQuery) });
-if (createR.status !== 200) { console.error(`[4a] create binding-test query HTTP ${createR.status} — ${await createR.text()}`); process.exit(4); }
-const created = await createR.json();
-console.log(`[4a] created binding-test query: ${created._id}`);
+// 4) Step REMOVED (CR-03 fix, 2026-05-18).
+// The W0-02 spike conclusively proved that {{ Current User.* }} bindings
+// resolve to null when queries are executed via POST /api/queries/<id>
+// (the Builder API path). End-to-end binding verification has to happen
+// at published-app runtime (deferred to Phase 3 W1+). See
+// tools/budibase-cli/SPIKE-FINDINGS.md for the full analysis.
 
-try {
-  const execR = await fetch(`${APP_URL}/api/queries/${created._id}`, { method: 'POST', headers: HA, body: JSON.stringify({ parameters: {} }) });
-  if (execR.status !== 200) { console.error(`[4b] execute HTTP ${execR.status} — ${await execR.text()}`); process.exit(4); }
-  const result = await execR.json();
-  const resolved = Array.isArray(result) && result[0]?.resolved;
-  if (resolved === SENTINEL_TENANT) {
-    console.log(`[4b] BINDING TEST PASS — {{ Current User.shiftyTenantId }} resolved to ${resolved}`);
-  } else {
-    console.error(`[4b] BINDING TEST FAIL — got ${JSON.stringify(result)}`);
-    console.error(`     This means {{ Current User.shiftyTenantId }} does NOT resolve from a schemaless field.`);
-    console.error(`     A separate declaration mechanism (or different field name strategy) is needed.`);
-    process.exit(5);
-  }
-} finally {
-  // Cleanup the binding-test query
-  const delR = await fetch(`${APP_URL}/api/queries/${created._id}/${created._rev}`, { method: 'DELETE', headers: HA });
-  if (delR.status === 200) console.log(`[4c] cleanup OK`);
-  else console.error(`[4c] cleanup FAILED HTTP ${delR.status} — manual delete needed for ${created._id}`);
-}
+console.log(`\n[4] SKIPPED — binding test against the Builder API is known to return null`);
+console.log(`     for {{ Current User.* }} bindings (see SPIKE-FINDINGS.md). Verify the`);
+console.log(`     binding resolves by visiting the published app at /app/<slug> and`);
+console.log(`     observing the value in a Builder UI data binding preview.`);
 
-console.log(`\n✅ apply-tenantid.mjs DONE — admin's shiftyTenantId = ${SENTINEL_TENANT}, binding verified.`);
+console.log(`\n✅ apply-tenantid.mjs DONE — admin's shiftyTenantId = ${SENTINEL_TENANT} (binding test deferred to runtime).`);
