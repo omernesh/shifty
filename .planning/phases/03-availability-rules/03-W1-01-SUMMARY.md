@@ -313,6 +313,38 @@ Verifying claimed artifacts:
 - Commits c97e086 / 51b705b / 1ddbace / 8b7cc69 / 988f612 — VERIFIED in git log
 
 ---
+
+## Task 4 addendum — orchestrator-driven browser verification attempt (2026-05-18)
+
+After the executor returned PENDING on Task 4, the orchestrator drove `chrome-devtools` MCP to attempt the verification. Result: **BLOCKED at a layer ABOVE the binding question.**
+
+**Sequence observed:**
+1. Navigated isolated-context browser to `https://apps.nesher.co/app/default%20workspace/shift-slots`.
+2. Page redirected to `/builder/auth/login`. Login form filled with `omernesher@gmail.com` + admin password. Login succeeded.
+3. Page redirected back to `/app/default%20workspace/shift-slots`.
+4. Network panel: `GET /api/applications/app_169e766804934fd18f2e20200d8fd22d/appPackage` returned **HTTP 404** — the published-app bootstrap failed.
+5. DOM rendered: `<h1>You don't have permission to use this app</h1>` + "Ask your administrator to grant you access."
+6. The shift-slot queries NEVER FIRED — execution was blocked at the app-permission layer, BEFORE any `{{ Current User.* }}` binding had a chance to evaluate.
+
+**Permission-grant probes attempted (all from Node via Internal API):**
+- `POST /api/global/users (merge roles map)` — returned 200 but Budibase silently dropped the `roles` field on save. Verify GET still showed `roles: {}`.
+- `POST /api/global/users/<user_id>/permission/<app_id>` with `{_rev}` body — returned 200 + new rev BUT the verify GET still showed empty roles, AND a fresh browser session still hit the same "no permission" wall.
+- `POST .../permission/<app_id>/<roleName>` (tried ADMIN/BASIC/POWER suffixes) — all returned 404.
+- Same calls against the DEV app ID — one returned 500, others 404.
+
+**Root cause hypothesis (not verified):**
+Budibase 3.38's app-permission model lives in a separate doc shape (possibly in CouchDB's `_users` or `_design/permissions`, not on the user record under `roles`). The Builder UI's "Add user to app" affordance presumably calls an endpoint that touches the right doc; my reverse-engineering attempts didn't find it. Possible candidates worth probing in a follow-up: `/api/global/users/<id>/permission` (PUT with body containing the app role map), or a workspaceApp-scoped endpoint under `/api/global/workspaceApps/*`.
+
+**Status:** Binding-resolution question remains **UN-VERIFIED**. The Task-4 binding-test plan was correct; the gating issue is one layer up (per-app permissions) that the plan didn't budget for.
+
+**Forward paths:**
+1. **Manual fix (~30 sec):** open Builder UI → app settings → users → grant `omernesher@gmail.com` ADMIN. Then re-run browser verification (orchestrator can drive it via chrome-devtools MCP, or user can do it manually).
+2. **API spike (~30 min):** reverse-engineer the canonical "grant per-app role" Internal API endpoint by watching Builder UI's network panel when the grant UI is used. Encode in `tools/budibase-cli/src/client.mjs` for future-proofing.
+3. **Lower-friction app config:** set the published app's default authenticated role to BASIC (instead of "explicit grant required"). Any logged-in user auto-gets access. Loses fine-grained access control but unblocks rapid iteration.
+
+Whichever path lands first, the remaining work is unchanged: open the page, watch the network panel, capture whether `{{ Current User.shiftyTenantId }}` resolves at app-runtime.
+
+---
 *Phase: 03-availability-rules*
 *Plan: W1-01*
-*Completed: 2026-05-18 (Tasks 0-3 + 5); Task 4 PENDING user browser verification*
+*Completed: 2026-05-18 (Tasks 0-3 + 5); Task 4 PENDING user browser verification (per-app permission grant required first; addendum above)*
