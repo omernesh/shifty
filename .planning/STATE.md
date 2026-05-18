@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: milestone
 status: executing
-stopped_at: "Phase 3 W0-02 PARTIAL: Tasks 1+2 done via Internal API (admin shiftyTenantId=00000000-...-0001 persisted); Tasks 3+4 deferred — binding resolution via Builder API returns null for all {{ Current User.* }} fields. Need a focused follow-up spike on Budibase's binding-resolution surfaces (published-app endpoint vs Builder API) before W1+ planning can begin. Field renamed across gate+tests+docs+plans: tenantId → shiftyTenantId. 26+ commits this run total."
-last_updated: "2026-05-18T11:05:33.197Z"
+stopped_at: "Phase 3 W1-01 PARTIAL: queries + client + tests + snapshot landed (Tasks 0,1,2,5 done). Task 3 screens APPLIED-BUT-INERT (data providers never fire /api/v2/queries/* at runtime — fixture shape missing field(s) Builder-UI auto-adds). Task 4 binding-resolution un-answered. W1-01.5 plan written (.planning/phases/03-availability-rules/03-W1-01-5-PLAN.md) — manual Builder-UI reference + diff. Session ended at 66% context."
+last_updated: "2026-05-18T11:39:37.055Z"
 last_activity: 2026-05-17
 progress:
   total_phases: 8
-  completed_phases: 3
-  total_plans: 26
+  completed_phases: 2
+  total_plans: 27
   completed_plans: 26
-  percent: 38
+  percent: 25
 ---
 
 # Project State
@@ -160,7 +160,7 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-05-18T11:04:52.847Z
-Stopped at: Phase 3 W0-02 PARTIAL: Tasks 1+2 done via Internal API (admin shiftyTenantId=00000000-...-0001 persisted); Tasks 3+4 deferred — binding resolution via Builder API returns null for all {{ Current User.* }} fields. Need a focused follow-up spike on Budibase's binding-resolution surfaces (published-app endpoint vs Builder API) before W1+ planning can begin. Field renamed across gate+tests+docs+plans: tenantId → shiftyTenantId. 26+ commits this run total.
-Resume file: None
+Last session: 2026-05-18T11:39:37.021Z
+Stopped at: Phase 3 W1-01 PARTIAL: queries + client + tests + snapshot landed (Tasks 0,1,2,5 done). Task 3 screens APPLIED-BUT-INERT (data providers never fire /api/v2/queries/* at runtime — fixture shape missing field(s) Builder-UI auto-adds). Task 4 binding-resolution un-answered. W1-01.5 plan written (.planning/phases/03-availability-rules/03-W1-01-5-PLAN.md) — manual Builder-UI reference + diff. Session ended at 66% context.
+Resume file: .planning/phases/03-availability-rules/03-W1-01-5-PLAN.md
 Next action: in a new session post-/clear, run `/gsd-autonomous` to begin Phase 03 Wave 0.
