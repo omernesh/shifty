@@ -141,7 +141,7 @@ None yet.
 
 - **Phase 03 Wave 0 — Budibase user-schema custom field flow**: Builder UI exposure of custom user fields needs verification during W0-02 planning; if rejected, fallback to JOIN-per-query on the `app_user` table (heavier but framework-aligned).
 - **Phase 03 Wave 0 — JS code block helper bundling pattern**: How `legacy/shifty-handlers/helpers/*.js` are made consumable inside Budibase JS code blocks is undecided (single-file bundle vs. inline-copy vs. NPM package in snapshot tarball); resolve during W0-03 execution.
-- **Phase 03 Wave 0 — Layer-2 CI gate must ship BEFORE W1**: any domain-table Query landing without the canonical `WHERE tenant_id = '{{ Current User.tenantId }}'::uuid` filter is a silent tenant-isolation regression. W0-04 is a hard dependency for W1+.
+- **Phase 03 Wave 0 — Layer-2 CI gate must ship BEFORE W1**: any domain-table Query landing without the canonical `WHERE tenant_id = '{{ Current User.shiftyTenantId }}'::uuid` filter is a silent tenant-isolation regression. W0-04 is a hard dependency for W1+.
 - **Phases 4–7**: still have `Plans: TBD` in ROADMAP. /gsd-autonomous will need to re-plan them with the post-pivot Builder UI shape as it reaches each. Phase 4 (FastAPI solver) is the first one where Layer 5 RLS becomes active again (solver connects to Postgres as a non-superuser).
 - **Phase 4**: Solver infeasibility-report unsat-core technique extends PRD §7.8 schema and needs deeper research during planning; budget extra time.
 - **Phase 6**: WAHA webhook depth (`message-status` events, retries config) needs research during planning; dedicated SIM is an OPS prerequisite before WhatsApp channel goes live.

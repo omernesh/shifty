@@ -28,7 +28,7 @@ Phase 3 delivers everything the solver (Phase 4) needs as input: configured `shi
 
 ### Wave 0 sequencing decisions
 
-- **D-06 (W0 ordering):** W0-01 (PRD §8.3 doc amendment) is doc-only and can ship immediately, independent of all other W0 work. W0-03 (helper bundling) can run in parallel with W0-01. W0-02 (tenantId field) blocks W0-04 (CI gate needs `{{ Current User.tenantId }}` to verify against) and likely W0-05 (snapshot must capture the field). W0-04 blocks any Wave-1+ work (no Builder UI queries can ship without the gate). Suggested order: W0-01 ‖ W0-03 → W0-02 → W0-04 → W0-05.
+- **D-06 (W0 ordering):** W0-01 (PRD §8.3 doc amendment) is doc-only and can ship immediately, independent of all other W0 work. W0-03 (helper bundling) can run in parallel with W0-01. W0-02 (tenantId field) blocks W0-04 (CI gate needs `{{ Current User.shiftyTenantId }}` to verify against) and likely W0-05 (snapshot must capture the field). W0-04 blocks any Wave-1+ work (no Builder UI queries can ship without the gate). Suggested order: W0-01 ‖ W0-03 → W0-02 → W0-04 → W0-05.
 - **D-07 (W0 stop point):** The autonomous run stops cleanly after W0-05 is verified. Wave 1+ work requires a fresh discuss session and likely the Builder UI installed locally + a manager seat on hpg5's instance.
 
 ### Claude's Discretion

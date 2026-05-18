@@ -10,7 +10,7 @@
 // 1. Default mode (no flags):
 //    - Reads Builder UI Queries via the Budibase Public API.
 //    - For every Query whose SQL body references a domain table, asserts that
-//      the canonical filter pattern  `WHERE tenant_id = '{{ Current User.tenantId }}'::uuid`
+//      the canonical filter pattern  `WHERE tenant_id = '{{ Current User.shiftyTenantId }}'::uuid`
 //      is present somewhere in the SQL.
 //    - Skips queries whose name is in EXEMPT_QUERIES.
 //    - If BUDIBASE_API_KEY is unset or the API is unreachable, warns and exits 0
@@ -56,14 +56,20 @@ const MIGRATIONS_DIR = join(REPO_ROOT, 'db', 'migrations');
 // ─────────────────────────────────────────────
 
 // Canonical filter pattern per BUDIBASE-CONVENTIONS.md §3:
-//   WHERE tenant_id = '{{ Current User.tenantId }}'::uuid
+//   WHERE tenant_id = '{{ Current User.shiftyTenantId }}'::uuid
+//
+// NOTE on field name: we deliberately use `shiftyTenantId` (NOT `tenantId`) to avoid a
+// collision with Budibase's own built-in `tenantId` field on user docs (it holds the
+// Budibase workspace tenant, e.g. "default" in CE single-tenant mode, and is used by
+// Budibase for its own request routing). Shifty's domain tenancy uses `shiftyTenantId`,
+// a schemaless custom field populated by the W0-02 invite-redemption Automation.
 // Tolerant regex:
 //   - allows optional alias prefix (e.g., `s.tenant_id`)
 //   - allows whitespace variance around `=`, around `::`, around `{{ }}`
 //   - case-insensitive
 //   - does NOT require WHERE on the same line (placement in an AND-chain is fine)
 export const TENANT_FILTER_PATTERN =
-  /\b(?:\w+\.)?tenant_id\s*=\s*'\s*\{\{\s*Current\s+User\.tenantId\s*\}\}\s*'\s*::\s*uuid/i;
+  /\b(?:\w+\.)?tenant_id\s*=\s*'\s*\{\{\s*Current\s+User\.shiftyTenantId\s*\}\}\s*'\s*::\s*uuid/i;
 
 // Per D-03: inline whitelist. PR-visible diff is the audit trail.
 // SEED EXEMPTIONS (from W0-02 invite-redemption Automation):
@@ -430,7 +436,7 @@ async function main_default() {
     console.error(`\nFAIL: query "${v.query.name}" (app ${v.appName}/${v.appId})`);
     console.error(`  ${v.result.reason}`);
     console.error(`  SQL: ${snippet.replace(/\n/g, ' ')}`);
-    console.error(`  Fix: add \`WHERE tenant_id = '{{ Current User.tenantId }}'::uuid\` to the query, or`);
+    console.error(`  Fix: add \`WHERE tenant_id = '{{ Current User.shiftyTenantId }}'::uuid\` to the query, or`);
     console.error(`       add "${v.query.name}" to EXEMPT_QUERIES in tools/check-bb-queries.mjs with a 1-line reason.`);
   }
   process.exit(1);
@@ -463,7 +469,7 @@ function main_selfTest() {
       query: {
         name: 'SELFTEST_synthetic_good',
         fields: {
-          sql: "SELECT id FROM soldier WHERE tenant_id = '{{ Current User.tenantId }}'::uuid",
+          sql: "SELECT id FROM soldier WHERE tenant_id = '{{ Current User.shiftyTenantId }}'::uuid",
         },
       },
       expectViolation: false,

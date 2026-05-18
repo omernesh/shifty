@@ -783,13 +783,13 @@ The defense above remains the design target. A fifth layer — Postgres Row-Leve
 
 1. Budibase's Postgres integration cannot wrap user Queries in transactions, so `SET LOCAL app.current_tenant = …` is silently discarded (auto-commit, no `BEGIN`/`COMMIT`).
 2. Multi-statement query bodies crash the integration's JS layer (`Cannot convert undefined or null to object` — code assumes single result, multi-statement returns array).
-3. `{{ Current User.tenantId }}` template bindings are parameterized (extended protocol bound params), not textual substitution; `SET LOCAL` does not accept bound parameters.
+3. `{{ Current User.shiftyTenantId }}` template bindings are parameterized (extended protocol bound params), not textual substitution; `SET LOCAL` does not accept bound parameters.
 4. The Budibase Postgres connection uses the `shifts` superuser, which bypasses RLS unconditionally per PostgreSQL's `pg_authid.rolsuper` semantics — so RLS policies have been silently bypassed since the moment Budibase connected on 2026-05-16. This is the de facto state, not a regression introduced by the amendment.
 
 **Effective layer map for Budibase-mediated queries (post-amendment):**
 
 - Layers 1, 3, 4 — unchanged (session-derived tenant_id, page-auth, request-role).
-- **Layer 2 — newly load-bearing as the top defense.** Every domain-table Query must include `WHERE tenant_id = '{{ Current User.tenantId }}'::uuid`. Enforced by CI gate at `tools/check-bb-queries.mjs` (Phase 03 Wave 0 deliverable).
+- **Layer 2 — newly load-bearing as the top defense.** Every domain-table Query must include `WHERE tenant_id = '{{ Current User.shiftyTenantId }}'::uuid`. Enforced by CI gate at `tools/check-bb-queries.mjs` (Phase 03 Wave 0 deliverable).
 - Layer 5 — policies remain in schema for future direct-DB consumers (e.g., the FastAPI solver service, when introduced in Phase 04, will connect as a non-superuser and DOES benefit from active RLS). Inactive for Budibase clients.
 
 "Missing any layer is release-blocking" applies to the effective layer map above. Layer 5 inactivity is the explicit framework constraint, not a missing layer.

@@ -7,7 +7,7 @@
 // edge cases the gate must handle correctly:
 //   - alias-prefixed tenant_id (s.tenant_id = …)
 //   - AND-chain placement (WHERE active = TRUE AND tenant_id = …)
-//   - tolerant whitespace around `::uuid` and `{{ Current User.tenantId }}`
+//   - tolerant whitespace around `::uuid` and `{{ Current User.shiftyTenantId }}`
 //   - exemption beats validation
 //   - non-domain-table queries are skipped
 //   - framework tables (schema_migrations, account, etc.) are not in the set
@@ -34,25 +34,25 @@ test('EXEMPT_QUERIES contains the two W0-02 invite-redemption query names', () =
 
 test('TENANT_FILTER_PATTERN matches the canonical form verbatim', () => {
   assert.ok(TENANT_FILTER_PATTERN.test(
-    `WHERE tenant_id = '{{ Current User.tenantId }}'::uuid`
+    `WHERE tenant_id = '{{ Current User.shiftyTenantId }}'::uuid`
   ));
 });
 
 test('TENANT_FILTER_PATTERN matches with alias prefix (s.tenant_id)', () => {
   assert.ok(TENANT_FILTER_PATTERN.test(
-    `WHERE s.tenant_id = '{{ Current User.tenantId }}'::uuid`
+    `WHERE s.tenant_id = '{{ Current User.shiftyTenantId }}'::uuid`
   ));
 });
 
 test('TENANT_FILTER_PATTERN matches in the middle of an AND-chain', () => {
   assert.ok(TENANT_FILTER_PATTERN.test(
-    `WHERE active = true AND tenant_id = '{{ Current User.tenantId }}'::uuid AND deleted_at IS NULL`
+    `WHERE active = true AND tenant_id = '{{ Current User.shiftyTenantId }}'::uuid AND deleted_at IS NULL`
   ));
 });
 
 test('TENANT_FILTER_PATTERN tolerates extra whitespace', () => {
   assert.ok(TENANT_FILTER_PATTERN.test(
-    `WHERE tenant_id  =  '{{  Current   User.tenantId  }}'  ::  uuid`
+    `WHERE tenant_id  =  '{{  Current   User.shiftyTenantId  }}'  ::  uuid`
   ));
 });
 
@@ -65,7 +65,7 @@ test('TENANT_FILTER_PATTERN does NOT match a plain tenant_id reference without t
 
 test('TENANT_FILTER_PATTERN does NOT match a literal string without ::uuid cast', () => {
   assert.strictEqual(
-    TENANT_FILTER_PATTERN.test(`WHERE tenant_id = '{{ Current User.tenantId }}'`),
+    TENANT_FILTER_PATTERN.test(`WHERE tenant_id = '{{ Current User.shiftyTenantId }}'`),
     false,
   );
 });
@@ -128,7 +128,7 @@ test('validateQuery accepts the canonical filter form', () => {
   const r = validateQuery(
     {
       name: 'q2',
-      fields: { sql: "SELECT id FROM soldier WHERE tenant_id = '{{ Current User.tenantId }}'::uuid" },
+      fields: { sql: "SELECT id FROM soldier WHERE tenant_id = '{{ Current User.shiftyTenantId }}'::uuid" },
     },
     DOMAIN, EXEMPT,
   );
@@ -140,7 +140,7 @@ test('validateQuery accepts alias-prefixed tenant_id (s.tenant_id)', () => {
     {
       name: 'q3',
       fields: {
-        sql: `SELECT s.id FROM soldier s JOIN org_unit o ON o.id = s.org_unit_id WHERE s.tenant_id = '{{ Current User.tenantId }}'::uuid`,
+        sql: `SELECT s.id FROM soldier s JOIN org_unit o ON o.id = s.org_unit_id WHERE s.tenant_id = '{{ Current User.shiftyTenantId }}'::uuid`,
       },
     },
     DOMAIN, EXEMPT,
@@ -153,7 +153,7 @@ test('validateQuery accepts the filter mid-AND-chain', () => {
     {
       name: 'q4',
       fields: {
-        sql: `SELECT id FROM soldier WHERE active = TRUE AND tenant_id = '{{ Current User.tenantId }}'::uuid AND deleted_at IS NULL`,
+        sql: `SELECT id FROM soldier WHERE active = TRUE AND tenant_id = '{{ Current User.shiftyTenantId }}'::uuid AND deleted_at IS NULL`,
       },
     },
     DOMAIN, EXEMPT,
@@ -221,7 +221,7 @@ test('validateQuery skips a query with an empty SQL body', () => {
 });
 
 test('validateQuery handles INSERT against a domain table with the binding in VALUES', () => {
-  // INSERT with the {{ Current User.tenantId }} binding embedded directly — would pass
+  // INSERT with the {{ Current User.shiftyTenantId }} binding embedded directly — would pass
   // (the gate is heuristic; it matches the canonical pattern wherever it appears in the SQL).
   // Use the canonical form to confirm; bare INSERT…VALUES without the binding is flagged.
   const bad = validateQuery(
@@ -237,7 +237,7 @@ test('validateQuery handles INSERT against a domain table with the binding in VA
     {
       name: 'insertGood',
       fields: {
-        sql: `INSERT INTO soldier (id, tenant_id, display_name) SELECT gen_random_uuid(), tenant_id, 'x' FROM tenant WHERE tenant_id = '{{ Current User.tenantId }}'::uuid`,
+        sql: `INSERT INTO soldier (id, tenant_id, display_name) SELECT gen_random_uuid(), tenant_id, 'x' FROM tenant WHERE tenant_id = '{{ Current User.shiftyTenantId }}'::uuid`,
       },
     },
     DOMAIN, EXEMPT,
