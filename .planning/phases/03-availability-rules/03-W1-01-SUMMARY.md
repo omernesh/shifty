@@ -344,7 +344,40 @@ Budibase 3.38's app-permission model lives in a separate doc shape (possibly in 
 
 Whichever path lands first, the remaining work is unchanged: open the page, watch the network panel, capture whether `{{ Current User.shiftyTenantId }}` resolves at app-runtime.
 
+## Task 4 addendum 2 — Builder preview reveals empty screens (2026-05-18)
+
+After the permission wall on the published-app URL, I drove `chrome-devtools` MCP into the Builder UI's PREVIEW iframe (which bypasses publish + per-app permissions). Result: a **bigger surprise.**
+
+**What I saw:**
+- The Builder UI shows the 3 W1-01 screens registered (`/shift-slots`, `/shift-slots/:id`, `/shift-slots/new`).
+- The component tree on the LIST screen shows the expected components: Header, Team selector label, Team list provider, Create button, Shifts provider, Empty state hint, Create shift modal, Edit shift modal.
+- Clicking "Preview" launched the in-Builder preview iframe at `https://apps.nesher.co/app_dev_169e766804934fd18f2e20200d8fd22d/#/shift-slots`.
+- The preview rendered just the empty "Shifty" header + the "Made with Budibase" badge. **No table, no Create button, no Hebrew labels, no data, no empty-state hint.**
+- Network panel for the preview iframe (69 requests captured): **zero `/api/v2/queries/*` calls.** The data provider components never fired their queries. By contrast, the appPackage + `/api/self` + `/api/roles/accessible` + `/api/routing/client` calls all succeeded.
+
+**What this means:**
+The Task-3 "applied 3 screens" success was a **false positive at the integration layer.** The Internal API accepted the screen JSON (HTTP 200), the screens appear in the Builder UI's tree, BUT the runtime renderer doesn't actualize the components — they're either:
+1. **Wrongly-shaped fixture JSON.** The SCREEN-SHAPE.md contract Task 0 produced may be incomplete — the screens technically validate but components fail to bind to data providers / queries.
+2. **Missing component definitions.** The screens reference component types that exist in the Builder's component palette but require additional setup (registration, library reference) that the fixtures didn't include.
+3. **Misconfigured data providers.** The "Shifts provider" component is in the tree but isn't pointing at the right query — or the query reference syntax in the JSON doesn't match what the runtime expects.
+
+**Severity:** This is the actual blocker. The permission API question becomes moot — even with full ADMIN role on the published app, the screens have no functional content to display. Task 4 (binding verification) cannot proceed until the screens actually render their data providers.
+
+**What was salvaged:**
+- The 6 query fixtures applied correctly (verified via Layer-2 gate's live run).
+- The SCREEN-SHAPE.md contract is partially-validated — the screens DO appear in the Builder, just don't function.
+- The `apply-fixtures.mjs` idempotency works.
+- The role + workspaceApp + tenant seed are in place.
+
+**Forward paths (priority-ranked):**
+
+1. **Manual Builder UI screen rebuild (~1-2h).** Click through to recreate the LIST screen via the Builder's drag-drop UI, then dump the resulting JSON via `/api/screens` GET. Diff against the fixture to find what's actually required. Captures the true SCREEN-SHAPE contract. This is the highest-confidence path.
+2. **Source-of-truth swap.** Accept Builder-UI-clicks as the W1+ authoring surface (rolling back D-08's CLI-first decision for screens specifically). Queries + automations stay CLI-driven; screens become Builder-UI work with snapshot capture. Faster but loses the config-as-code review benefit for screens.
+3. **Deeper SCREEN-SHAPE reverse-engineering spike.** Re-run Task 0 with more rigor: capture the Builder bundle's `previewQuery` / data-provider code paths and decode the exact shape (e.g., what `dataProvider.dataSource` looks like for a Postgres-query-driven list). Slowest, highest fidelity.
+
+**Status of W1-01:** Tasks 0, 1, 2, 5 LANDED CLEANLY. Task 3 (screens) APPLIED-BUT-NON-FUNCTIONAL. Task 4 (binding verification) NOT-REACHABLE until Task 3 is fixed. The binding-resolution question itself remains UN-ANSWERED.
+
 ---
 *Phase: 03-availability-rules*
 *Plan: W1-01*
-*Completed: 2026-05-18 (Tasks 0-3 + 5); Task 4 PENDING user browser verification (per-app permission grant required first; addendum above)*
+*Completed: 2026-05-18 (Tasks 0-2 + 5; Task 3 false-positive — screens applied but non-functional; Task 4 blocked)*
