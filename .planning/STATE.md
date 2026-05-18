@@ -4,13 +4,13 @@ milestone: v1.1
 milestone_name: milestone
 status: executing
 stopped_at: "Phase 3 W0-02 PARTIAL: Tasks 1+2 done via Internal API (admin shiftyTenantId=00000000-...-0001 persisted); Tasks 3+4 deferred — binding resolution via Builder API returns null for all {{ Current User.* }} fields. Need a focused follow-up spike on Budibase's binding-resolution surfaces (published-app endpoint vs Builder API) before W1+ planning can begin. Field renamed across gate+tests+docs+plans: tenantId → shiftyTenantId. 26+ commits this run total."
-last_updated: "2026-05-18T01:26:38.456Z"
+last_updated: "2026-05-18T11:05:33.197Z"
 last_activity: 2026-05-17
 progress:
   total_phases: 8
   completed_phases: 3
-  total_plans: 25
-  completed_plans: 25
+  total_plans: 26
+  completed_plans: 26
   percent: 38
 ---
 
@@ -132,6 +132,10 @@ Recent decisions affecting current work:
 - [Phase ?]: Plan 03-W0-05: PsExec NOT required for snapshot runs (docker run --rm against cached image works fine over plink); PsExec required only for one-time docker pull bootstrap — script detects not-cached case and prints recovery hint
 - [Phase ?]: Plan 03-W0-05: budi backups --export takes POSITIONAL filename (NOT -o flag); --env <envfile> mandatory in non-interactive use; wrapper synthesizes budi-compatible env on hpg5 per-run from existing .env
 - [Phase ?]: Plan 03-W0-05: pscp Windows-path quoting requires forward slashes (claude@hpg5:C:/path/file) — backslashes confuse colon-parsing for host:path; GNU tar needs --force-local when inspecting C:\... paths
+- [Phase ?]: Plan 03-W1-01: Inline modal embedding (Budibase idiomatic) — modals are children of /shift-slots opened via Open Modal event handler; route-stub screens at /shift-slots/new and /shift-slots/:id redirect back to list.
+- [Phase ?]: Plan 03-W1-01: Budibase 3.38.4 requires workspaceAppId on every screen (HTTP 400 otherwise); dev workspace ships empty workspaceApps[]; apply-fixtures.mjs auto-creates 'Shifty' workspaceApp on first run.
+- [Phase ?]: Plan 03-W1-01: Budibase query parameters[].type field is REJECTED by Joi (HTTP 400); canonical parameter shape is {name, default} only — empirically verified via probe-query-shape.mjs.
+- [Phase ?]: Plan 03-W1-01: SPIKE-BINDINGS.md open question REMAINS UNRESOLVED. Headless probe of both /api/queries/<id> and /api/v2/queries/<id> returns HTTP 400 'invalid input syntax for type uuid: ""' on dev AND published apps — confirming {{ Current User.shiftyTenantId }} resolves to empty string outside a browser-loaded app session. Browser MCP verification PENDING (user action).
 
 ### Pending Todos
 
@@ -156,7 +160,7 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-05-18T01:26:38.419Z
+Last session: 2026-05-18T11:04:52.847Z
 Stopped at: Phase 3 W0-02 PARTIAL: Tasks 1+2 done via Internal API (admin shiftyTenantId=00000000-...-0001 persisted); Tasks 3+4 deferred — binding resolution via Builder API returns null for all {{ Current User.* }} fields. Need a focused follow-up spike on Budibase's binding-resolution surfaces (published-app endpoint vs Builder API) before W1+ planning can begin. Field renamed across gate+tests+docs+plans: tenantId → shiftyTenantId. 26+ commits this run total.
-Resume file: .planning/phases/03-availability-rules/03-W0-02-SUMMARY.md
+Resume file: None
 Next action: in a new session post-/clear, run `/gsd-autonomous` to begin Phase 03 Wave 0.
