@@ -146,6 +146,82 @@ test('getDomainTables excludes Phase-0 bootstrap tables dropped in 0008', () => 
   }
 });
 
+// ──────────────── getDomainTables() — WR-08 (comma DROP + block comments) ────────────────
+
+import { writeFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join as pathJoin } from 'node:path';
+
+function withTempMigrations(files) {
+  const dir = mkdtempSync(pathJoin(tmpdir(), 'bbq-test-'));
+  for (const [name, content] of Object.entries(files)) {
+    writeFileSync(pathJoin(dir, name), content, 'utf-8');
+  }
+  return dir;
+}
+
+test('getDomainTables drops ALL tables from comma-separated DROP TABLE (WR-08)', () => {
+  const dir = withTempMigrations({
+    '0001_init.up.sql': `
+      CREATE TABLE foo (id uuid);
+      CREATE TABLE bar (id uuid);
+      CREATE TABLE baz (id uuid);
+    `,
+    '0002_drop.up.sql': `
+      DROP TABLE foo, bar, baz;
+    `,
+  });
+  try {
+    const tables = getDomainTables(dir);
+    assert.ok(!tables.has('foo'), 'foo should be dropped');
+    assert.ok(!tables.has('bar'), 'bar should be dropped (WR-08 — was previously retained)');
+    assert.ok(!tables.has('baz'), 'baz should be dropped (WR-08 — was previously retained)');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('getDomainTables handles DROP TABLE with IF EXISTS + CASCADE on comma list (WR-08)', () => {
+  const dir = withTempMigrations({
+    '0001_init.up.sql': `
+      CREATE TABLE alpha (id uuid);
+      CREATE TABLE beta (id uuid);
+      CREATE TABLE gamma (id uuid);
+    `,
+    '0002_drop.up.sql': `
+      DROP TABLE IF EXISTS alpha, beta, gamma CASCADE;
+    `,
+  });
+  try {
+    const tables = getDomainTables(dir);
+    assert.ok(!tables.has('alpha'));
+    assert.ok(!tables.has('beta'));
+    assert.ok(!tables.has('gamma'));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('getDomainTables ignores CREATE TABLE inside block comments (WR-08)', () => {
+  const dir = withTempMigrations({
+    '0001_init.up.sql': `
+      CREATE TABLE realtable (id uuid);
+      /* example:
+         CREATE TABLE fakebut_inside_comment (id uuid);
+         CREATE TABLE alsofake_in_comment (id uuid);
+       */
+    `,
+  });
+  try {
+    const tables = getDomainTables(dir);
+    assert.ok(tables.has('realtable'));
+    assert.ok(!tables.has('fakebut_inside_comment'), 'must NOT capture CREATE inside /* … */');
+    assert.ok(!tables.has('alsofake_in_comment'), 'must NOT capture CREATE inside /* … */');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 // ──────────────── validateQuery() ────────────────
 
 const DOMAIN = new Set(['soldier', 'shift_instance', 'tenant']);

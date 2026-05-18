@@ -190,7 +190,12 @@ if (isMainModule()) {
  */
 export function getDomainTables(migrationsDir = MIGRATIONS_DIR) {
   const createPattern = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:public\.)?"?(\w+)"?\s*\(/gi;
-  const dropPattern   = /DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:public\.)?"?(\w+)"?/gi;
+  // WR-08 fix (2026-05-18): match the entire table-list payload of DROP TABLE
+  // (everything up to the terminating semicolon) so the comma-separated form
+  // `DROP TABLE foo, bar, baz;` removes ALL three names instead of just `foo`.
+  // The capture group keeps a CASCADE/RESTRICT modifier outside; we strip it
+  // when splitting on commas below.
+  const dropMultiPattern = /DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?([^;]+);/gi;
 
   if (!existsSync(migrationsDir)) {
     throw new Error(`migrations directory not found: ${migrationsDir}`);
@@ -205,14 +210,29 @@ export function getDomainTables(migrationsDir = MIGRATIONS_DIR) {
   for (const f of files) {
     const content = readFileSync(join(migrationsDir, f), 'utf-8');
 
-    // Strip line comments so a commented-out CREATE TABLE doesn't pollute the set
-    const stripped = content.replace(/--[^\n]*/g, '');
+    // WR-08 fix: strip BOTH block (`/* ... */`) AND line (`-- …`) comments so
+    // a commented-out CREATE TABLE or DROP TABLE doesn't pollute the set.
+    const stripped = content
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/--[^\n]*/g, '');
 
     for (const m of stripped.matchAll(createPattern)) {
       tables.add(m[1].toLowerCase());
     }
-    for (const m of stripped.matchAll(dropPattern)) {
-      tables.delete(m[1].toLowerCase());
+    for (const m of stripped.matchAll(dropMultiPattern)) {
+      // The capture is the entire table-list before the semicolon. Split on
+      // commas, drop a trailing CASCADE/RESTRICT modifier (these live in the
+      // last element only), and normalise each name (lowercase + strip
+      // `public.` prefix + strip quotes).
+      const rawList = m[1].replace(/\b(CASCADE|RESTRICT)\b/gi, '').trim();
+      const names = rawList.split(',')
+        .map((s) => s.trim()
+          .replace(/^public\./i, '')
+          .replace(/^"|"$/g, '')
+          .toLowerCase()
+        )
+        .filter((n) => /^\w+$/.test(n)); // only well-formed identifiers
+      for (const n of names) tables.delete(n);
     }
   }
 
