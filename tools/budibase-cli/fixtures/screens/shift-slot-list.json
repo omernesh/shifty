@@ -1,0 +1,407 @@
+{
+  "name": "shift-slot-list",
+  "workspaceAppId": "{{workspaceAppId}}",
+  "showNavigation": true,
+  "width": "Large",
+  "routing": { "route": "/shift-slots", "roleId": "ADMIN", "homeScreen": true },
+  "props": {
+    "_id": "cmp_shift_slots_root",
+    "_component": "@budibase/standard-components/container",
+    "_styles": { "normal": { "padding-top": "16px", "padding-bottom": "16px" }, "hover": {}, "active": {}, "selected": {} },
+    "_instanceName": "shift_slot list root",
+    "layout": "flex",
+    "direction": "column",
+    "hAlign": "stretch",
+    "vAlign": "top",
+    "size": "grow",
+    "gap": "M",
+    "_children": [
+      {
+        "_id": "cmp_header_text",
+        "_component": "@budibase/standard-components/heading",
+        "_styles": { "normal": { "text-align": "right" }, "hover": {}, "active": {}, "selected": {} },
+        "_instanceName": "Header",
+        "_children": [],
+        "text": "משמרות",
+        "size": "L",
+        "align": "right"
+      },
+      {
+        "_id": "cmp_team_selector",
+        "_component": "@budibase/standard-components/labelcomponent",
+        "_styles": { "normal": {}, "hover": {}, "active": {}, "selected": {} },
+        "_instanceName": "Team selector label",
+        "_children": [],
+        "text": "צוות"
+      },
+      {
+        "_id": "cmp_team_dropdown",
+        "_component": "@budibase/standard-components/dataprovider",
+        "_styles": { "normal": {}, "hover": {}, "active": {}, "selected": {} },
+        "_instanceName": "Team list provider",
+        "dataSource": {
+          "type": "query",
+          "label": "team-list",
+          "tableId": "{{query:team-list}}"
+        },
+        "autoRefresh": 0,
+        "_children": [
+          {
+            "_id": "cmp_team_select",
+            "_component": "@budibase/standard-components/dynamicfilter",
+            "_styles": { "normal": {}, "hover": {}, "active": {}, "selected": {} },
+            "_instanceName": "Team select",
+            "_children": [],
+            "dataProvider": "{{ literal [cmp_team_dropdown] }}"
+          }
+        ]
+      },
+      {
+        "_id": "cmp_create_button",
+        "_component": "@budibase/standard-components/button",
+        "_styles": { "normal": {}, "hover": {}, "active": {}, "selected": {} },
+        "_instanceName": "Create button",
+        "_children": [],
+        "text": "+ משמרת חדשה",
+        "type": "cta",
+        "onClick": [
+          {
+            "id": "evt_open_create_modal",
+            "##eventHandlerType": "Open Modal",
+            "parameters": { "id": "cmp_create_modal" }
+          }
+        ]
+      },
+      {
+        "_id": "cmp_shifts_table_provider",
+        "_component": "@budibase/standard-components/dataprovider",
+        "_styles": { "normal": {}, "hover": {}, "active": {}, "selected": {} },
+        "_instanceName": "Shifts provider",
+        "dataSource": {
+          "type": "query",
+          "label": "shift-slot-list",
+          "tableId": "{{query:shift-slot-list}}",
+          "parameters": [
+            { "name": "team_id", "default": "" }
+          ]
+        },
+        "autoRefresh": 0,
+        "paginate": false,
+        "_children": [
+          {
+            "_id": "cmp_shifts_table",
+            "_component": "@budibase/standard-components/table",
+            "_styles": { "normal": {}, "hover": {}, "active": {}, "selected": {} },
+            "_instanceName": "Shifts table",
+            "_children": [],
+            "dataProvider": "{{ literal [cmp_shifts_table_provider] }}",
+            "showAutoColumns": true,
+            "title": "משמרות",
+            "rowCount": 20,
+            "onRowClick": [
+              {
+                "id": "evt_state_select",
+                "##eventHandlerType": "Update State",
+                "parameters": {
+                  "key": "selectedShift",
+                  "value": "{{ [cmp_shifts_table].[_id] }}",
+                  "type": "set",
+                  "persist": false
+                }
+              },
+              {
+                "id": "evt_open_edit_modal",
+                "##eventHandlerType": "Open Modal",
+                "parameters": { "id": "cmp_edit_modal" }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "_id": "cmp_empty_state",
+        "_component": "@budibase/standard-components/text",
+        "_styles": { "normal": { "text-align": "right", "padding": "16px" }, "hover": {}, "active": {}, "selected": {} },
+        "_instanceName": "Empty state hint",
+        "_children": [],
+        "text": "אין משמרות עדיין — לחץ '+ משמרת חדשה' כדי להוסיף",
+        "_conditions": [
+          {
+            "newSetting": "_hide",
+            "setting": "_hide",
+            "settingType": "boolean",
+            "settingValue": "false",
+            "valueType": "Binding",
+            "operator": "morethan",
+            "noValue": false,
+            "value": "0",
+            "referenceValue": "{{ [cmp_shifts_table_provider].[rows].length }}"
+          }
+        ]
+      },
+      {
+        "_id": "cmp_create_modal",
+        "_component": "@budibase/standard-components/modal",
+        "_styles": { "normal": {}, "hover": {}, "active": {}, "selected": {} },
+        "_instanceName": "Create shift modal",
+        "_children": [
+          {
+            "_id": "cmp_create_modal_heading",
+            "_component": "@budibase/standard-components/heading",
+            "_styles": { "normal": { "text-align": "right" }, "hover": {}, "active": {}, "selected": {} },
+            "_instanceName": "Create heading",
+            "_children": [],
+            "text": "משמרת חדשה",
+            "size": "M"
+          },
+          {
+            "_id": "cmp_template_radio",
+            "_component": "@budibase/standard-components/labelcomponent",
+            "_styles": { "normal": {}, "hover": {}, "active": {}, "selected": {} },
+            "_instanceName": "Template label",
+            "_children": [],
+            "text": "תבנית: בחר 2x12h או 3x8h ומלא את השדות. למשמרת חוצה חצות, סיים < התחל מותר."
+          },
+          {
+            "_id": "cmp_create_form",
+            "_component": "@budibase/standard-components/container",
+            "_styles": { "normal": {}, "hover": {}, "active": {}, "selected": {} },
+            "_instanceName": "Create form",
+            "layout": "flex",
+            "direction": "column",
+            "gap": "S",
+            "_children": [
+              {
+                "_id": "cmp_name_field",
+                "_component": "@budibase/standard-components/stringfield",
+                "_styles": { "normal": {}, "hover": {}, "active": {}, "selected": {} },
+                "_instanceName": "name field",
+                "_children": [],
+                "label": "שם",
+                "placeholder": "Day / Night / Morning",
+                "field": "name"
+              },
+              {
+                "_id": "cmp_start_field",
+                "_component": "@budibase/standard-components/stringfield",
+                "_styles": { "normal": {}, "hover": {}, "active": {}, "selected": {} },
+                "_instanceName": "start_time field",
+                "_children": [],
+                "label": "התחלה (HH:MM)",
+                "placeholder": "06:00",
+                "field": "start_time"
+              },
+              {
+                "_id": "cmp_end_field",
+                "_component": "@budibase/standard-components/stringfield",
+                "_styles": { "normal": {}, "hover": {}, "active": {}, "selected": {} },
+                "_instanceName": "end_time field",
+                "_children": [],
+                "label": "סיום (HH:MM)",
+                "placeholder": "18:00",
+                "field": "end_time"
+              },
+              {
+                "_id": "cmp_headcount_field",
+                "_component": "@budibase/standard-components/stringfield",
+                "_styles": { "normal": {}, "hover": {}, "active": {}, "selected": {} },
+                "_instanceName": "headcount field",
+                "_children": [],
+                "label": "מספר חיילים",
+                "placeholder": "1",
+                "field": "headcount"
+              },
+              {
+                "_id": "cmp_role_tags_field",
+                "_component": "@budibase/standard-components/stringfield",
+                "_styles": { "normal": {}, "hover": {}, "active": {}, "selected": {} },
+                "_instanceName": "required_role_tags field (comma-separated)",
+                "_children": [],
+                "label": "תגיות תפקיד (פסיקים)",
+                "placeholder": "driver,medic",
+                "field": "required_role_tags"
+              },
+              {
+                "_id": "cmp_min_seniority_field",
+                "_component": "@budibase/standard-components/stringfield",
+                "_styles": { "normal": {}, "hover": {}, "active": {}, "selected": {} },
+                "_instanceName": "min_seniority field",
+                "_children": [],
+                "label": "ותק מינימלי (אופציונלי)",
+                "placeholder": "",
+                "field": "min_seniority"
+              },
+              {
+                "_id": "cmp_submit_create",
+                "_component": "@budibase/standard-components/button",
+                "_styles": { "normal": {}, "hover": {}, "active": {}, "selected": {} },
+                "_instanceName": "Submit create",
+                "_children": [],
+                "text": "שמור",
+                "type": "primary",
+                "onClick": [
+                  {
+                    "id": "evt_exec_create",
+                    "##eventHandlerType": "Execute Query",
+                    "parameters": {
+                      "datasourceId": "datasource_plus_e5b3191da9eb4cb8854252f16a15367a",
+                      "queryId": "{{query:shift-slot-create}}",
+                      "queryParams": {
+                        "team_id":            "{{ [cmp_team_dropdown].[selectedRow].[id] }}",
+                        "name":               "{{ [cmp_name_field].[value] }}",
+                        "start_time":         "{{ [cmp_start_field].[value] }}",
+                        "end_time":           "{{ [cmp_end_field].[value] }}",
+                        "headcount":          "{{ [cmp_headcount_field].[value] }}",
+                        "required_role_tags": "{{ [cmp_role_tags_field].[value] }}",
+                        "min_seniority":      "{{ [cmp_min_seniority_field].[value] }}",
+                        "display_order":      "0"
+                      },
+                      "notificationOverride": false
+                    }
+                  },
+                  {
+                    "id": "evt_refresh_after_create",
+                    "##eventHandlerType": "Refresh Data Provider",
+                    "parameters": { "componentId": "cmp_shifts_table_provider" }
+                  },
+                  {
+                    "id": "evt_close_create",
+                    "##eventHandlerType": "Close Modal"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "_id": "cmp_edit_modal",
+        "_component": "@budibase/standard-components/modal",
+        "_styles": { "normal": {}, "hover": {}, "active": {}, "selected": {} },
+        "_instanceName": "Edit shift modal",
+        "_children": [
+          {
+            "_id": "cmp_edit_heading",
+            "_component": "@budibase/standard-components/heading",
+            "_styles": { "normal": { "text-align": "right" }, "hover": {}, "active": {}, "selected": {} },
+            "_instanceName": "Edit heading",
+            "_children": [],
+            "text": "ערוך משמרת",
+            "size": "M"
+          },
+          {
+            "_id": "cmp_edit_name",
+            "_component": "@budibase/standard-components/stringfield",
+            "_styles": { "normal": {}, "hover": {}, "active": {}, "selected": {} },
+            "_instanceName": "edit name",
+            "_children": [],
+            "label": "שם",
+            "field": "edit_name",
+            "defaultValue": "{{ [cmp_shifts_table].[selectedRow].[name] }}"
+          },
+          {
+            "_id": "cmp_edit_start",
+            "_component": "@budibase/standard-components/stringfield",
+            "_styles": { "normal": {}, "hover": {}, "active": {}, "selected": {} },
+            "_instanceName": "edit start",
+            "_children": [],
+            "label": "התחלה",
+            "field": "edit_start_time",
+            "defaultValue": "{{ [cmp_shifts_table].[selectedRow].[start_time] }}"
+          },
+          {
+            "_id": "cmp_edit_end",
+            "_component": "@budibase/standard-components/stringfield",
+            "_styles": { "normal": {}, "hover": {}, "active": {}, "selected": {} },
+            "_instanceName": "edit end",
+            "_children": [],
+            "label": "סיום",
+            "field": "edit_end_time",
+            "defaultValue": "{{ [cmp_shifts_table].[selectedRow].[end_time] }}"
+          },
+          {
+            "_id": "cmp_edit_headcount",
+            "_component": "@budibase/standard-components/stringfield",
+            "_styles": { "normal": {}, "hover": {}, "active": {}, "selected": {} },
+            "_instanceName": "edit headcount",
+            "_children": [],
+            "label": "מספר חיילים",
+            "field": "edit_headcount",
+            "defaultValue": "{{ [cmp_shifts_table].[selectedRow].[headcount] }}"
+          },
+          {
+            "_id": "cmp_submit_update",
+            "_component": "@budibase/standard-components/button",
+            "_styles": { "normal": {}, "hover": {}, "active": {}, "selected": {} },
+            "_instanceName": "Submit update",
+            "_children": [],
+            "text": "שמור",
+            "type": "primary",
+            "onClick": [
+              {
+                "id": "evt_exec_update",
+                "##eventHandlerType": "Execute Query",
+                "parameters": {
+                  "datasourceId": "datasource_plus_e5b3191da9eb4cb8854252f16a15367a",
+                  "queryId": "{{query:shift-slot-update}}",
+                  "queryParams": {
+                    "id":                 "{{ [cmp_shifts_table].[selectedRow].[id] }}",
+                    "name":               "{{ [cmp_edit_name].[value] }}",
+                    "start_time":         "{{ [cmp_edit_start].[value] }}",
+                    "end_time":           "{{ [cmp_edit_end].[value] }}",
+                    "headcount":          "{{ [cmp_edit_headcount].[value] }}",
+                    "required_role_tags": "",
+                    "min_seniority":      "",
+                    "display_order":      ""
+                  },
+                  "notificationOverride": false
+                }
+              },
+              {
+                "id": "evt_refresh_after_update",
+                "##eventHandlerType": "Refresh Data Provider",
+                "parameters": { "componentId": "cmp_shifts_table_provider" }
+              },
+              {
+                "id": "evt_close_edit",
+                "##eventHandlerType": "Close Modal"
+              }
+            ]
+          },
+          {
+            "_id": "cmp_delete_btn",
+            "_component": "@budibase/standard-components/button",
+            "_styles": { "normal": {}, "hover": {}, "active": {}, "selected": {} },
+            "_instanceName": "Delete button",
+            "_children": [],
+            "text": "מחק",
+            "type": "warning",
+            "onClick": [
+              {
+                "id": "evt_exec_delete",
+                "##eventHandlerType": "Execute Query",
+                "parameters": {
+                  "datasourceId": "datasource_plus_e5b3191da9eb4cb8854252f16a15367a",
+                  "queryId": "{{query:shift-slot-delete}}",
+                  "queryParams": {
+                    "id": "{{ [cmp_shifts_table].[selectedRow].[id] }}"
+                  },
+                  "notificationOverride": false
+                }
+              },
+              {
+                "id": "evt_refresh_after_delete",
+                "##eventHandlerType": "Refresh Data Provider",
+                "parameters": { "componentId": "cmp_shifts_table_provider" }
+              },
+              {
+                "id": "evt_close_after_delete",
+                "##eventHandlerType": "Close Modal"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "name": "shift-slot-edit-modal",
+  "workspaceAppId": "{{workspaceAppId}}",
+  "showNavigation": true,
+  "width": "Medium",
+  "routing": { "route": "/shift-slots/:id", "roleId": "ADMIN", "homeScreen": false },
+  "props": {
+    "_id": "cmp_edit_modal_root",
+    "_component": "@budibase/standard-components/container",
+    "_styles": { "normal": { "padding": "24px" }, "hover": {}, "active": {}, "selected": {} },
+    "_instanceName": "Edit modal route root",
+    "layout": "flex",
+    "direction": "column",
+    "hAlign": "stretch",
+    "vAlign": "top",
+    "size": "grow",
+    "gap": "M",
+    "_children": [
+      {
+        "_id": "cmp_edit_route_heading",
+        "_component": "@budibase/standard-components/heading",
+        "_styles": { "normal": { "text-align": "right" }, "hover": {}, "active": {}, "selected": {} },
+        "_instanceName": "Heading",
+        "_children": [],
+        "text": "עריכת משמרת",
+        "size": "L"
+      },
+      {
+        "_id": "cmp_edit_route_id_text",
+        "_component": "@budibase/standard-components/text",
+        "_styles": { "normal": { "text-align": "right" }, "hover": {}, "active": {}, "selected": {} },
+        "_instanceName": "ID display",
+        "_children": [],
+        "text": "מזהה משמרת: {{ Url.id }}",
+        "shift-slot-update-query-ref": "{{query:shift-slot-update}}",
+        "shift-slot-delete-query-ref": "{{query:shift-slot-delete}}"
+      },
+      {
+        "_id": "cmp_edit_route_hint",
+        "_component": "@budibase/standard-components/text",
+        "_styles": { "normal": { "text-align": "right" }, "hover": {}, "active": {}, "selected": {} },
+        "_instanceName": "Hint",
+        "_children": [],
+        "text": "המודאל לעריכת משמרת מוטמע בדף הראשי. לחץ על משמרת ברשימה כדי לערוך/למחוק אותה."
+      },
+      {
+        "_id": "cmp_edit_route_back",
+        "_component": "@budibase/standard-components/button",
+        "_styles": { "normal": {}, "hover": {}, "active": {}, "selected": {} },
+        "_instanceName": "Back to list",
+        "_children": [],
+        "text": "חזור לרשימת המשמרות",
+        "type": "primary",
+        "onClick": [
+          {
+            "id": "evt_nav_back_edit",
+            "##eventHandlerType": "Navigate To",
+            "parameters": { "url": "/shift-slots", "peek": false }
+          }
+        ]
+      }
+    ]
+  }
+}
