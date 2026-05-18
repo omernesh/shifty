@@ -1,5 +1,9 @@
 # Roadmap: Shifty — Miluim Shift Planning SaaS
 
+> **2026-05-18 — Pivoted Budibase → Next.js (ADR: `deliberations/2026-05-18-budibase-to-nextjs-pivot.md`). Phase 03 reset to W1.**
+>
+> Phase 02 (Budibase deployment) and Phase 03 W0 (Builder helpers, Layer-2 gate, snapshot tooling, CLI scaffold) are **archived (Budibase era)** — preserved in git history (~1 week of work) but superseded. Phase 03 resumes at W1 on the new stack with the original GOAL (availability rules + shift CRUD) unchanged.
+>
 > **STACK PIVOT — 2026-05-16: Lowdefy killed; Budibase 3.38.4 (self-hosted CE) deployed as replacement same day.**
 >
 > - **Phases 1 + 2 completed under Lowdefy.** Products preserved: schema (all 14 migrations including Layer-5 RLS), pure-function helpers + 26 unit tests, RTL email template, Playwright test patterns. Outputs (YAML pages, blocks, custom plugins, `lowdefy build` pipeline) are DEAD and preserved at `legacy/shifty-handlers/` for porting reference only — they will never run again.
@@ -21,8 +25,8 @@ Shifty's v1 is a Hebrew-RTL, multi-tenant shift-planning SaaS for Israeli reserv
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundations** - Lowdefy runtime + tenancy + RBAC + 5-layer tenant defense + custom-plugin scaffold + ops baseline (completed 2026-05-12)
-- [x] **Phase 2: Org & People** - Units/teams CRUD, soldier roster CRUD, CSV roster import with smart-quote canonicalization (completed 2026-05-16; closed with documented deferral of 21 mutation-path e2e specs to Phase 03 — see 02-11-SUMMARY.md)
-- [ ] **Phase 3: Availability & Rules** - Shift slots, planning windows, hybrid availability UI, 8-rule catalog with per-soldier tightening
+- [x] **Phase 2: Org & People** - Units/teams CRUD, soldier roster CRUD, CSV roster import with smart-quote canonicalization (completed 2026-05-16 under Lowdefy; **archived (Budibase era)** as of 2026-05-18 pivot — see `deliberations/2026-05-18-budibase-to-nextjs-pivot.md`)
+- [ ] **Phase 3: Availability & Rules** - Shift slots, planning windows, hybrid availability UI, 8-rule catalog with per-soldier tightening (**reset to W1 on Next.js stack 2026-05-18**)
 - [ ] **Phase 4: Solver & Schedule** - FastAPI CP-SAT solver with unsat-core infeasibility, draft → publish lifecycle, manager hand-edit
 - [ ] **Phase 5: Lifecycle Features** - Swap workflow + manager manual override + time clock (3 parallel sub-streams)
 - [ ] **Phase 6: Notifications & Reports** - Dispatcher plugin + Email/WhatsApp/Push/in-app + webhooks + cron service (partially parallel)
@@ -82,10 +86,10 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Avoids pitfalls**: P5 (CSV direction-mark stripping at write time), P10 (display-name normalization, 24-color palette spec).
 
 ### Phase 3: Availability & Rules
-> **Post-pivot scope (2026-05-17):** First phase executing on Budibase. Authored per `docs/BUDIBASE-CONVENTIONS.md` (Builder UI is source of truth for screens/queries/automations; PR-time snapshot tarballs at `budibase-exports/`; schema + helpers + Layer-2 gate stay git-tracked). Wave 0 resolves the 5 open items from BUDIBASE-CONVENTIONS.md §10 (CI gate, helper-bundling pattern, user-schema `tenantId` field, snapshot tooling, PRD §8.3 amendment) before any user-facing feature ships in W1+.
+> **Post-pivot scope (2026-05-18):** First phase executing on Next.js 15 + shadcn/ui + Auth.js + Drizzle. Original Budibase-era Wave 0 (W0-01..W0-05) and Wave 1 partial (W1-01) are **archived (Budibase era)** — preserved in git history (commits up to `79dd6b5`) but superseded by the pivot ADR `deliberations/2026-05-18-budibase-to-nextjs-pivot.md`. The Phase 03 GOAL (availability rules + shift CRUD) is unchanged; only the UI stack changes. Phase 03 resumes at a fresh W1 to be planned via `/gsd-plan-phase`.
 
 **Goal**: Managers and soldiers can fully specify a planning window's inputs — shift slots configured, the window opened with auto-generated shift instances, soldiers declaring availability via the hybrid range-blockout + per-slot UI, and the 8-rule catalog tuned with per-soldier tightenings — so the solver has everything it needs to run.
-**Depends on**: Phase 2
+**Depends on**: Phase 2 (schema + helpers + tests survive pivot)
 **Requirements**: SHFT-01, SHFT-02, SHFT-03, SHFT-04, SHFT-05, SHFT-06, SHFT-07, AVAL-01, AVAL-02, AVAL-03, AVAL-04, AVAL-05, AVAL-06, AVAL-07, AVAL-08, RULE-01, RULE-02, RULE-03, RULE-04, RULE-05, RULE-06, RULE-07
 **Success Criteria** (what must be TRUE):
   1. Manager defines `shift_slot` rows using `2x12h` / `3x8h` / Custom templates with required role tags (AND-combined), min seniority, headcount, and midnight-spanning times; opens a `planning_window` with `constraint_lock_at`; `shift_instance` rows auto-generate as the cross-product of (slot × date × headcount_index).
@@ -93,18 +97,13 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Constraint lock prevents writes by non-managers after the lock time; manager writes after lock produce `schedule_audit` rows with `to_state=availability_manager_override`; soldiers joining mid-window default to "available" and can declare up to the lock.
   4. Manager toggles all 8 rules with numeric limits via UI form (changes immediately consumed by next solver run); per-soldier overrides can ONLY tighten (boolean false→true and integer-lower); loosening is silently ignored with a UI warning showing team baseline alongside the soldier's tightening.
   5. Rule semantics are encoded (not just documented): "Weekend" hardcoded to Friday+Saturday for `weekend_separation`; `fairness_objective` defaults to `count_variance` and acts as the solver's minimization target, with hard rules as constraints.
-**Plans**: 9 plans (5 Wave 0 + 4 Wave 1–4)
-  - [x] 03-W0-01-PLAN.md — PRD §8.3 amendment + ROADMAP cross-link: doc-only plan formalizing the L5→L2 framework constraint (Budibase superuser bypass of RLS; Layer 2 becomes top defense; Layer 5 preserved in schema for future direct-DB clients like the FastAPI solver). Updates PRD §8.3 "Enforcement" paragraph + cross-links BUDIBASE-CONVENTIONS.md §2.
-  - [ ] 03-W0-02-PLAN.md — Budibase user-schema `tenantId` custom field: verify Builder UI exposure of the custom-field mechanism, document the add procedure step-by-step, capture in the inaugural snapshot tarball. Includes a Budibase Automation that populates the field on invite-redemption (write to `app_user` table + patch Budibase user row in the same Automation). Fallback if Builder UI rejects custom fields: JOIN to `app_user` per query.
-  - [x] 03-W0-03-PLAN.md — JS code block + helper integration pattern: port `legacy/shifty-handlers/helpers/{canonicalize,palette,role-tag,availability-source}.js` into a form consumable by Budibase JS code blocks (bundle approach TBD during execution — single-file bundle vs. inline-copy vs. NPM package committed to snapshot tarball); preserve all 26 unit tests; document the chosen bundling pattern as the canonical reference for downstream phases.
-  - [x] 03-W0-04-PLAN.md — Layer-2 CI gate (`tools/check-bb-queries.mjs`): pulls all queries from Budibase Public API (`POST /api/public/v1/queries/search`), parses `fields.sql`, asserts the canonical `WHERE tenant_id = '{{ Current User.shiftyTenantId }}'::uuid` filter pattern on every domain-table query (domain tables enumerated from `db/migrations/`); whitelist mechanism for legitimate exceptions (e.g., `app_user` provisioning). Wire into CI and pre-commit.
-  - [x] 03-W0-05-PLAN.md — PR snapshot tooling (`tools/snapshot-budibase.ps1`): wraps `budi backups --export` (executed against the running `shifty-budibase-app` container on hpg5), produces a dated tarball, commits to `budibase-exports/YYYY-MM-DD-<feature>.tar.gz`. Used at every PR open during Phase 03+ so reviewers can extract + grep to spot-check Builder UI changes.
-  - [~] 03-W1-01-PLAN.md — `shift_slot` CRUD on Budibase: schema (no changes — tables exist from migrations 0003+); Builder UI screens for slot creation using 2x12h / 3x8h / Custom templates; required-role-tag binding (multiselect from `role_tag`); min-seniority + headcount fields; midnight-spanning time inputs. Every read Query carries the Layer-2 tenant filter; CI gate runs green. [PARTIAL: Tasks 0-3 + 5 complete (commits c97e086, 51b705b, 1ddbace, 8b7cc69, 988f612); Task 4 browser-binding-verification PENDING — see 03-W1-01-SUMMARY.md "Task 4" section. SCREEN-SHAPE.md ships as the canonical contract for W2/W3/W4.]
-  - [ ] 03-W2-01-PLAN.md — `planning_window` open + `shift_instance` auto-generation: Builder UI screen + Automation that on window-open computes the cross-product (slot × date × headcount_index) of shift_instance rows and bulk-inserts; `constraint_lock_at` field UI; window state transitions; post-lock write-gate enforced in Automation conditional (Layer-4).
-  - [ ] 03-W3-01-PLAN.md — Hybrid availability declaration UI: manager + soldier flows for range blockouts + per-slot toggles; precedence rules (`manager_override > per_slot > range_blockout`) enforced via the ported `availability-source.js` helper in a JS code block; mobile-first layout (no horizontal scroll on iPhone SE viewport); soldier post-lock writes blocked, manager post-lock writes audited with `to_state=availability_manager_override`.
-  - [ ] 03-W4-01-PLAN.md — 8-rule catalog configuration UI: manager-facing toggle form for all 8 rules with numeric limits; per-soldier override UI with tighten-only enforcement (boolean false→true; integer lower-only); UI warning showing team baseline alongside the soldier's tightening; rule semantics are encoded in solver service config (not Phase 3 scope — Phase 3 ships only the storage + UI; solver consumes in Phase 4).
-**Sequencing notes**: Wave 0 (W0-01..W0-05) executes first as a tight loop — these unlock everything downstream and resolve the open items in BUDIBASE-CONVENTIONS.md §10. W0-01 is doc-only and can ship immediately (no Builder UI work); W0-02..W0-05 are tooling/infra. Once W0 is green, W1→W2→W3→W4 is the user-functional sequence: shift_slot CRUD → planning_window + shift_instance generation → availability UI → rules config UI. The 24h-pre-lock notification (AVAL-09) is wired in Phase 6 since it requires the dispatcher.
-**Avoids pitfalls**: P10 (preserve prior-art beloved feature — availability declaration must be fast); new post-pivot risk — Layer-2 gate must run BEFORE any W1+ Query ships, otherwise tenant-isolation regressions land silently.
+**Plans**: 4 plans (W1–W4 on Next.js stack; planning TBD via /gsd-plan-phase)
+  - [ ] 03-W1 — Next.js scaffold + auth + first authed route: Next.js 15 (App Router, RSC) bootstrap; shadcn/ui + Tailwind config (Hebrew RTL by default); Drizzle wiring against the existing Postgres schema (no migration changes); Auth.js EmailProvider via Resend magic links with a database session strategy (Drizzle adapter); a `tenantScopedQuery()` helper that resolves `tenant_id` from the session and is the only sanctioned way to read domain tables; Layer-5 RLS re-activated (Next.js connects as a non-superuser role with `SET LOCAL app.tenant_id`); first authed route renders the user's tenant landing page; replacement CI gate for `tools/check-bb-queries.mjs` (now grep/AST-shaped against `.ts`/`.tsx` instead of Builder UI queries).
+  - [ ] 03-W2 — Shift slot CRUD + tenant-scoped queries: route + server actions for `shift_slot` using `2x12h` / `3x8h` / Custom templates; required-role-tag multiselect from `role_tag`; min-seniority + headcount; midnight-spanning time inputs. All reads/writes go through `tenantScopedQuery()` + Layer-5 RLS. Playwright cross-tenant probes return 403.
+  - [ ] 03-W3 — Availability rules UI + validation: hybrid range-blockout + per-slot toggle UI; precedence logic ported from `legacy/shifty-handlers/helpers/availability-source.js`; mobile-first layout (no horizontal scroll on iPhone SE viewport); soldier post-lock writes blocked, manager post-lock writes audited with `to_state=availability_manager_override`.
+  - [ ] 03-W4 — Solver integration stubs + planning_window: `planning_window` open route + server action that on open computes the cross-product (slot × date × headcount_index) of `shift_instance` rows and bulk-inserts; `constraint_lock_at` field UI; window state transitions; post-lock write-gate enforced in server actions; 8-rule catalog configuration UI with per-soldier tighten-only overrides; rule semantics ship in solver service config (Phase 4 consumes).
+**Sequencing notes**: W1 unlocks all downstream waves — Next.js + Drizzle + Auth.js + Layer-2 CI gate replacement must be green before W2 ships any tenant-scoped route. Once W1 is green, W2→W3→W4 is the user-functional sequence: shift_slot CRUD → availability UI → planning_window + rules config (W4 collapses the previous W2+W4 because both are server-action shaped and benefit from being planned together against the new stack). The 24h-pre-lock notification (AVAL-09) is wired in Phase 6 since it requires the dispatcher.
+**Avoids pitfalls**: P10 (preserve prior-art beloved feature — availability declaration must be fast); post-pivot risk — Layer-2 CI gate replacement must run BEFORE any W2 route ships, otherwise tenant-isolation regressions land silently. Layer-5 RLS is re-activated for the Next.js client (not a Postgres superuser), strictly stronger than the Budibase-era posture.
 
 ### Phase 4: Solver & Schedule
 **Goal**: A manager triggers the solver from an `open` planning window and gets back a draft schedule that respects all 8 active rules — or, if infeasible, an actionable Hebrew report naming affected soldiers and dates. The manager can hand-edit the draft (rule violations highlighted but non-blocking) and publish it, locking the schedule as the source of truth for swap proposals.
@@ -190,17 +189,17 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7. Phase M 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundations | 5/5 | Complete (Lowdefy era; products survive pivot) | 2026-05-12 |
-| 2. Org & People | 11/11 | Complete (Lowdefy era; products survive pivot) | 2026-05-16 |
-| 3. Availability & Rules | 8/9 (+ W1-01 partial pending browser verification) | In Progress|  |
+| 2. Org & People | 11/11 | Complete (Lowdefy era; products survive 2nd pivot — helpers/tests/RTL email port forward; Budibase shell archived) | 2026-05-16 |
+| 3. Availability & Rules | 0/4 | Reset to W1 on Next.js stack 2026-05-18 |  |
 | 4. Solver & Schedule | 0/TBD | Not started | - |
 | 5. Lifecycle Features | 0/TBD | Not started | - |
 | 6. Notifications & Reports | 0/TBD | Not started | - |
 | 7. Polish & Exports | 0/TBD | Not started | - |
 | M. Tenant #1 Migration | 0/TBD | Not started | - |
 
-> **Note on Phase 3 counter:** The legacy Lowdefy-era Plans 03-01..03-04 (4/8 done) are no longer counted — their outputs (Lowdefy YAML pages) are dead. The 9 plans listed above are the post-pivot Budibase-shaped re-scope. Migration 0013 + 0014 (introduced during the legacy 03-01..03-04 work) ARE applied on hpg5 and Phase 3 W1+ schemas build on them — see CLAUDE.md and BUDIBASE-CONVENTIONS.md for the schema-survives-pivot guarantee.
+> **Note on Phase 3 counter (2026-05-18 reset):** The Budibase-era Phase 03 plans (W0-01..W0-05 + W1-01 partial) are **archived (Budibase era)** — preserved in `.planning/phases/03-availability-rules/` and in git history (commits up to `79dd6b5`) but no longer counted. The 4 plans listed above are the post-second-pivot Next.js-shaped re-scope, to be drafted via `/gsd-plan-phase`. The Postgres schema and 14 migrations (0001..0014) ARE applied on hpg5 and survive the pivot intact — see CLAUDE.md and the pivot ADR for the schema-survives-pivot guarantee.
 
 ---
-*Roadmap revised: 2026-05-17 (stack pivot to Budibase); original 2026-05-12 (Lowdefy era)*
-*Source: PRD §13.1 (locked) + research/SUMMARY.md amendments + REQUIREMENTS.md v1 scope + docs/BUDIBASE-CONVENTIONS.md (post-pivot conventions)*
+*Roadmap revised: 2026-05-18 (Budibase → Next.js pivot); previous: 2026-05-17 (Lowdefy → Budibase pivot); original 2026-05-12 (Lowdefy era)*
+*Source: PRD §13.1 (locked) + research/SUMMARY.md amendments + REQUIREMENTS.md v1 scope + `.planning/deliberations/2026-05-18-budibase-to-nextjs-pivot.md` (post-second-pivot ADR)*
 *Granularity: standard; Parallelization: enabled*

@@ -2,47 +2,36 @@
 
 Guidance for Claude Code working in this repo.
 
-## Stack pivot — 2026-05-16
+## Stack pivot — 2026-05-18
 
-**Lowdefy was killed** (silent plugin-registration drops, `_state:` testing trap, missing antd block exports, build-time FATAL on stub links, no ECharts RTL). **New stack: Budibase 3.38.4 self-hosted CE** (Apache-2.0, no branding paywall on CE).
+**Budibase was killed** (CLI-first authoring proved unworkable: screen fixtures applied via API but inert at runtime; per-app permission API undocumented; bindings only resolve in browser; Builder UI affordances not driveable by chrome-devtools MCP). **New stack: Next.js 15 (App Router) + shadcn/ui + Auth.js (NextAuth EmailProvider via Resend magic links) + Drizzle ORM on Postgres 16, all in Docker on hpg5.** Two prior pivot eras preserved at `legacy/shifty-handlers/` and the Budibase work removed in this commit.
 
-**Status:** Phase 02 closed (`v0.2.0-phase2`), Phase 03 paused mid-execution (Plans 03-01..03-04 done, 03-05..03-08 dropped). Business logic preserved at `legacy/shifty-handlers/` for porting to Budibase.
+**What survives:** Postgres schema + all 14 migrations, FastAPI solver scope (Phase 04, not built), Auth.js handlers ported from `legacy/shifty-handlers/auth/`, GSD planning artifacts (`.planning/`), hpg5 deployment infrastructure.
 
-**What survives:** Postgres schema + all 14 migrations (Layer-5 RLS intact), FastAPI solver (Phase 04, not built), Playwright test patterns + helpers, GSD planning artifacts (`.planning/`).
+## Next.js deployment on hpg5
 
-## Budibase deployment on hpg5
+**Stack:** Next.js app container (UI + API routes + Auth.js + Drizzle) + Postgres 16 (Shifty business data) + one-shot `migrate` runner. FastAPI solver joins in Phase 04. All in `docker-compose.yml` at repo root.
 
-**Stack:** Budibase 3.38.4 (UI + thin logic) + Postgres 16 (Shifty business data) + one-shot `migrate` runner. FastAPI solver joins in Phase 04. All in `docker-compose.yml` at repo root.
+**Conventions doc:** `docs/NEXTJS-CONVENTIONS.md` (replaces the dead `BUDIBASE-CONVENTIONS.md`) — source-of-truth boundaries, tenant-isolation layer map, tenant_id plumbing, GSD plan shape, backup/DR. **Load-bearing for Phase 03+ planning.**
 
-**Conventions doc:** `docs/BUDIBASE-CONVENTIONS.md` — source-of-truth boundaries, post-pivot tenant-isolation layer map (Layer 5 RLS inactive for Budibase clients — Layer 2 is top defense with CI gate), tenant_id plumbing, GSD plan shape, backup/DR, what's preserved vs dead. **Load-bearing for Phase 03+ planning.**
-
-### Service topology (8 containers)
+### Service topology
 
 | Service | Image | Role |
 |---------|-------|------|
-| `budibase-proxy` | `budibase/proxy:3.38.4` | nginx; **only host port: `8080:10000`** |
-| `budibase-app` | `budibase/apps:3.38.4` | builder + app server |
-| `budibase-worker` | `budibase/worker:3.38.4` | background tasks, auth, tenants |
-| `budibase-couchdb` | `budibase/couchdb:v3.3.3` | Budibase metadata (apps/screens/users) — NOT Shifty data |
-| `budibase-redis` | `redis:7.4.9-alpine` | session cache + queue |
-| `budibase-minio` | `minio/minio:RELEASE.2024-12-18T13-15-44Z` | S3-compatible object store |
-| `postgres` | `postgres:16` | **Shifty business data**; Layer-5 RLS active |
+| `nextjs-app` | built from `./Dockerfile` (node:20-alpine base) | Next.js 15 App Router; **host port: `8080:3000`** |
+| `postgres` | `postgres:16` | **Shifty business data**; `tenant_id` on every domain table |
 | `migrate` | `migrate/migrate:v4.18.3` | one-shot DB migration runner |
-
-LiteLLM pair from upstream compose is intentionally omitted; `LITELLM_MASTER_KEY` unset short-circuits the readiness check.
-
-Budibase apps live in CouchDB. The Builder UI is the canonical *authoring* surface, but it is not the *only* surface — the Internal API (`/api/screens`, `/api/automations`, `/api/queries`, `/api/datasources`, `/api/global/configs/*`) exposes the same JSON shape the Builder UI reads/writes. Headless authoring is proven (spike `55f657b`, scaffold at `tools/budibase-cli/`, full report at `tools/budibase-cli/SPIKE-FINDINGS.md`). Use cookie auth: `POST http://budibase-worker:4003/api/global/auth/default/login` with `{username, password}` (NOT `email`) → capture `budibase:auth` + `budibase:auth.sig` cookies → send with every downstream call alongside `x-budibase-app-id`. `db/migrations/` remains source of truth for Postgres schema. Back up `budibase-couchdb-data` volume (or use `tools/snapshot-budibase.ps1` for PR-time snapshots) to preserve Builder UI state.
+| `solver` | (Phase 04) `python:3.12-slim-bookworm` + OR-Tools | constraint-solving microservice; not yet built |
 
 ### Public access
 
-- **LAN:** `http://hpg5:8080/builder`
-- **Public:** `https://apps.nesher.co/builder` (Cloudflare Tunnel → `http://192.168.1.133:8080`, tunnel runs in separate Windows user account, out of scope for SSH ops)
-- First-run admin signup via UI (`BB_ADMIN_USER_EMAIL`/`BB_ADMIN_USER_PASSWORD` left unset).
-- Add Postgres as data source post-signup: host `postgres`, port `5432`, db `shifts`, user `shifts`, password from `.env`.
+- **LAN:** `http://hpg5:8080`
+- **Public:** `https://apps.nesher.co` (existing Cloudflare Tunnel → `http://192.168.1.133:8080`, tunnel runs in separate Windows user account, out of scope for SSH ops)
+- First-run admin signup via `/auth/signin` (Resend magic link).
 
 ### Secrets
 
-In `.env` on hpg5 only (never committed). `.env.example` lists names. Budibase secrets: `JWT_SECRET`, `API_ENCRYPTION_KEY`, `INTERNAL_API_KEY`, `COUCH_DB_USER`, `COUCH_DB_PASSWORD`, `REDIS_PASSWORD`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`. Compose uses `${VAR:?missing}` for fail-fast.
+In `.env` on hpg5 only (never committed). `.env.example` lists names. Next.js secrets: `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, `RESEND_API_KEY`, `DATABASE_URL`. Plus `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` for the postgres service. Compose uses `${VAR:?missing}` for fail-fast.
 
 ## hpg5 — deployment target
 
@@ -59,7 +48,7 @@ Remote shell is **cmd**. For complex scripts use `powershell -NoProfile -Encoded
 
 ### PsExec — when it's required
 
-**Docker Desktop's credential helper needs an interactive session.** SSH = Windows logon type 3 (network) = no helper access. Operations that hit a registry (`docker pull`, `docker compose pull`, `docker compose build`) must run through PsExec inside `claude`'s session 1:
+**Docker Desktop's credential helper needs an interactive session.** SSH = Windows logon type 3 (network) = no helper access. Operations that hit a registry (`docker pull`, `docker compose pull`, `docker compose build` of the Next.js image base) must run through PsExec inside `claude`'s session 1:
 
 ```
 psexec -accepteula -nobanner -i 1 -u claude -p Onclaude2103 cmd /c "<docker cmd> > C:\shifts-manager\out.txt 2>&1"
@@ -84,7 +73,7 @@ Read `out.txt` for output (`-i` sends stdout to the interactive session, not bac
 plink ... hpg5 "powershell -c \"cd C:\shifts-manager; git fetch origin main; git reset --hard origin/main; git log -1 --oneline\""
 ```
 
-`reset --hard` is safe — `.gitignore` excludes `postgres-data/`, `.env`, `*.log`. Workflow: edit + commit locally → `git push origin main` → SSH + git fetch/reset on hpg5.
+`reset --hard` is safe — `.gitignore` excludes `postgres-data/`, `.env`, `*.log`, `node_modules/`, `.next/`. Workflow: edit + commit locally → `git push origin main` → SSH + git fetch/reset on hpg5 → rebuild if needed.
 
 ## Common ops on hpg5
 
@@ -93,10 +82,10 @@ plink ... hpg5 "powershell -c \"cd C:\shifts-manager; git fetch origin main; git
 plink ... hpg5 "powershell -c \"cd C:\shifts-manager; docker compose ps\""
 
 # Tail a service
-plink ... hpg5 "powershell -c \"docker logs -f shifty-budibase-app\""
+plink ... hpg5 "powershell -c \"docker logs -f shifty-nextjs-app\""
 
-# Pull images (REQUIRES PsExec)
-plink ... hpg5 "powershell -c \"\$env:PATH = [Environment]::GetEnvironmentVariable('PATH','Machine') + ';' + [Environment]::GetEnvironmentVariable('PATH','User'); psexec -accepteula -nobanner -i 1 -u claude -p Onclaude2103 cmd /c 'cd C:\shifts-manager && docker compose pull > C:\shifts-manager\pull.txt 2>&1'; Get-Content C:\shifts-manager\pull.txt -Tail 40\""
+# Pull images / rebuild app (REQUIRES PsExec)
+plink ... hpg5 "powershell -c \"\$env:PATH = [Environment]::GetEnvironmentVariable('PATH','Machine') + ';' + [Environment]::GetEnvironmentVariable('PATH','User'); psexec -accepteula -nobanner -i 1 -u claude -p Onclaude2103 cmd /c 'cd C:\shifts-manager && docker compose pull && docker compose build > C:\shifts-manager\pull.txt 2>&1'; Get-Content C:\shifts-manager\pull.txt -Tail 40\""
 
 # Start the stack
 plink ... hpg5 "powershell -c \"cd C:\shifts-manager; docker compose up -d; docker compose ps\""
@@ -111,15 +100,17 @@ plink ... hpg5 "powershell -c \"cd C:\shifts-manager; docker compose run --rm mi
 ## Repo layout
 
 ```
-docker-compose.yml        Budibase (6) + postgres + migrate
-db/migrations/            numbered SQL migrations (0001..0014_*.sql)
-legacy/shifty-handlers/   preserved business logic from Lowdefy era (28 files; see legacy/README.md)
-docs/                     PRD.md (product spec), BUDIBASE-CONVENTIONS.md (load-bearing)
+docker-compose.yml        Next.js app + postgres + migrate
+Dockerfile                Next.js production build (node:20-alpine, multi-stage)
+db/migrations/            numbered SQL migrations (0001..0014_*.sql) — source of truth
+src/db/                   Drizzle schema + client (Phase 03 W1)
+src/lib/auth/             Auth.js config (Phase 03 W1)
+src/lib/tenant/           tenant-scoped query helper (Phase 03 W1)
+src/components/ui/        shadcn components (vendored, Phase 03 W1)
+app/                      Next.js App Router (Phase 03 W1)
+legacy/shifty-handlers/   preserved business logic from Lowdefy era; Auth.js handlers port from here
+docs/                     PRD.md (product spec), NEXTJS-CONVENTIONS.md (load-bearing, being authored)
 .planning/                GSD planning artifacts
-tools/budibase-helpers/   IIFE JS bundle for Builder UI code blocks (W0-03; 40/40 tests)
-tools/check-bb-queries.mjs  Layer-2 CI gate (W0-04; 503 LOC, 23 tests)
-tools/snapshot-budibase.ps1 PR-time Builder UI snapshot wrapper (W0-05; 293 LOC)
-tools/budibase-cli/       Internal API client — headless Builder UI work (login + dump + smoke; see SPIKE-FINDINGS.md)
 .env.example              template; copy to .env on hpg5 (NEVER committed)
 solver/                   FastAPI + OR-Tools — Phase 04, not yet created
 ```
@@ -127,15 +118,16 @@ solver/                   FastAPI + OR-Tools — Phase 04, not yet created
 ## Working conventions
 
 - **Postgres schema is source of truth for Shifty data.** Add a new numbered migration in `db/migrations/`; never edit a committed migration.
-- **Budibase apps live in CouchDB.** Author via Builder UI for interactive work; use `tools/budibase-cli/` for headless authoring (CRUD over Internal API). Back up `budibase-couchdb-data` volume to preserve them; PR-time snapshots via `tools/snapshot-budibase.ps1`.
-- **Solver logic stays in `solver/`** (Phase 04), not in Budibase queries. Budibase queries fine for CRUD + light shaping.
+- **Next.js code is the UI source of truth.** Drizzle schema in `src/db/schema.ts` mirrors `db/migrations/` — run `drizzle-kit introspect` after applying a new SQL migration, then commit the regenerated schema.
+- **Layer-2 tenant filter via `tenantScopedQuery()` helper** in `src/lib/tenant/` is the top defense; enforced via CI gate (to be re-created post-pivot). Never trust client-supplied `tenant_id`.
+- **Solver logic stays in `solver/`** (Phase 04), not in Next.js API routes. API routes fine for CRUD + light shaping; they call out to the solver service for scheduling.
 - **Secrets in `.env` on hpg5 only.** Compose injects via `${VAR:?missing}`.
 - **GitHub:** `omernesh/shifty`. User identity `omernesher`. Commit on feature branches, push.
 
 ## When working in this repo
 
 - User works in **orchestrator mode** (see global CLAUDE.md) — delegate multi-file work to sub-agents.
-- No `npm test` / `dotnet build`. Build sequence is `docker compose pull` (PsExec) + `docker compose up -d`.
+- Standard Node tooling: `npm install`, `npm run dev` (local), `npm run build` (CI), `npm test` (Vitest, when added). Docker pulls (Next.js base image) still need PsExec on hpg5.
 - Hebrew RTL default, English LTR alternative. Asia/Jerusalem TZ. DD/MM/YYYY (he), YYYY-MM-DD (en).
 
 <!-- GSD:project-start source:PROJECT.md -->
@@ -151,8 +143,8 @@ Multi-tenant SaaS for Israeli reserve soldiers (miluim) and their commanders to 
 
 ### Constraints
 
-- **Tech stack (locked, PRD §1; updated post-pivot):** Budibase 3.38.4 on Postgres 16, FastAPI+OR-Tools CP-SAT solver, Docker Compose on hpg5, Auth.js (NextAuth EmailProvider via Resend magic links), WAHA for WhatsApp, Web Push, Cloudflare Tunnel.
-- **Tenant isolation:** every domain table has `tenant_id`; queries filter by session-derived tenant_id (never request input). Post-pivot: Layer 5 RLS inactive for Budibase clients (single shared Postgres role) — **Layer 2 (server-side filter) is top defense with CI gate.** Missing any layer is release-blocking.
+- **Tech stack (locked, PRD §1; updated post-pivot):** Next.js 15 (App Router) + shadcn/ui + Drizzle on Postgres 16, FastAPI+OR-Tools CP-SAT solver, Docker Compose on hpg5, Auth.js (NextAuth EmailProvider via Resend magic links), WAHA for WhatsApp, Web Push, Cloudflare Tunnel.
+- **Tenant isolation:** every domain table has `tenant_id`; queries filter by session-derived tenant_id (never request input). **Layer 2 (server-side filter via `tenantScopedQuery()`) is top defense with CI gate.** Missing any layer is release-blocking.
 - **Solver SLO:** <10s p95 for 30 soldiers × 30 days × 4 active rules. Stateless. Same seed = same output.
 - **Notification SLOs:** Email <60s, WhatsApp <30s best-effort, Push <5s, in-app instant.
 - **Hardware:** single hpg5 desktop (Windows 11 + Docker Desktop). PsExec for any registry-pull docker command.
@@ -162,12 +154,13 @@ Multi-tenant SaaS for Israeli reserve soldiers (miluim) and their commanders to 
 <!-- GSD:stack-start source:research/STACK.md -->
 ## Technology Stack
 
-**Note:** This block auto-regenerates from `research/STACK.md` (still Lowdefy-era). Trust the bullets below over the source until STACK.md is updated.
+**Note:** This block auto-regenerates from `research/STACK.md` (still Lowdefy/Budibase-era). Trust the bullets below over the source until STACK.md is updated.
 
-- **UI/app layer:** Budibase 3.38.4 (CE, Apache-2.0). Apps authored in Builder UI, stored in CouchDB.
+- **UI/app layer:** Next.js 15 (App Router, RSC), shadcn/ui, Tailwind CSS, TypeScript.
 - **Database:** Postgres 16 (`postgres:16`). `citext` extension for case-insensitive email. `gen_random_uuid()` built-in.
+- **ORM:** Drizzle 0.x (latest) + drizzle-kit (introspect + migrate codegen).
+- **Auth:** Auth.js / NextAuth EmailProvider via Resend magic links (ported from `legacy/shifty-handlers/auth/`).
 - **Solver (Phase 04, not built):** Python 3.12 (`python:3.12-slim-bookworm`, NOT Alpine — OR-Tools wheels are glibc), `ortools==9.15.6755`, FastAPI ~0.115, uvicorn[standard] ~0.32, pydantic ~2.9, pytest 8.3, testcontainers 4.8.
-- **Auth:** Auth.js / NextAuth EmailProvider via Resend magic links (preserved from Lowdefy era in `legacy/shifty-handlers/auth/`).
 - **Integrations:** Resend `6.12.3` (email), `web-push` `3.6.7` (Web Push, VAPID), WAHA `devlikeapro/waha:2026.4.3` (WhatsApp, NOWEB engine), `node-cron` `4.2.1` (separate cron container).
 - **PDF:** Puppeteer (~23.x) with `fonts-noto-hebrew` + `fonts-noto-arabic` apt packages.
 - **Ingress:** Cloudflare Tunnel (cloudflared, separate Windows user account on hpg5).
@@ -176,13 +169,13 @@ Multi-tenant SaaS for Israeli reserve soldiers (miluim) and their commanders to 
 <!-- GSD:conventions-start source:CONVENTIONS.md -->
 ## Conventions
 
-Conventions not yet established. Will populate as patterns emerge.
+Drizzle schema in `src/db/schema.ts`. Tenant scoping mandatory via `tenantScopedQuery(session, tableName)` — never trust client-supplied `tenant_id`. App Router segments under `app/(authed)/` enforce auth via middleware. shadcn components copied into `src/components/ui/` (vendored, not npm dep). RTL by default: `<html dir="rtl" lang="he">`.
 <!-- GSD:conventions-end -->
 
 <!-- GSD:architecture-start source:ARCHITECTURE.md -->
 ## Architecture
 
-Architecture not yet mapped. Follow existing patterns found in the codebase.
+Architecture not yet mapped. Will be filled in during Phase 03 W1.
 <!-- GSD:architecture-end -->
 
 <!-- GSD:skills-start source:skills/ -->
@@ -190,7 +183,7 @@ Architecture not yet mapped. Follow existing patterns found in the codebase.
 
 | Skill | Description | Path |
 |-------|-------------|------|
-| lowdefy | Reference index for Lowdefy 5.3.x. **Dead post-pivot** — kept for legacy reference only. | `.claude/skills/lowdefy/SKILL.md` |
+| _TBD_ | Skills will be added as Next.js / Drizzle / Auth.js patterns stabilize. | — |
 <!-- GSD:skills-end -->
 
 <!-- GSD:workflow-start source:GSD defaults -->

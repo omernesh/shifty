@@ -6,11 +6,3 @@ postgres-data/
 node_modules/
 package-lock.json
 .claude/scheduled_tasks.lock
-
-# Budibase PR snapshots — tempfiles are ignored; committed tarballs are tracked.
-# The `!` re-include is load-bearing: it prevents a *.tmp rule from
-# accidentally masking a finalized *.tar.gz (e.g., during a race between
-# pscp finishing and Move-Item renaming).
-budibase-exports/*.tmp
-budibase-exports/*.partial
-!budibase-exports/*.tar.gz

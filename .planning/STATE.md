@@ -1,3 +1,15 @@
+> **⚠️ HISTORICAL — superseded 2026-05-18.**
+> This file was written during the Budibase era and references stacks that have since been pivoted away from.
+> Current stack: Next.js 15 + shadcn/ui + Auth.js + Drizzle + Postgres 16.
+> See `.planning/deliberations/2026-05-18-budibase-to-nextjs-pivot.md` for the pivot ADR.
+> Content below is preserved for historical context only. Do not use as a source of truth.
+
+### Current state (2026-05-18)
+- Project pivoted Budibase → Next.js 15 + shadcn/ui + Auth.js + Drizzle.
+- Phase 02 (Budibase deploy) + Phase 03 W0 (Budibase tooling) are archived in git history.
+- Phase 03 reset to W1 — Next.js scaffold + auth + first authed route. Plan TBD via /gsd-plan-phase.
+- Postgres schema + 14 migrations + legacy handlers + solver design preserved.
+
 ---
 gsd_state_version: 1.0
 milestone: v1.1

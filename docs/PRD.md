@@ -26,7 +26,18 @@ The animating insight from discovery: **people are dynamic creatures**. A schedu
 
 **Non-goals for v1**: native mobile apps, cross-tenant coverage, payroll, geofencing, SMS, phone-call notifications, rules DSL, Google Calendar sync, multi-org membership. See §14.
 
-**Stack** (locked, not under review): Lowdefy 5.3 on Postgres 16, FastAPI+OR-Tools solver, Docker Compose on hpg5, public via Cloudflare Tunnel, Auth.js for auth, Resend for email, WAHA for WhatsApp, Web Push for browser push.
+**Stack** (locked, not under review):
+- UI/app layer: Next.js 15 (App Router, RSC) + shadcn/ui + Tailwind CSS + TypeScript. Drizzle ORM 0.x on top of the Postgres schema. Auth.js / NextAuth EmailProvider + Resend magic links (database session strategy, not JWT). [Updated 2026-05-18 — pivot ADR in `.planning/deliberations/2026-05-18-budibase-to-nextjs-pivot.md`.]
+- Postgres 16 (schema is source of truth; 14 numbered migrations survive both pivots).
+- FastAPI + OR-Tools CP-SAT solver (Phase 04, not yet built).
+- Docker Compose on hpg5 (Windows 11 Pro desktop).
+- Public via Cloudflare Tunnel (separate Windows user account).
+- Resend for email (transactional + magic links), WAHA for WhatsApp (NOWEB engine), Web Push (VAPID) for browser push.
+
+**Locked decision revision history**:
+- 2026-05-18 — UI/app layer pivoted Budibase 3.38.4 → Next.js 15 + shadcn/ui + Auth.js + Drizzle. ADR: `.planning/deliberations/2026-05-18-budibase-to-nextjs-pivot.md`.
+- 2026-05-16 — UI/app layer pivoted Lowdefy 5.3 → Budibase 3.38.4 (archived; superseded 2026-05-18).
+- 2026-05-12 — original Lowdefy 5.3 stack locked.
 
 ---
 

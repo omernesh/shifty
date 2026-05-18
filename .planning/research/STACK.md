@@ -1,3 +1,9 @@
+> **⚠️ HISTORICAL — superseded 2026-05-18.**
+> This file was written during the Lowdefy and Budibase era and references stacks that have since been pivoted away from.
+> Current stack: Next.js 15 + shadcn/ui + Auth.js + Drizzle + Postgres 16.
+> See `.planning/deliberations/2026-05-18-budibase-to-nextjs-pivot.md` for the pivot ADR.
+> Content below is preserved for historical context only. Do not use as a source of truth.
+
 # Technology Stack — Shifty (v1, locked-stack patterns)
 
 **Project:** Shifty — Miluim Shift Planning SaaS
