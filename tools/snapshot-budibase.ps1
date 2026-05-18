@@ -205,6 +205,14 @@ $EncodedScript = [Convert]::ToBase64String($Bytes)
 & plink @PlinkArgs "powershell -NoProfile -EncodedCommand $EncodedScript" | Out-Host
 if ($LASTEXITCODE -ne 0) { throw "Generating budi.env on $HpgHost failed (exit $LASTEXITCODE)" }
 
+# WR-05 fix (2026-05-18): wrap steps 5–7 in try/finally so the cleanup of
+# the credential-bearing budi.env on hpg5 runs even when a throw fires
+# from steps 5/6/7 (budi backups failure, pscp failure, tarball sanity
+# check failure). Previously any throw between budi.env creation and the
+# step-8 cleanup left cleartext CouchDB and MinIO creds on hpg5 — a
+# violation of the header's "credentials never persist longer than one
+# snapshot" promise.
+try {
 # ----------------------------------------------------------------------------
 # 5. Run budi inside an ephemeral node:22-alpine container on the shifty network.
 #    See header for why this shape is required (budi not inside apps container,
@@ -260,8 +268,14 @@ if (-not $hasCouch) {
 # Atomic move into place
 Move-Item -Force $LocalTmpPath $LocalFinalPath
 
+} finally {
 # ----------------------------------------------------------------------------
-# 8. Clean up the hpg5 staging area (env file + remote tarball).
+# 8. Clean up the hpg5 staging area (env file + remote tarball). WR-05 fix:
+#    this runs in a finally{} block so a throw from steps 5/6/7 does NOT
+#    leave the credential-bearing budi.env on hpg5. Best-effort — we
+#    swallow plink errors here because the primary failure (whatever
+#    triggered the throw) has already been raised and we don't want a
+#    secondary plink failure to mask it.
 # ----------------------------------------------------------------------------
 Write-Host "[6/6] Cleaning up remote staging area ..."
 $CleanupScript = @"
@@ -270,7 +284,12 @@ Remove-Item -Force '$HpgStageDir\budi.env' -ErrorAction SilentlyContinue
 "@
 $Bytes2 = [System.Text.Encoding]::Unicode.GetBytes($CleanupScript)
 $EncodedCleanup = [Convert]::ToBase64String($Bytes2)
-& plink @PlinkArgs "powershell -NoProfile -EncodedCommand $EncodedCleanup" | Out-Null
+try {
+    & plink @PlinkArgs "powershell -NoProfile -EncodedCommand $EncodedCleanup" | Out-Null
+} catch {
+    Write-Warning "Cleanup on $HpgHost failed: $($_.Exception.Message). Manually verify $HpgStageDir\budi.env is removed."
+}
+}
 
 # ----------------------------------------------------------------------------
 # 9. Emit summary + suggested commit message (NO auto-commit — per safety).
