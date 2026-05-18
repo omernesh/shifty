@@ -13,6 +13,14 @@ Phase 3 delivers everything the solver (Phase 4) needs as input: configured `shi
 
 **Wave 1–4 scope (deferred):** shift_slot CRUD, planning_window + shift_instance generation, hybrid availability UI, 8-rule catalog UI. Discussed in a separate session when Wave 0 lands.
 
+### Wave 1 addendum (2026-05-18)
+
+W1-01 starts after Wave 0 landed + the binding-resolution spike concluded (see `tools/budibase-cli/SPIKE-BINDINGS.md`). New decisions:
+
+- **D-08 (W1 authoring surface):** CLI-first via `tools/budibase-cli/`. Screens, queries, automations are committed as git-tracked JSON and applied via the Internal API (`POST /api/queries`, `POST /api/screens`, `POST /api/automations`). Fallback to Builder UI clicks per-subtree if a payload shape proves prohibitively hard to reverse-engineer. PR diffs review the JSON; snapshot tarball still captured at PR open for the CouchDB record.
+- **D-09 (W1 execution mode):** Autonomous — surface only genuine blockers. Planner + executor make best-effort decisions and document them in the SUMMARY rather than pausing for every gray area.
+- **D-10 (binding verification):** First W1 screen acts as the verification loop. After execution, open the published-app URL in a browser as the admin; if the list view shows the admin's tenant rows, bindings work. If not, open a focused debug spike with concrete failing repro. Headless verification is blocked (per SPIKE-BINDINGS.md).
+
 </domain>
 
 <decisions>
