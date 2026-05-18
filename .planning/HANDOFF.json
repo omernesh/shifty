@@ -1,26 +1,56 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-18T16:49:10.530+03:00",
+  "timestamp": "2026-05-18T21:43:27.337+03:00",
   "phase": "03",
   "phase_name": "availability-rules",
   "phase_dir": ".planning/phases/03-availability-rules",
-  "plan": null,
+  "plan": "W1",
   "task": null,
-  "total_tasks": null,
-  "status": "paused-pivot",
+  "total_tasks": 8,
+  "status": "ready-for-execution",
   "completed_tasks": [],
-  "remaining_tasks": [],
+  "remaining_tasks": [
+    { "id": 1, "name": "Migration 0015 — users.shifty_tenant_id column", "status": "not_started" },
+    { "id": 2, "name": "Repo scaffold (Next.js 15 + pnpm + Tailwind v4 + shadcn/ui RTL + Dockerfile prereqs)", "status": "not_started" },
+    { "id": 3, "name": "Drizzle wiring — pull, client, withTenantTx, tenantScopedQuery", "status": "not_started" },
+    { "id": 4, "name": "Auth.js v5 setup — config split, callbacks, Hebrew Resend template, founding-admin seed", "status": "not_started" },
+    { "id": 5, "name": "Middleware + login pages + first authed route /shifts", "status": "not_started" },
+    { "id": 6, "name": "Layer-2 CI gate (ts-morph) + golden fixtures", "status": "not_started" },
+    { "id": 7, "name": "Tenant-scope + Layer-5 RLS read+write integration tests", "status": "not_started" },
+    { "id": 8, "name": "Dockerfile + nextjs-app compose service + .env.example + README", "status": "not_started" }
+  ],
   "blockers": [],
-  "human_actions_pending": [],
+  "human_actions_pending": [
+    {
+      "action": "Verify domain in Resend dashboard (shifty@nesher.co) before W1 Task 4 production switch. W1 dev uses onboarding@resend.dev — sends only to your verified Resend-account email (omernesher@gmail.com).",
+      "context": "Researcher flagged this manual step. W1 can complete entirely against dev-mode Resend.",
+      "blocking": false
+    }
+  ],
   "decisions": [
     {
       "decision": "Pivot Budibase → Next.js 15 + shadcn/ui + Auth.js + Drizzle on Postgres 16",
       "rationale": "User cannot do hours of Builder UI clicking. Code-first authoring eliminates fixture-shape mysteries. Tenant isolation moves into typed code + reactivated Layer-5 RLS.",
       "phase": "03",
       "adr": ".planning/deliberations/2026-05-18-budibase-to-nextjs-pivot.md"
+    },
+    {
+      "decision": "D-W1-01: Auth.js v5 beta (5.0.0-beta.31+)",
+      "rationale": "Dedicated Resend provider; edge-runtime split; unified auth() helper; better App Router alignment. v4 fallback documented in 03-RESEARCH.md.",
+      "phase": "03"
+    },
+    {
+      "decision": "D-W1-02: Add users.shifty_tenant_id UUID column via migration 0015 (not JOIN against app_user)",
+      "rationale": "Auth.js users table is deliberately NOT RLS-protected per migration 0009; session callback reads the column directly with no extra query.",
+      "phase": "03"
+    },
+    {
+      "decision": "D-W1-03: Cloudflare Tunnel stays at :8080; compose maps 8080:3000",
+      "rationale": "Zero ops change. Firewall rule + Cloudflare config unchanged.",
+      "phase": "03"
     }
   ],
   "uncommitted_files": [],
-  "next_action": "Pivot rip-out complete. Run /gsd-plan-phase to draft Phase 03 W1 (Next.js scaffold + auth + first authed route).",
-  "context_notes": "Budibase ripped out 2026-05-18. Postgres schema + migrations + legacy handlers + solver design preserved. Phase 03 reset to W1 for the new stack. ADR explains the pivot."
+  "next_action": "Run /gsd-execute-phase 03 W1 in a fresh session. Executor reads 03-W1-PLAN.md and executes 8 tasks atomically. Critical path: T1 → T2 → T3 → T4 → T5 → (T6 ∥ T7) → T8.",
+  "context_notes": "This session: pivoted Budibase → Next.js (a769bee), force-pushed to remote (unrelated-histories divergence resolved with --force-with-lease), cleaned hpg5 (6 Budibase containers + 3 volumes removed, postgres + 29 Shifty tables intact), produced 03-RESEARCH.md (~870 lines, HIGH confidence), 03-W1-PLAN.md (~1062 lines, 8 atomic tasks, ~2050 LOC estimated), and 03-W1-PLAN-CHECK.md (2-round review, verdict pass_with_warnings). One cosmetic warning W-R2-01 in plan (example SQL in T7 references non-existent shift_slot.weekday column — executor catches on first run, ~5-min one-line fix). All planning at commit 5bee16b. Phase 03 W1 unblocked; executor has full context."
 }
