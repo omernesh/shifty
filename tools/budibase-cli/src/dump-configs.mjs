@@ -1,0 +1,58 @@
+// Dump Budibase global config documents to learn their shapes before W0-02 patches them.
+// Reads: /api/global/configs/<type> for known config types.
+//
+// Run from an ephemeral container in shifts-manager_default:
+//   docker run --rm --network shifts-manager_default \
+//     -e BB_EMAIL=... -e BB_PASSWORD=... \
+//     -v $(pwd)/tools/budibase-cli:/cli \
+//     node:22-alpine node /cli/src/dump-configs.mjs
+
+import { login } from './login.mjs';
+
+const WORKER = process.env.BB_WORKER || 'http://budibase-worker:4003';
+const APP_ID = process.env.BB_APP_ID || 'app_dev_169e766804934fd18f2e20200d8fd22d';
+const APP    = process.env.BB_APP || 'http://budibase-app:4002';
+
+const { cookieHeader } = await login();
+const H = { Cookie: cookieHeader, 'x-budibase-app-id': APP_ID, 'Content-Type': 'application/json' };
+
+const out = { capturedAt: new Date().toISOString(), workerConfigs: {}, automations: null, users: null };
+
+// 1) Probe global configs by type
+for (const type of ['settings', 'account', 'google', 'oidc', 'password', 'company']) {
+  try {
+    const r = await fetch(`${WORKER}/api/global/configs/${type}`, { headers: H });
+    if (r.status === 200) {
+      const j = await r.json();
+      out.workerConfigs[type] = j;
+    } else {
+      out.workerConfigs[type] = { _status: r.status, _text: (await r.text()).slice(0, 200) };
+    }
+  } catch (e) {
+    out.workerConfigs[type] = { _error: e.message };
+  }
+}
+
+// 2) Existing automations (per-app)
+try {
+  const r = await fetch(`${APP}/api/automations`, { headers: H });
+  out.automations = r.status === 200 ? await r.json() : { _status: r.status, _text: (await r.text()).slice(0, 200) };
+} catch (e) { out.automations = { _error: e.message }; }
+
+// 3) Existing users — verify the admin record
+try {
+  const r = await fetch(`${WORKER}/api/global/users`, { headers: H });
+  if (r.status === 200) {
+    const users = await r.json();
+    // Only return summary shape — DO NOT log password hashes / private fields
+    out.users = users.map(u => ({
+      _id: u._id, email: u.email,
+      builder: u.builder, admin: u.admin, tenantId: u.tenantId,
+      allKeys: Object.keys(u).sort(),
+    }));
+  } else {
+    out.users = { _status: r.status, _text: (await r.text()).slice(0, 200) };
+  }
+} catch (e) { out.users = { _error: e.message }; }
+
+console.log(JSON.stringify(out, null, 2));
