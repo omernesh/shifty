@@ -1,0 +1,38 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-05-18T12:07:16.463Z",
+  "phase": "03",
+  "phase_name": "availability-rules",
+  "phase_dir": ".planning/phases/03-availability-rules",
+  "plan": "W1-01",
+  "task": 4,
+  "total_tasks": 6,
+  "status": "paused",
+  "completed_tasks": [
+    { "id": 0, "name": "Screen JSON shape reverse-engineering (SCREEN-SHAPE.md, 380 lines)", "status": "done", "commit": "c97e086" },
+    { "id": 1, "name": "BudibaseClient + 12 new methods (6/6 live tests pass)", "status": "done", "commit": "51b705b" },
+    { "id": 2, "name": "6 query fixtures applied; Layer-2 gate live-green", "status": "done", "commit": "1ddbace" },
+    { "id": 3, "name": "3 screen fixtures applied + app published", "status": "partial", "progress": "JSON POSTed and accepted (HTTP 200), components visible in Builder UI tree, BUT runtime data providers never fire /api/v2/queries/* on load — fixture shape missing field(s) Builder UI auto-adds", "commit": "8b7cc69" },
+    { "id": 5, "name": "Snapshot + SUMMARY + ROADMAP partial-mark", "status": "done", "commit": "8f9ba0f" }
+  ],
+  "remaining_tasks": [
+    { "id": 4, "name": "Browser binding-resolution verification — BLOCKED on Task 3 fix", "status": "blocked" }
+  ],
+  "blockers": [
+    { "description": "W1-01 screen fixtures applied successfully (visible in Builder UI component tree, data provider IS configured with shift-slot-list binding per the right-panel config), but the runtime preview iframe never fires /api/v2/queries/* on screen load. Lowering screen routing.roleId from ADMIN to BASIC did not help. Three rounds of investigation exhausted: headless probes, published-app browser session, role-probe + dump-screens diagnostic. Fixture shape appears structurally complete on inspection but the runtime never activates data providers.", "type": "technical", "workaround": "Open W1-01.5 plan to manually compose a reference screen in Builder UI, diff against our fixture, identify the missing required field(s)." },
+    { "description": "Per-app permission wall on the published-app URL https://apps.nesher.co/app/default%20workspace/shift-slots — admin has builder.global=true + admin.global=true but no per-app role. POST /api/global/users/<id>/permission/<app_id> returns 200 + new rev but the grant doesn't take effect. Builder UI uses a different per-app role assignment mechanism that was not reverse-engineered.", "type": "technical", "workaround": "Use Builder UI preview iframe (bypasses publish + per-app permissions) for binding verification — same app context where bindings should resolve." }
+  ],
+  "human_actions_pending": [
+    { "action": "Compose ONE minimal reference screen in the Builder UI: navigate to https://apps.nesher.co/builder → Shifty App → click '+ Add Screen' (hover-revealed button) → Blank screen, route '/_W1_REF' → drag Data Provider component onto canvas → set Data: shift-slot-list → drag Table inside the Data Provider → save (autosave kicks in after blur) → click Preview → confirm at least one POST /api/v2/queries/<id> fires (Network panel) with HTTP 200 and rows returned.", "context": "The Builder UI's '+ Add Screen' affordance is hover-revealed and not surfaced by the chrome-devtools MCP a11y snapshot, blocking the orchestrator from doing this step headless. The composed reference screen's JSON (captured via GET /api/screens) will reveal the missing required field(s) that our fixtures omit — the load-bearing diff that unblocks W1-01.5 Tasks 2-3.", "blocking": true },
+    { "action": "OPTIONAL — Tackle the per-app permission grant: open Builder UI → Shifty App → app-level user management (path TBD) → grant omernesher@gmail.com ADMIN role on this specific app. Network panel will reveal the canonical Internal API endpoint that achieves this. Encode in tools/budibase-cli/src/client.mjs as `assignAppRole(userId, appId, roleId)`.", "context": "Currently blocks accessing the published-app URL https://apps.nesher.co/app/default%20workspace/shift-slots. Workaround (use Builder UI preview iframe instead) is fine for verification work but not for letting real users access deployed apps.", "blocking": false }
+  ],
+  "decisions": [
+    { "decision": "Use shiftyTenantId (NOT tenantId) for Shifty domain tenant on user docs", "rationale": "Budibase populates `tenantId` natively with the workspace tenant ('default' in CE single-tenant mode) — overwriting it would risk breaking Budibase's own routing", "phase": "03" },
+    { "decision": "CLI-first authoring (D-08): screens/queries/automations as committed JSON fixtures applied via tools/budibase-cli/ Internal API", "rationale": "Reviewable in PR diffs; reproducible across environments. NEEDS REVISITING for screens specifically given the W1-01 inert-fixture finding — the next session should decide whether to keep CLI-first for screens after seeing the reference-vs-fixture diff", "phase": "03" },
+    { "decision": "First W1 screen IS the binding-resolution verification (D-10)", "rationale": "Headless API-only verification is blocked per SPIKE-BINDINGS.md (bindings only resolve in published-app browser runtime). Amortize verification into the first real screen build.", "phase": "03" },
+    { "decision": "W1-01.5 plan written to close the loop on screen-fixture shape", "rationale": "Three addendums to 03-W1-01-SUMMARY.md exhausted the API-only investigation path; the remaining unknown is field-level shape detail visible only via Builder-UI-composed reference. New plan is autonomous:false (one manual Builder step) followed by automated diff + re-apply.", "phase": "03" }
+  ],
+  "uncommitted_files": [],
+  "next_action": "Open .planning/phases/03-availability-rules/03-W1-01-5-PLAN.md and start with Task 1 (the human-action step: compose reference screen in Builder UI). Once that completes, the rest is automated (Tasks 2-5 auto).",
+  "context_notes": "Long session — went from /clear (shrunk CLAUDE.md) through full Phase 3 W0 + spike + code review + W1-01 + binding-resolution investigation + screen-shape diagnosis. Phase 3 W0 closed cleanly except W0-02's Automation+snapshot subtasks (blocked on binding resolution). Phase 3 W1-01 is partial — queries/client/tests/snapshot all green, but screens applied-but-inert. The actual binding-resolution question (does {{ Current User.shiftyTenantId }} resolve at runtime?) is STILL un-answered — gated on getting screens to actually fire their data providers first. W1-01.5 plan closes that loop with one manual Builder UI step. Session ended at ~66% context."
+}
