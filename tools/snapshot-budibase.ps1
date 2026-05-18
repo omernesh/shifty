@@ -46,9 +46,12 @@
   CLAUDE.md "SSH access").
 
 .PARAMETER HpgPassword
-  SSH password for hpg5. Default: $env:HPG_SSH_PASSWORD if set, else the
-  canonical fallback from CLAUDE.md. Prefer setting $env:HPG_SSH_PASSWORD
-  so the password never appears in shell history or script source.
+  SSH password for hpg5. Sourced from $env:HPG_SSH_PASSWORD when not
+  passed explicitly. The script FAILS LOUDLY if neither -HpgPassword nor
+  $env:HPG_SSH_PASSWORD is set — there is no longer a literal fallback in
+  the script source (CR-02 fix, 2026-05-18). The canonical hpg5 password
+  is documented in CLAUDE.md "SSH access"; set it in the env var (or pass
+  -HpgPassword) before running.
 
 .PARAMETER HpgHostKey
   Pinned SSH hostkey for hpg5 (CLAUDE.md "SSH access"). Default matches the
@@ -82,7 +85,10 @@ param(
     [string]$Date = (Get-Date -Format 'yyyy-MM-dd'),
 
     [string]$HpgUser = 'claude',
-    [string]$HpgPassword = $(if ($env:HPG_SSH_PASSWORD) { $env:HPG_SSH_PASSWORD } else { 'Onclaude2103' }),
+    # CR-02 fix (2026-05-18): NO literal fallback. Sourced from env or fail
+    # loudly. Rotation of the canonical hpg5 password is a manual operator
+    # decision — out of scope for this script. See CLAUDE.md "SSH access".
+    [string]$HpgPassword = $env:HPG_SSH_PASSWORD,
     [string]$HpgHostKey = 'SHA256:tPg5mYQbJO/9ccGmNGeyJeQQSPXq+C6SL3EHJcbRZMQ',
     [string]$HpgHost = 'hpg5',
     [string]$ComposeNetwork = 'shifts-manager_default',
@@ -93,6 +99,14 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+# ----------------------------------------------------------------------------
+# 0. Guard: SSH password must come from env or explicit -HpgPassword arg.
+#    CR-02 fix (2026-05-18): no hardcoded fallback in the script source.
+# ----------------------------------------------------------------------------
+if ([string]::IsNullOrWhiteSpace($HpgPassword)) {
+    throw "HPG_SSH_PASSWORD env var (or -HpgPassword arg) is required. See CLAUDE.md 'SSH access' for the canonical hpg5 credential. Set the env var with: `$env:HPG_SSH_PASSWORD = '<password>'"
+}
 
 # ----------------------------------------------------------------------------
 # 1. Resolve paths
