@@ -241,7 +241,14 @@ if ($LASTEXITCODE -ne 0) { throw "budi backups --export failed on $HpgHost (exit
 # ----------------------------------------------------------------------------
 $RemoteTarballFwd = "$HpgStageDir\$ContainerTarballName".Replace('\', '/')
 Write-Host "[4/6] Copying tarball back via pscp -> $LocalTmpPath ..."
-& pscp -pw $HpgPassword -hostkey $HpgHostKey -batch "${HpgUser}@${HpgHost}:$RemoteTarballFwd" $LocalTmpPath
+# WR-06 fix (2026-05-18): pass the local destination as a quoted string so
+# paths containing spaces (e.g., `C:\Projects\shifts manager\`) survive
+# pscp's argv parsing. PowerShell's `&` call operator already handles
+# argument quoting when the variable is wrapped in double quotes, but
+# the original invocation passed `$LocalTmpPath` unquoted which let
+# whitespace in the path split into multiple argv entries on some
+# pscp builds.
+& pscp -pw $HpgPassword -hostkey $HpgHostKey -batch "${HpgUser}@${HpgHost}:$RemoteTarballFwd" "$LocalTmpPath"
 if ($LASTEXITCODE -ne 0) { throw "pscp failed (exit $LASTEXITCODE)" }
 
 # ----------------------------------------------------------------------------
