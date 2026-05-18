@@ -31,7 +31,7 @@ Guidance for Claude Code working in this repo.
 
 LiteLLM pair from upstream compose is intentionally omitted; `LITELLM_MASTER_KEY` unset short-circuits the readiness check.
 
-Budibase apps are authored in the Builder UI and stored in CouchDB. **No config-as-code.** Treat the Builder UI as source of truth for screens/queries; `db/migrations/` is source of truth for Postgres schema. Back up `budibase-couchdb-data` volume to preserve Budibase apps.
+Budibase apps live in CouchDB. The Builder UI is the canonical *authoring* surface, but it is not the *only* surface — the Internal API (`/api/screens`, `/api/automations`, `/api/queries`, `/api/datasources`, `/api/global/configs/*`) exposes the same JSON shape the Builder UI reads/writes. Headless authoring is proven (spike `55f657b`, scaffold at `tools/budibase-cli/`, full report at `tools/budibase-cli/SPIKE-FINDINGS.md`). Use cookie auth: `POST http://budibase-worker:4003/api/global/auth/default/login` with `{username, password}` (NOT `email`) → capture `budibase:auth` + `budibase:auth.sig` cookies → send with every downstream call alongside `x-budibase-app-id`. `db/migrations/` remains source of truth for Postgres schema. Back up `budibase-couchdb-data` volume (or use `tools/snapshot-budibase.ps1` for PR-time snapshots) to preserve Builder UI state.
 
 ### Public access
 
@@ -116,6 +116,10 @@ db/migrations/            numbered SQL migrations (0001..0014_*.sql)
 legacy/shifty-handlers/   preserved business logic from Lowdefy era (28 files; see legacy/README.md)
 docs/                     PRD.md (product spec), BUDIBASE-CONVENTIONS.md (load-bearing)
 .planning/                GSD planning artifacts
+tools/budibase-helpers/   IIFE JS bundle for Builder UI code blocks (W0-03; 40/40 tests)
+tools/check-bb-queries.mjs  Layer-2 CI gate (W0-04; 503 LOC, 23 tests)
+tools/snapshot-budibase.ps1 PR-time Builder UI snapshot wrapper (W0-05; 293 LOC)
+tools/budibase-cli/       Internal API client — headless Builder UI work (login + dump + smoke; see SPIKE-FINDINGS.md)
 .env.example              template; copy to .env on hpg5 (NEVER committed)
 solver/                   FastAPI + OR-Tools — Phase 04, not yet created
 ```
@@ -123,7 +127,7 @@ solver/                   FastAPI + OR-Tools — Phase 04, not yet created
 ## Working conventions
 
 - **Postgres schema is source of truth for Shifty data.** Add a new numbered migration in `db/migrations/`; never edit a committed migration.
-- **Budibase apps are authored in the Builder UI** (not config-as-code). Back up `budibase-couchdb-data` volume to preserve them.
+- **Budibase apps live in CouchDB.** Author via Builder UI for interactive work; use `tools/budibase-cli/` for headless authoring (CRUD over Internal API). Back up `budibase-couchdb-data` volume to preserve them; PR-time snapshots via `tools/snapshot-budibase.ps1`.
 - **Solver logic stays in `solver/`** (Phase 04), not in Budibase queries. Budibase queries fine for CRUD + light shaping.
 - **Secrets in `.env` on hpg5 only.** Compose injects via `${VAR:?missing}`.
 - **GitHub:** `omernesh/shifty`. User identity `omernesher`. Commit on feature branches, push.
