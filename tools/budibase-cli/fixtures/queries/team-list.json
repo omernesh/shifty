@@ -3,7 +3,7 @@
   "datasourceId": "datasource_plus_e5b3191da9eb4cb8854252f16a15367a",
   "queryVerb": "read",
   "fields": {
-    "sql": "SELECT id, name FROM org_unit WHERE tenant_id = '{{ Current User.shiftyTenantId }}'::uuid AND kind = 'team' ORDER BY name"
+    "sql": "SELECT id, name, level FROM org_unit WHERE tenant_id = '{{ Current User.shiftyTenantId }}'::uuid ORDER BY level, name"
   },
   "parameters": [],
   "schema": {
