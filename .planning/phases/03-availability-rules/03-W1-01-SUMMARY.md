@@ -377,7 +377,73 @@ The Task-3 "applied 3 screens" success was a **false positive at the integration
 
 **Status of W1-01:** Tasks 0, 1, 2, 5 LANDED CLEANLY. Task 3 (screens) APPLIED-BUT-NON-FUNCTIONAL. Task 4 (binding verification) NOT-REACHABLE until Task 3 is fixed. The binding-resolution question itself remains UN-ANSWERED.
 
+## Task 4 addendum 3 — dump-screens diagnosis (2026-05-18)
+
+Followed the "manual rebuild + diff" path. Before clicking through to compose a reference screen, ran `GET /api/screens` on the live stack to inspect what Budibase actually stored for our 3 W1-01 screens. **Verdict: the screen JSON is structurally complete.**
+
+All 3 screens present with full component trees. The LIST screen's tree confirmed:
+```
+@budibase/standard-components/container "shift_slot list root"
+  @budibase/standard-components/heading "Header"
+  @budibase/standard-components/labelcomponent "Team selector label"
+  @budibase/standard-components/dataprovider "Team list provider"
+    .dataSource = {"type":"query","label":"team-list","tableId":"query_datasource_plus_..."}
+    @budibase/standard-components/dynamicfilter "Team select"
+  @budibase/standard-components/button "Create button"
+  @budibase/standard-components/dataprovider "Shifts provider"
+    .dataSource = {"type":"query","label":"shift-slot-list","tableId":"query_datasource_plus_..."}
+    @budibase/standard-components/table "Shifts table"
+  @budibase/standard-components/text "Empty state hint"
+  @budibase/standard-components/modal "Create shift modal" (+ 7 form fields)
+  @budibase/standard-components/modal "Edit shift modal" (+ 5 form fields)
+```
+
+Components are the canonical `@budibase/standard-components/*` paths. `dataSource.type: "query"` is correct. `tableId` points at full query `_id`s. Per-app role on the screen is `ADMIN`. The fixtures are NOT obviously malformed.
+
+**Probe: lowered list-screen `routing.roleId` to BASIC via PATCH (verified the role change persisted).** Reloaded preview. **Zero `/api/v2/queries/*` calls fired.** Even with role no longer the blocker, the data providers don't activate.
+
+Reverted screen role back to ADMIN (the original intentional state).
+
+## Root cause hypothesis (updated)
+
+Between the screen storing and the runtime activating data providers, one of these is silently failing:
+1. **The runtime expects a different `dataSource` shape than what writes accept.** Budibase accepts `{type: "query", label, tableId}` on write but the runtime preview-iframe data-provider component may require additional fields (e.g., `datasourceId`, `pageSize`, `filters`) that our fixtures omitted. Builder UI's "Create data provider" affordance presumably populates these implicitly.
+2. **The data provider needs to be inside a SPECIFIC parent component** (e.g., a specific layout container with provider scope). Just being on the screen root may not propagate context to children that consume it via `{{ literal [cmp_id] }}` references.
+3. **The screen-level "On screen load" config is empty** (`button "No actions set"` in Builder UI). The Builder may auto-add a `Fetch query` action to that hook when a data provider is added through the UI. Without it, no query fires on screen mount.
+
+Hypothesis #3 is the most testable + most likely. The dump shows zero `_actions` on the screen-root container.
+
+## Updated forward path
+
+The previous Forward Path 1 (manual rebuild + diff) is still the right move — but the diff target is now `dataSource` shape AND/OR screen-level actions, not the broad component tree. Concrete plan for W1-01.5:
+
+1. Click through Builder UI to compose ONE minimal screen: container → dataprovider (bound to `shift-slot-list`) → table → save.
+2. `GET /api/screens` → capture the new screen's full JSON.
+3. `diff` field-by-field against `tools/budibase-cli/fixtures/screens/shift-slot-list.json`. Likely deltas: additional fields on `dataSource`, or an `_actions` array on the screen root, or a `layoutId` value other than undefined.
+4. Update `SCREEN-SHAPE.md` with the corrected contract.
+5. Re-apply our fixtures via `apply-fixtures.mjs` (idempotent — handles diff).
+6. Re-test preview → expect `/api/v2/queries/*` to fire.
+7. Then close Task 4 with binding-resolution PASS/FAIL.
+
+Estimate: ~1h for the rebuild + diff. Strictly bounded scope.
+
+## Net status of W1-01
+
+| Layer | Status |
+|-------|--------|
+| Schema | ✓ (no changes needed, table already in 0003) |
+| Queries (6 fixtures) | ✓ live + Layer-2 gate green |
+| BudibaseClient extensions | ✓ 6/6 tests pass |
+| Screen fixtures applied (3) | ⚠ JSON shape accepted at write, components inert at runtime |
+| Builder UI tree visible | ✓ all components show with right names |
+| Preview data fires | ✗ no /api/v2/queries/* on load |
+| Published-app browser test | ✗ blocked by per-app role + the above |
+| Binding-resolution question | ✗ STILL UN-ANSWERED |
+| Snapshot tarball | ✓ committed |
+
+The plan's invariant "W1-01 ships a working shift_slot CRUD screen" is **NOT** met. The path to meet it is bounded (W1-01.5 above). The binding-resolution question that motivated the spike is downstream of this — once data providers fire, we'll see immediately whether `{{ Current User.shiftyTenantId }}` resolves.
+
 ---
 *Phase: 03-availability-rules*
 *Plan: W1-01*
-*Completed: 2026-05-18 (Tasks 0-2 + 5; Task 3 false-positive — screens applied but non-functional; Task 4 blocked)*
+*Completed: 2026-05-18 (Tasks 0-2 + 5 LANDED; Task 3 screen-fixtures APPLIED-BUT-INERT; Task 4 STILL BLOCKED; W1-01.5 followup proposed)*
